@@ -22,7 +22,10 @@ jobs:
           node-version: 20
       - run: npm install
       - name: Install Chromium for Playwright
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 8
+        run: |
+          npx playwright install-deps chromium
+          npx playwright install --only-shell chromium
       - run: npm test
       - run: npm run typecheck
       - run: npm run lint
