@@ -25,7 +25,9 @@ function parseBuild(output: string, projectId: string, originals: Map<string, st
   if (typeof value.summary !== 'string' || !value.summary.trim() ||
       !Array.isArray(value.plan) || value.plan.length < 1 || value.plan.length > 12 ||
       value.plan.some((step) => typeof step !== 'string' || !step.trim() || step.length > 500) ||
-      !Array.isArray(value.requirements) || value.requirements.length < 1 || value.requirements.length > 20 ||\n      value.requirements.some((item) => typeof item !== 'string' || !item.trim() || item.length > 500) ||\n      !Array.isArray(value.files) || value.files.length < 1 || value.files.length > MAX_FILES) {
+      !Array.isArray(value.requirements) || value.requirements.length < 1 || value.requirements.length > 20 ||
+      value.requirements.some((item) => typeof item !== 'string' || !item.trim() || item.length > 500) ||
+      !Array.isArray(value.files) || value.files.length < 1 || value.files.length > MAX_FILES) {
     throw new Error('AI returned an invalid build plan');
   }
   const seen = new Set<string>();
