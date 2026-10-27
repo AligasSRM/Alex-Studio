@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { POST as createProjectRoute } from '../app/api/projects/route';
-import { POST as writeFileRoute } from '../app/api/files/route';
+import { GET as getFilesRoute, POST as writeFileRoute } from '../app/api/files/route';
 import { GET as previewRoute } from '../app/api/preview/route';
 import { projectRoot } from '../lib/path-security';
 
@@ -58,6 +58,24 @@ describe('local project API', () => {
     expect(traversal.status).toBe(400);
     expect(fs.existsSync(path.join(projectRoot(project.id), '..', 'outside.txt'))).toBe(false);
     expect(approved.headers.get('content-type')).toContain('application/json');
+  });
+
+  it('rejects file listing, reads, and writes for unknown project IDs', async () => {
+    const projectId = 'missing-project-authorization-check';
+    const list = await getFilesRoute(new Request('http://localhost:3000/api/files?projectId=' + projectId, {
+      headers: { host: 'localhost:3000' },
+    }));
+    expect(list.status).toBe(404);
+
+    const read = await getFilesRoute(new Request('http://localhost:3000/api/files?projectId=' + projectId + '&path=index.html', {
+      headers: { host: 'localhost:3000' },
+    }));
+    expect(read.status).toBe(404);
+
+    const write = await writeFileRoute(localRequest('http://localhost:3000/api/files', {
+      projectId, path: 'index.html', content: '<h1>Must not be written</h1>', approved: true,
+    }));
+    expect(write.status).toBe(404);
   });
 
   it('serves the current project HTML in a restricted preview response', async () => {
