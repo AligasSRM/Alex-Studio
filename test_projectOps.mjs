@@ -53,3 +53,35 @@ test("project file path validation rejects a symlink that escapes the project", 
     fs.rmSync(outsideDir, { recursive: true, force: true });
   }
 });
+test("project file APIs reject secret files while preserving safe dotfiles", () => {
+  const project = createProject("secret-file-boundary-test");
+  const root = path.join(process.cwd(), "workspace", project.id);
+  try {
+    fs.mkdirSync(path.join(root, "config"), { recursive: true });
+    fs.mkdirSync(path.join(root, "secrets"), { recursive: true });
+    fs.writeFileSync(path.join(root, ".env"), "API_KEY=do-not-expose");
+    fs.writeFileSync(path.join(root, ".env.local"), "TOKEN=do-not-expose");
+    fs.writeFileSync(path.join(root, "config", "private.key"), "private");
+    fs.writeFileSync(path.join(root, "secrets", "token.txt"), "token");
+    fs.writeFileSync(path.join(root, ".gitignore"), "node_modules");
+
+    for (const relative of [
+      ".env",
+      ".env.local",
+      "config/private.key",
+      "secrets/token.txt",
+    ]) {
+      assert.throws(
+        () => validateProjectFilePath(`${project.id}/${relative}`),
+        /Invalid project file path/i,
+        `expected protected path to be rejected: ${relative}`
+      );
+      assert.ok(!getProjectFiles(project.id).includes(relative), `expected listing to omit: ${relative}`);
+    }
+
+    assert.doesNotThrow(() => validateProjectFilePath(`${project.id}/.gitignore`));
+    assert.ok(getProjectFiles(project.id).includes(".gitignore"));
+  } finally {
+    deleteProject(project.id);
+  }
+});
