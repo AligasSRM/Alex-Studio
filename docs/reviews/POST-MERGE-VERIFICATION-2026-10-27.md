@@ -2,8 +2,8 @@
 
 **Date:** 2026-10-27  
 **Repository:** `AligasSRM/Alex-Studio`  
-**Scope:** Read-only verification of the Undo/Redo merge on `main`  
-**Status:** 🟡 **INCOMPLETE — post-merge verification is not yet proven**
+**Scope:** Verification of Undo/Redo merge on `main`  
+**Status:** 🟡 **INCOMPLETE — automated PR checks pass; exact-main and browser runtime evidence remain outstanding**
 
 ## 1. Target revision
 
@@ -14,14 +14,22 @@
 
 ## 2. CI evidence
 
-The CI run associated with the PR branch completed successfully:
+### Pre-merge evidence for the Undo/Redo implementation
 
 - [GitHub Actions run #40517939987](https://github.com/AligasSRM/Alex-Studio/actions/runs/40517939987)
 - Event: `pull_request`
-- Tested head SHA: `abe761b07a72328dbfd5fe3070b327f9a4b93e55`
+- Tested PR head SHA: `abe761b07a72328dbfd5fe3070b327f9a4b93e55`
 - Result: `completed / success`
 
-All steps in that run reported success:
+### Follow-up documentation PR check
+
+- [GitHub Actions run #40519105244](https://github.com/AligasSRM/Alex-Studio/actions/runs/40519105244)
+- Event: `pull_request`, PR #5
+- Tested head SHA: `c15c219daf7332d785797d5684f3a0fcac3ee17a`
+- Base `main` SHA reported for PR #5: `ddaf3f1b37cb9308d58643acb632891e399a22ec`
+- Result: `completed / success`
+
+All steps in run #40519105244 passed:
 
 | Check | Result |
 |---|---|
@@ -31,20 +39,28 @@ All steps in that run reported success:
 | `npm run lint` | PASS |
 | `npm run build` | PASS |
 
-**Evidence limitation:** the successful run tested the PR head SHA above, not the final merge commit SHA. It is valid pre-merge evidence, but it must not be described as a post-merge test of `main`.
+**Evidence limitation:** run #40519105244 validates the PR head against its `main` base; it is not a run on the exact merge commit SHA itself. Do not describe it as direct post-merge CI for `main`.
 
-## 3. Post-merge checks performed
+## 3. Source-level review of the requested interactions
 
-| Check | Observed result |
-|---|---|
-| `main` HEAD | Matches `ddaf3f1b37cb9308d58643acb632891e399a22ec` |
-| Actions runs listed for `main` | 0 returned |
-| Check runs on merge commit | 0 returned |
-| Browser/manual interaction test | Not performed / no evidence recorded |
+Inspected `components/StudioWorkspace.tsx`, `lib/edit-history.ts`, and `tests/edit-history.test.ts` on `main`.
 
-Zero returned check runs means **no post-merge CI result is available in the queried GitHub records**. It does not mean that tests failed.
+| Scenario | Source-level finding | Runtime evidence |
+|---|---|---|
+| Edit → Undo → Redo | UI calls `undoEdit` / `redoEdit` and updates the draft from history state; unit tests cover history ordering | Not run in a browser |
+| New edit after Undo | `recordEdit` clears `future`; a unit test covers redo-history invalidation | Not run in a browser |
+| Save after Undo/Redo | Save submits the current draft; after success it sets the saved baseline and resets history to the saved content | Not run in a browser |
+| Switch files/projects | Successful file selection and project opening load content and reset history for the newly selected file | Not run in a browser |
 
-## 4. CI trigger gap
+This is code inspection, not proof of runtime behavior or persistence.
+
+## 4. Why browser checks are still open
+
+The project README defines the prototype as local-only. The API enforces localhost/same-origin restrictions for mutations and there is no supported public test deployment established in the evidence reviewed. I could not start the repository in an execution environment here: a Git clone attempt failed because the execution environment could not resolve `github.com`.
+
+Therefore, I have **not** claimed to perform browser interactions, save/reopen checks, or project-switching checks. Those checks require a running local instance or a deliberately configured test environment that preserves the local-only security boundary.
+
+## 5. CI trigger gap
 
 The current `.github/workflows/ci.yml` triggers on:
 
@@ -52,28 +68,24 @@ The current `.github/workflows/ci.yml` triggers on:
 - pushes to `feature/alex-studio-implementation-2026-10-27` only;
 - manual `workflow_dispatch`.
 
-It does **not** declare `push` on `main`. Therefore, a merge into `main` does not automatically trigger this workflow under the current configuration. This explains the missing post-merge run and should be addressed in a separate reviewed change if post-merge CI is required.
-
-## 5. Undo/Redo coverage boundary
-
-The merged PR adds `lib/edit-history.ts` and `tests/edit-history.test.ts`. The test file covers:
-
-1. Undo/redo order;
-2. clearing redo history after a new edit;
-3. duplicate values and the 100-entry undo-history cap;
-4. safe boundary operations when undo/redo is unavailable.
-
-These unit tests passed in the PR CI run. No browser-level verification is recorded here for undo/redo interaction, saving after undo/redo, or switching files/projects.
+It does **not** declare `push` on `main`. A merge into `main` therefore does not automatically trigger this workflow under the current configuration. If post-merge CI is required, address this in a separate reviewed PR; do not edit `main` directly.
 
 ## 6. Acceptance decision
 
 **Current decision: 🟡 OPEN — do not mark post-merge verification complete.**
 
-Before starting another feature:
+Completed:
+1. Verified the target `main` merge SHA and the relevant GitHub CI run records.
+2. Confirmed all automated steps in PR #5's run passed.
+3. Inspected the Undo/Redo UI wiring, save reset behavior, file/project switching reset behavior, and existing unit tests.
+4. Recorded the evidence boundaries without conflating code inspection with runtime testing.
 
-1. Run the same test, typecheck, lint, and production-build commands against the exact current `main` commit.
-2. Perform a focused browser check for edit → undo → redo, a new edit after undo, save after undo/redo, and switching files/projects.
-3. Record the exact tested SHA and results.
-4. Consider a separate PR to add `main` to the CI push trigger; do not change `main` directly.
+Still outstanding:
+1. Run test, typecheck, lint, and production build against the exact merge SHA `ddaf3f1b37cb9308d58643acb632891e399a22ec` (for example, via a controlled `workflow_dispatch` run against that ref).
+2. In a running local browser instance, perform edit → undo → redo.
+3. Undo, make a different edit, and verify Redo is disabled / unavailable.
+4. Save after Undo and after Redo; reopen the file and verify the persisted content.
+5. Switch files and projects after editing; verify the correct content is loaded and no stale history is applied.
+6. Record exact runtime environment, tested SHA, and observed outcomes.
 
-This record documents available evidence and gaps. It does not claim that unperformed checks passed.
+This record does not claim that unperformed checks passed. `main` has not been modified directly, PR #5 has not been merged, and PR #1 has not been touched.
