@@ -35,12 +35,18 @@ test('P0-ACC-001: project can be switched away from and reopened with saved file
   ]));
 });
 
-test('P0-ACC-004/005/006: diff review is shown and remains read-only', async ({ page }) => {
+test('P0-ACC-004/005/006: diff review is read-only and the exact reviewed draft is submitted for approval', async ({ page }) => {
   await page.goto('/');
   await createProject(page, `p0-diff-${Date.now()}`);
   const editor = page.getByRole('textbox', { name: 'File editor' });
   const original = await editor.inputValue();
   const modified = '<!doctype html><html><body><h1>Diff acceptance marker</h1></body></html>';
+  let savePayload: Record<string, unknown> | undefined;
+  page.on('request', request => {
+    if (request.url().endsWith('/api/files') && request.method() === 'POST') {
+      savePayload = request.postDataJSON() as Record<string, unknown>;
+    }
+  });
   await editor.fill(modified);
   await page.getByRole('button', { name: 'Review diff', exact: true }).click();
   await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
@@ -50,6 +56,48 @@ test('P0-ACC-004/005/006: diff review is shown and remains read-only', async ({ 
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await expect(editor).toHaveValue(modified);
   expect(await editor.inputValue()).not.toBe(original);
+  await saveCurrentFile(page);
+  expect(savePayload).toMatchObject({ path: 'index.html', content: modified, approved: true });
+});
+
+test('P0-ACC-003: a failed project creation shows an error and preserves the current selection', async ({ page }) => {
+  await page.goto('/');
+  const projectSelect = page.getByLabel('Active project');
+  await expect(projectSelect).toBeVisible();
+  const selectedBefore = await projectSelect.inputValue();
+  const headingBefore = await page.locator('.files h2').innerText();
+  await page.route('**/api/projects', async route => {
+    if (route.request().method() === 'POST') {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Injected create failure' }) });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.locator('#new-project').fill(`p0-failed-create-${Date.now()}`);
+  await page.getByRole('button', { name: /Create$/ }).click();
+  await expect(page.getByRole('alert')).toContainText('Injected create failure');
+  expect(await projectSelect.inputValue()).toBe(selectedBefore);
+  await expect(page.locator('.files h2')).toHaveText(headingBefore);
+});
+
+test('P0-ACC-007: changed files can each be reviewed independently', async ({ page }) => {
+  await page.goto('/');
+  await createProject(page, `p0-multifile-${Date.now()}`);
+  const editor = page.getByRole('textbox', { name: 'File editor' });
+  await editor.fill('<!doctype html><html><body><h1>HTML file review</h1></body></html>');
+  await saveCurrentFile(page);
+
+  await page.getByRole('button', { name: /styles\\.css/ }).click();
+  await editor.fill('body { background: rgb(8, 9, 10); }');
+  await page.getByRole('button', { name: 'Review diff', exact: true }).click();
+  await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
+  await page.getByRole('button', { name: 'Code', exact: true }).click();
+  await saveCurrentFile(page);
+
+  await page.getByRole('button', { name: /index\\.html/ }).click();
+  await editor.fill('<!doctype html><html><body><h1>Second HTML review</h1></body></html>');
+  await page.getByRole('button', { name: 'Review diff', exact: true }).click();
+  await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
 });
 
 test('P0-ACC-009: cancelling approval leaves the saved file unchanged', async ({ page }) => {
