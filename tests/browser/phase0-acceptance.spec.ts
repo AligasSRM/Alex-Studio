@@ -15,6 +15,7 @@ async function createProject(page: Page, name: string) {
 async function saveCurrentFile(page: Page) {
   await page.getByRole('button', { name: 'Review & save' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Saved');
 }
 
@@ -172,7 +173,7 @@ test('P0-ACC-002: saved project content survives a real production-server restar
   const startServer = async () => {
     const child = spawn(process.execPath, [
       path.join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next'),
-      'start', '--hostname', 'localhost', '--port', String(port),
+      'start', '--hostname', '127.0.0.1', '--port', String(port),
     ], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: 'production' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let startupOutput = '';
     child.stdout?.on('data', chunk => { startupOutput += chunk.toString(); });
