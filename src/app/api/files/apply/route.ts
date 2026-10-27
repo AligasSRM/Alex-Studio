@@ -3,16 +3,32 @@ import { writeFile, createBackup, validatePath, fileExists } from "@/lib/fileOps
 import fs from "fs";
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { path: relativePath, content } = body;
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > 1_100_000) {
+    return NextResponse.json({ error: "Request body is too large" }, { status: 413 });
+  }
 
-    if (!relativePath || typeof relativePath !== "string") {
+  try {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Request body must be valid JSON" }, { status: 400 });
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Request body must be an object" }, { status: 400 });
+    }
+    const { path: relativePath, content } = body as { path?: unknown; content?: unknown };
+
+    if (!relativePath || typeof relativePath !== "string" || relativePath.length > 500) {
       return NextResponse.json({ error: "Missing or invalid 'path'" }, { status: 400 });
     }
 
     if (typeof content !== "string") {
       return NextResponse.json({ error: "Missing or invalid 'content'" }, { status: 400 });
+    }
+    if (content.length > 1_000_000) {
+      return NextResponse.json({ error: "File content is too large (maximum 1,000,000 characters)" }, { status: 413 });
     }
 
     // Validate path first (will throw if invalid)
