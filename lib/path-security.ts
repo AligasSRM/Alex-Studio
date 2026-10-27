@@ -106,5 +106,5 @@ export function assertLocalMutation(request: Request) {
 export function assertTextContent(content: unknown): asserts content is string {
   if (typeof content !== 'string') throw new Error('Content must be text');
   if (Buffer.byteLength(content, 'utf8') > 1024 * 1024) throw new Error('File exceeds 1 MiB');
-  if (content.includes('\\0')) throw new Error('Binary files not supported');
+  if (content.includes('\0')) throw new Error('Binary files not supported');
 }
