@@ -1,9 +1,11 @@
 export const runtime = 'nodejs';
 import { NextResponse } from 'next/server';
 import { getProject } from '@/lib/project-store';
+import { assertLocalRequest } from '@/lib/path-security';
 import { readProjectFile } from '@/lib/files';
 
 export async function GET(request: Request) {
+  if (!assertLocalRequest(request)) return new NextResponse('Local requests only', { status: 403, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
   const id = new URL(request.url).searchParams.get('projectId') || '';
   const project = getProject(id);
   if (!project) {
