@@ -21,6 +21,7 @@ async function saveCurrentFile(page: Page) {
   await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('status')).toContainText('Saved');
+  await page.getByRole('button', { name: 'Code', exact: true }).click();
 }
 
 test('P0-ACC-001: project can be switched away from and reopened with saved files intact', async ({ page }) => {
