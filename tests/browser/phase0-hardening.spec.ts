@@ -25,7 +25,7 @@ test('P0-ACC-007: rendered diff assertions cover CSS and HTML files independentl
   const originalCssPane = page.locator('.diff-shell .monaco-editor.original-in-monaco-diff-editor .view-lines');
   await expect(modifiedCss).toContainText('P0-CSS-DIFF-MARKER');
   await expect(originalCssPane).toContainText('background:#101827');
-  await page.getByRole('button', { name: "I've reviewed this diff" }).click();
+  await page.getByRole('button', { name: "Diff reviewed — continue" }).click();
 
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await page.getByRole('button', { name: 'Review & save' }).click();
@@ -77,7 +77,7 @@ test('P0-ACC-013: preview response restricts external resource classes and form 
   await editor.fill(hostileResources);
   await page.getByRole('button', { name: 'Review diff first' }).click();
   await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
-  await page.getByRole('button', { name: "I've reviewed this diff" }).click();
+  await page.getByRole('button', { name: "Diff reviewed — continue" }).click();
   await page.getByRole('button', { name: 'Review & save' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
   await expect(page.getByRole('status')).toContainText('Saved');
