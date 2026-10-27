@@ -27,6 +27,8 @@ describe('workspace path security', () => {
       fs.writeFileSync(path.join(outside, 'secret.txt'), 'secret');
       fs.symlinkSync(outside, path.join(project, 'escape'), 'dir');
       expect(() => resolveProjectPath('test-project', 'escape/secret.txt')).toThrow();
+      fs.symlinkSync(path.join(outside, 'not-created-yet.txt'), path.join(project, 'dangling'), 'file');
+      expect(() => resolveProjectPath('test-project', 'dangling/created.txt')).toThrow();
     } finally {
       fs.rmSync(outside, { recursive: true, force: true });
     }
