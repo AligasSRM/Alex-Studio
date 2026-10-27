@@ -86,7 +86,7 @@ export async function POST(request: Request) {
     const inputTokens = Number.isInteger(result.usage?.input_tokens) ? result.usage?.input_tokens as number : null;
     const outputTokens = Number.isInteger(result.usage?.output_tokens) ? result.usage?.output_tokens as number : null;
     const estimatedCostUsd = estimateAICostUsd(inputTokens, outputTokens);
-    let accounting: { monthlyCostUsd: number; budgetWarning: boolean };
+    let accounting: { monthlyCostUsd: number | null; budgetWarning: boolean };
     try {
       accounting = recordAIUsage(input.projectId, {
         timestamp: new Date().toISOString(), model, inputTokens, outputTokens, estimatedCostUsd,
