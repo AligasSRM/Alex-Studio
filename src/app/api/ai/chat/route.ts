@@ -79,8 +79,11 @@ export async function POST(request: NextRequest) {
         estimateOnly: true,
       },
     });
-  } catch {
+  } catch (error) {
     // Do not return provider response bodies or credentials to the client.
+    if (error instanceof Error && error.message === "AI_NOT_CONFIGURED") {
+      return NextResponse.json({ error: "AI is not configured. Set AI_API_KEY, or explicitly enable AI_ALLOW_MOCK in development." }, { status: 503 });
+    }
     return NextResponse.json({ error: "AI provider request failed" }, { status: 502 });
   }
 }
