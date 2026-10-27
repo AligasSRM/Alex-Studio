@@ -1,24 +1,2 @@
-export const runtime = 'nodejs';
-
-import { NextResponse } from 'next/server';
-import { resolveWorkspacePath, isPathAllowed } from '@/lib/path-security';
-
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const requested = searchParams.get('path');
-
-  if (!requested) {
-    return NextResponse.json({ error: 'Missing path' }, { status: 400 });
-  }
-
-  try {
-    const safePath = resolveWorkspacePath(requested);
-    if (!isPathAllowed(safePath)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    return NextResponse.json({ ok: true, path: safePath });
-  } catch (error) {
-    return NextResponse.json({ error: 'Forbidden path' }, { status: 403 });
-  }
-}
+export const runtime='nodejs';import {NextResponse} from 'next/server';import {readProjectFile} from '@/lib/files';import {getProject} from '@/lib/project-store';
+export async function GET(r:Request){const u=new URL(r.url),id=u.searchParams.get('projectId')||'',p=u.searchParams.get('path')||'';if(!getProject(id))return NextResponse.json({error:'Project not found'},{status:404});if(!p)return NextResponse.json({error:'Missing path'},{status:400});try{return NextResponse.json({ok:true,path:p,content:readProjectFile(id,p)},{headers:{'Cache-Control':'no-store'}});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Read failed'},{status:400});}}
