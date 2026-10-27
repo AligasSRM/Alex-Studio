@@ -18,6 +18,8 @@ export type AcceptanceReport = {
 type ProjectFile = { path: string; content: string };
 const BUILTINS = new Set(builtinModules.flatMap((name) => [name, name.replace(/^node:/, '')]));
 const EXTERNAL = /^(?:https?:|mailto:|tel:|data:|blob:|file:|\/\/|#)/i;
+const HTML_EXTENSIONS = new Set(['.html', '.htm', '.xhtml']);
+const SCRIPT_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts']);
 
 function resolveReference(from: string, raw: string, files: Map<string, string>): boolean {
   const value = raw.trim().split(/[?#]/, 1)[0];
@@ -39,20 +41,20 @@ function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
   const addMatches = (pattern: RegExp, kind: string) => {
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(file.content)) !== null) {
-      const value = match.slice(1).find((part) => part !== undefined)?.trim();
+      const value = match.slice(1).find((part) => typeof part === 'string' && part.length > 0)?.trim();
       if (value) refs.push({ raw: value, kind });
       if (match[0].length === 0) pattern.lastIndex++;
     }
   };
 
-  if (/\.(?:html?|xhtml)$/i.test(file.path)) {
+  if (HTML_EXTENSIONS.has(path.posix.extname(file.path).toLowerCase())) {
     addMatches(/\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+))/gi, 'HTML src/href');
   }
-  if (/\.css$/i.test(file.path)) {
+  if (path.posix.extname(file.path).toLowerCase() === '.css') {
     addMatches(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]+))\s*\)/gi, 'CSS url()');
     addMatches(/@import\s+(?:url\(\s*)?(?:"([^"]*)"|'([^']*)')/gi, 'CSS @import');
   }
-  if (/\.(?:[cm]?[jt]sx?)$/i.test(file.path)) {
+  if (SCRIPT_EXTENSIONS.has(path.posix.extname(file.path).toLowerCase())) {
     addMatches(/\bimport\s*["']([^"']+)["']/g, 'module import');
     addMatches(/\bimport\b[^;\n]*?\bfrom\s*["']([^"']+)["']/g, 'module import');
     addMatches(/\bexport\b[^;\n]*?\bfrom\s*["']([^"']+)["']/g, 'module import');
