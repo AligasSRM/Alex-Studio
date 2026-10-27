@@ -9,9 +9,9 @@ export function checkRateLimit(key: string, limit = 10, windowMs = 60_000, now =
     throw new Error('Invalid rate limit configuration');
   }
 
-  for (const [bucketKey, bucket] of buckets) {
+  buckets.forEach((bucket, bucketKey) => {
     if (bucket.resetAt <= now) buckets.delete(bucketKey);
-  }
+  });
 
   let bucket = buckets.get(key);
   if (!bucket || bucket.resetAt <= now) {
