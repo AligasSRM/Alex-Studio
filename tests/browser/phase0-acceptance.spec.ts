@@ -16,7 +16,7 @@ async function createProject(page: Page, name: string) {
 async function saveCurrentFile(page: Page) {
   await page.getByRole('button', { name: 'Review diff first' }).click();
   await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
-  await page.getByRole('button', { name: "I've reviewed this diff" }).click();
+  await page.getByRole('button', { name: "Diff reviewed — continue" }).click();
   await page.getByRole('button', { name: 'Review & save' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -126,7 +126,7 @@ test('P0-ACC-009: cancelling approval leaves the saved file unchanged', async ({
   await editor.fill('<!doctype html><html><body><h1>Cancelled change</h1></body></html>');
   await page.getByRole('button', { name: 'Review diff first' }).click();
   await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
-  await page.getByRole('button', { name: "I've reviewed this diff" }).click();
+  await page.getByRole('button', { name: "Diff reviewed — continue" }).click();
   await page.getByRole('button', { name: 'Review & save' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
