@@ -43,6 +43,20 @@ test('AI builder prepares a multi-file draft without writes, then applies it aft
     });
   });
 
+  await page.route('**/api/ai/iterate', async route => {
+    const request = route.request().postDataJSON() as { files: { path: string; content: string; baseHash: string | null }[] };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        ok: true,
+        build: { summary: 'Verified draft', plan: ['Browser smoke test passed'], files: request.files },
+        diagnostic: { ok: true, available: true, summary: 'Isolated browser test passed', output: '{"ok":true,"title":"Generated flow","errors":[]}' },
+        repairs: [],
+      }),
+    });
+  });
+
   await page.locator('#ai-prompt').fill('Create a connected page with a heading and matching styles.');
   await page.getByRole('button', { name: 'Generate project draft' }).click();
   await expect(page.getByText('Proposed build — 2 file(s), not yet applied')).toBeVisible();
@@ -54,7 +68,14 @@ test('AI builder prepares a multi-file draft without writes, then applies it aft
   expect((await indexBeforeApproval.json()).content).toBe(originalIndex);
   expect((await cssBeforeApproval.json()).content).toBe(originalCss);
 
-  await page.getByRole('button', { name: 'Approve & apply all files' }).click();
+  const applyButton = page.getByRole('button', { name: 'Approve & apply all files' });
+  await expect(applyButton).toBeDisabled();
+
+  // A draft cannot be applied until the verification endpoint reports a successful check.
+  await page.getByRole('button', { name: 'Verify & auto-repair in sandbox' }).click();
+  await expect(page.locator('.ai-result')).toContainText('Isolated browser test passed');
+  await expect(applyButton).toBeEnabled();
+  await applyButton.click();
   await expect(page.getByRole('status')).toContainText('Applied 2 reviewed file changes.');
 
   // The real apply endpoint must persist both files only after the explicit approval action.
