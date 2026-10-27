@@ -31,7 +31,7 @@ The development server is configured to bind to `127.0.0.1` only. Open the local
 3. Edit the content in the editor.
 4. Choose **Review proposed change** to prepare a draft.
 5. Inspect the real diff. The review screen checks that the source file still matches the original hash.
-6. Approve to apply the change, or reject it. After approval, Alex Studio reads the file back and verifies its hash.
+6. Approve to apply the change, or reject it. After approval, Alex Studio reads the file back and verifies its hash. A previous version can be restored with a second hash check.
 
 Draft content is held in the browser's session storage until review is completed. File reads and writes are scoped to a validated project path. Backups are created before replacing an existing file.
 
@@ -59,7 +59,7 @@ See [A0–A5 engineering gates](docs/engineering/ACCEPTANCE-GATES-A0-A5.md). A s
 - AI-generated changes are not yet converted automatically into a structured, project-scoped change plan.
 - AI pricing must be configured correctly for the selected model; provider billing remains the authoritative charge record.
 - Per-project request-rate limiting and multi-process ledger stress testing remain outstanding.
-- ZIP export with secret exclusions is not implemented.
+- ZIP export is implemented with path checks, secret/internal-file exclusions, and archive-size limits; browser-level download verification is still required.
 - Browser-level end-to-end coverage and real-world preview isolation checks are still required.
 - Git-based project history, rollback UX, and recovery tests need further work.
 - Authentication and authorization are not implemented; the application must remain local-only.
