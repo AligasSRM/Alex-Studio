@@ -28,7 +28,8 @@ export default function ReviewPage() {
 
   useEffect(() => {
     let active = true;
-    (async () => {
+    const timer = window.setTimeout(() => {
+      void (async () => {
       const params = new URLSearchParams(window.location.search);
       const projectId = params.get("project") || "";
       const filePath = params.get("path") || "";
@@ -68,8 +69,12 @@ export default function ReviewPage() {
       } finally {
         if (active) setLoading(false);
       }
-    })();
-    return () => { active = false; };
+      })();
+    }, 0);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   const handleApprove = async () => {
