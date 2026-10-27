@@ -1,14 +1,16 @@
 'use client';
 
+import Link from 'next/link';
+
 export function ProjectSidebar() {
   return (
     <aside className="sidebar">
       <h3>Alex Studio</h3>
       <ul>
-        <li><a href="/">Dashboard</a></li>
-        <li><a href="/projects">Projects</a></li>
-        <li><a href="/editor">Editor</a></li>
-        <li><a href="/preview/demo">Preview</a></li>
+        <li><Link href="/">Dashboard</Link></li>
+        <li><Link href="/projects">Projects</Link></li>
+        <li><Link href="/editor">Editor</Link></li>
+        <li><Link href="/preview/demo">Preview</Link></li>
       </ul>
     </aside>
   );
