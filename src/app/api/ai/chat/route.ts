@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chatWithAI, estimateTokens, type ChatMessage } from "@/lib/aiClient";
+import { chatWithAI, type ChatMessage } from "@/lib/aiClient";
 import { projectExists } from "@/lib/projectOps";
 import { getBudgetConfig, reserveAiUsage, settleAiUsage, releaseAiUsage } from "@/lib/aiUsage";
 
