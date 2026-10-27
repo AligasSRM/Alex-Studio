@@ -1,20 +1,3 @@
-export const runtime = 'nodejs';
-
-import { NextResponse } from 'next/server';
-import { createProject, listProjects } from '@/lib/project-store';
-
-export async function GET() {
-  return NextResponse.json({ projects: listProjects() });
-}
-
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  const name = typeof body?.name === 'string' ? body.name.trim() : '';
-
-  if (!name) {
-    return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
-  }
-
-  const project = createProject(name);
-  return NextResponse.json({ project }, { status: 201 });
-}
+export const runtime='nodejs';import {NextResponse} from 'next/server';import {assertLocalMutation} from '@/lib/path-security';import {createProject,listProjects} from '@/lib/project-store';
+export async function GET(){return NextResponse.json({projects:listProjects()},{headers:{'Cache-Control':'no-store'}});}
+export async function POST(r:Request){if(!assertLocalMutation(r))return NextResponse.json({error:'Local same-origin requests only'},{status:403});const b=await r.json().catch(()=>null);if(!b||typeof b.name!=='string')return NextResponse.json({error:'Project name is required'},{status:400});try{return NextResponse.json({project:createProject(b.name)},{status:201});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Create failed'},{status:400});}}

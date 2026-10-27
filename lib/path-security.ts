@@ -1,55 +1,9 @@
-import fs from 'fs';
-import path from 'path';
-
-export const WORKSPACE_ROOT = path.resolve(process.cwd(), 'workspace');
-
-export function ensureWorkspaceRoot() {
-  fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
-}
-
-export function resolveWorkspacePath(inputPath: string): string {
-  ensureWorkspaceRoot();
-
-  const normalized = inputPath.replace(/\\/g, '/').trim();
-  if (!normalized || normalized.includes('..') || path.isAbsolute(normalized)) {
-    throw new Error('Invalid path');
-  }
-
-  const resolved = path.resolve(WORKSPACE_ROOT, normalized);
-  const realWorkspace = fs.realpathSync.native(WORKSPACE_ROOT);
-  if (!resolved.startsWith(realWorkspace)) {
-    throw new Error('Path escapes workspace');
-  }
-
-  return resolved;
-}
-
-export function isPathAllowed(targetPath: string): boolean {
-  try {
-    const realWorkspace = fs.realpathSync.native(WORKSPACE_ROOT);
-    const realTarget = fs.existsSync(targetPath)
-      ? fs.realpathSync.native(targetPath)
-      : targetPath;
-
-    return realTarget.startsWith(realWorkspace);
-  } catch {
-    return false;
-  }
-}
-
-export function createProjectDirectory(projectId: string): string {
-  ensureWorkspaceRoot();
-  const projectDir = path.join(WORKSPACE_ROOT, projectId);
-  fs.mkdirSync(projectDir, { recursive: true });
-  return projectDir;
-}
-
-export function backupFile(filePath: string): string {
-  const backupDir = path.join(path.dirname(filePath), '.alex', 'backups');
-  fs.mkdirSync(backupDir, { recursive: true });
-
-  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backupPath = path.join(backupDir, `${path.basename(filePath)}-${timestamp}.bak`);
-  fs.copyFileSync(filePath, backupPath);
-  return backupPath;
-}
+import fs from 'node:fs';import path from 'node:path';
+export const WORKSPACE_ROOT=path.resolve(process.cwd(),'workspace');
+const ID=/^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
+export function ensureWorkspaceRoot(){fs.mkdirSync(WORKSPACE_ROOT,{recursive:true});}
+export function validateProjectId(id:string){if(typeof id!=='string'||!ID.test(id)||id.includes('..'))throw new Error('Invalid project id');return id;}
+export function projectRoot(id:string){ensureWorkspaceRoot();const root=path.resolve(WORKSPACE_ROOT,validateProjectId(id)),rel=path.relative(WORKSPACE_ROOT,root);if(!rel||rel.startsWith('..')||path.isAbsolute(rel))throw new Error('Invalid project root');if(fs.existsSync(root)&&fs.lstatSync(root).isSymbolicLink())throw new Error('Project symlinks are not allowed');return root;}
+export function resolveProjectPath(id:string,p:string){const root=projectRoot(id);if(typeof p!=='string')throw new Error('Invalid path');const n=p.replace(/\\/g,'/').trim();if(!n||n.startsWith('/')||/^[a-zA-Z]:/.test(n))throw new Error('Invalid path');const parts=n.split('/');if(parts.some(x=>!x||x==='.'||x==='..'||x.startsWith('.')))throw new Error('Hidden or traversal path denied');const target=path.resolve(root,...parts),rel=path.relative(root,target);if(!rel||rel.startsWith('..')||path.isAbsolute(rel)||!fs.existsSync(root))throw new Error('Invalid project path');const realRoot=fs.realpathSync.native(root);let probe=target;while(!fs.existsSync(probe)){const next=path.dirname(probe);if(next===probe)throw new Error('Invalid path');probe=next;}const real=fs.realpathSync.native(probe),r=path.relative(realRoot,real);if(r.startsWith('..')||path.isAbsolute(r))throw new Error('Symlink escape denied');if(fs.existsSync(target)&&fs.lstatSync(target).isSymbolicLink())throw new Error('Symlink files denied');return target;}
+export function assertLocalMutation(r:Request){const origin=r.headers.get('origin'),host=r.headers.get('host');if(!origin||!host)return false;try{const u=new URL(origin);return u.host.toLowerCase()===host.toLowerCase()&&['localhost','127.0.0.1','[::1]','::1'].includes(u.hostname.toLowerCase());}catch{return false;}}
+export function assertTextContent(c:unknown):asserts c is string{if(typeof c!=='string')throw new Error('Content must be text');if(Buffer.byteLength(c,'utf8')>1024*1024)throw new Error('File exceeds 1 MiB');if(c.includes('\\0'))throw new Error('Binary files not supported');}
