@@ -73,7 +73,7 @@ export function getProjectMetaPath(projectId: string): string {
 }
 
 export function validateProjectFilePath(value: string): string {
-  if (typeof value !== "string" || value.length === 0 || value.length > 500 || value.includes("\\0") || value.includes("\\\\")) {
+  if (typeof value !== "string" || value.length === 0 || value.length > 500 || value.includes("\0") || value.includes("\\")) {
     throw new Error("Invalid project file path");
   }
   const parts = value.split("/");
