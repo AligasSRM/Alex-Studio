@@ -1,8 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { POST as createProjectRoute } from '../app/api/projects/route';
-import { POST as writeFileRoute } from '../app/api/files/route';
+import { GET as getFilesRoute, POST as writeFileRoute } from '../app/api/files/route';
 import { GET as previewRoute } from '../app/api/preview/route';
+import { getProject, listProjects } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 
 const createdIds: string[] = [];
@@ -36,6 +37,21 @@ describe('local project API', () => {
     expect(fs.existsSync(path.join(projectRoot(id), 'script.js'))).toBe(true);
   });
 
+  it('rejects symlinked project metadata when reading project details', async () => {
+    const created = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'Metadata Symlink Test' }));
+    if (created.status !== 201) throw new Error('Project creation failed: ' + await created.clone().text());
+    const { project } = await created.json();
+    createdIds.push(project.id);
+    const root = projectRoot(project.id);
+    const metadata = path.join(root, '.alex-project.json');
+    const linkedMetadata = path.join(root, 'linked-metadata.json');
+    fs.writeFileSync(linkedMetadata, JSON.stringify({ id: project.id, name: 'Forged project name', createdAt: new Date().toISOString() }));
+    fs.unlinkSync(metadata);
+    fs.symlinkSync(linkedMetadata, metadata);
+    expect(getProject(project.id)).toBeNull();
+    expect(listProjects().some((item) => item.id === project.id)).toBe(false);
+  });
+
   it('refuses file writes without explicit approval and saves after approval', async () => {
     const created = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'Approval Test Project' }));
     if (created.status !== 201) throw new Error('Project creation failed: ' + await created.clone().text());
@@ -58,6 +74,24 @@ describe('local project API', () => {
     expect(traversal.status).toBe(400);
     expect(fs.existsSync(path.join(projectRoot(project.id), '..', 'outside.txt'))).toBe(false);
     expect(approved.headers.get('content-type')).toContain('application/json');
+  });
+
+  it('rejects file listing, reads, and writes for unknown project IDs', async () => {
+    const projectId = 'missing-project-authorization-check';
+    const list = await getFilesRoute(new Request('http://localhost:3000/api/files?projectId=' + projectId, {
+      headers: { host: 'localhost:3000' },
+    }));
+    expect(list.status).toBe(404);
+
+    const read = await getFilesRoute(new Request('http://localhost:3000/api/files?projectId=' + projectId + '&path=index.html', {
+      headers: { host: 'localhost:3000' },
+    }));
+    expect(read.status).toBe(404);
+
+    const write = await writeFileRoute(localRequest('http://localhost:3000/api/files', {
+      projectId, path: 'index.html', content: '<h1>Must not be written</h1>', approved: true,
+    }));
+    expect(write.status).toBe(404);
   });
 
   it('serves the current project HTML in a restricted preview response', async () => {

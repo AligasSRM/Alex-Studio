@@ -9,9 +9,13 @@ async function createProject(page: Page, name: string) {
 }
 
 async function saveCurrentFile(page: Page) {
+  await page.getByRole('button', { name: 'Review diff first' }).click();
+  await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
+  await page.getByRole('button', { name: "Diff reviewed — continue" }).click();
   await page.getByRole('button', { name: 'Review & save' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
   await expect(page.getByRole('status')).toContainText('Saved');
+  await page.getByRole('button', { name: 'Code', exact: true }).click();
 }
 
 test('edit, undo, redo, branch invalidation, and save/reopen preserve the expected content', async ({ page }) => {
@@ -36,6 +40,7 @@ test('edit, undo, redo, branch invalidation, and save/reopen preserve the expect
 
   await saveCurrentFile(page);
   await page.reload();
+  await page.getByLabel('Active project').selectOption({ label: projectName });
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'File editor' })).toHaveValue(branched);
 });
