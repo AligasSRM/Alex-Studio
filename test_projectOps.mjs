@@ -28,7 +28,7 @@ test("project creation escapes HTML and creates a usable project", () => {
 test("project operations reject traversal and malformed identifiers", () => {
   assert.equal(getProject("../outside"), null);
   assert.equal(deleteProject("../outside"), false);
-  assert.deepEqual(getProjectFiles("../outside"), []);
+  assert.throws(() => getProjectFiles("../outside"), /Invalid project id/);
 });
 
 test("project creation rejects invalid fields", () => {
