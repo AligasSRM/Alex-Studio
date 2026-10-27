@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
-import { createProject, getProject, getProjectFiles, updateProject, deleteProject } from "./src/lib/projectOps.ts";
+import os from "node:os";
+import { createProject, getProject, getProjectFiles, updateProject, deleteProject, validateProjectFilePath } from "./src/lib/projectOps.ts";
 
 test("project creation escapes HTML and creates a usable project", () => {
   let projectId;
@@ -34,4 +35,21 @@ test("project operations reject traversal and malformed identifiers", () => {
 test("project creation rejects invalid fields", () => {
   assert.throws(() => createProject("", "description"), /Project name is required/);
   assert.throws(() => createProject("x".repeat(101)), /100 characters or fewer/);
+});
+
+test("project file path validation rejects a symlink that escapes the project", () => {
+  const project = createProject("symlink-boundary-test");
+  const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "alex-project-outside-"));
+  const linkPath = path.join(process.cwd(), "workspace", project.id, "escape.txt");
+  try {
+    fs.writeFileSync(path.join(outsideDir, "secret.txt"), "private");
+    fs.symlinkSync(path.join(outsideDir, "secret.txt"), linkPath, "file");
+    assert.throws(
+      () => validateProjectFilePath(`${project.id}/escape.txt`),
+      /outside project/i
+    );
+  } finally {
+    deleteProject(project.id);
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
 });
