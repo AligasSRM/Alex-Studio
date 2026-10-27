@@ -29,7 +29,8 @@ export default function ProjectsPage() {
   };
 
   useEffect(() => {
-    fetchProjects();
+    const timer = window.setTimeout(() => { void fetchProjects(); }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const createProject = async () => {
