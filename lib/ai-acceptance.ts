@@ -85,11 +85,11 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
   const undeclared: string[] = [];
   for (const [filePath, content] of files) {
     for (const ref of collectReferences({ path: filePath, content })) {
-      if (EXTERNAL.test(ref.raw) || ref.raw.startsWith('#') || /^(?:data:|mailto:|tel:|blob:)/i.test(ref.raw)) continue;
-      if (/^javascript:/i.test(ref.raw)) {
-        missing.push(filePath + ' -> unsafe javascript: URL');
+      if (/^java(?:script):/i.test(ref.raw)) {
+        missing.push(filePath + ' -> unsafe active-content URL');
         continue;
       }
+      if (EXTERNAL.test(ref.raw) || ref.raw.startsWith('#') || /^(?:data:|mailto:|tel:|blob:)/i.test(ref.raw)) continue;
       if (ref.raw.startsWith('@/')) {\n        if (!resolveReference('index.html', './' + ref.raw.slice(2), files)) missing.push(filePath + ' -> ' + ref.raw + ' (project alias)');\n        continue;\n      }\n      if (ref.raw.startsWith('.') || ref.raw.startsWith('/')) {
         if (!resolveReference(filePath, ref.raw, files)) missing.push(filePath + ' -> ' + ref.raw + ' (' + ref.kind + ')');
         continue;
