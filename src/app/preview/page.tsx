@@ -86,7 +86,7 @@ export default function PreviewPage() {
       <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded">
         <h2 className="font-bold text-yellow-800 mb-2">Security Notes</h2>
         <ul className="text-sm text-yellow-700 space-y-1">
-          <li>• <code>sandbox="allow-scripts"</code> — scripts can run but no top-level navigation, no popups, no same-origin access</li>
+          <li>• <code>sandbox=&quot;allow-scripts&quot;</code> — scripts can run but no top-level navigation, no popups, no same-origin access</li>
           <li>• CSP headers (set server-side) block fetch to external resources</li>
           <li>• <code>window.parent</code> access is blocked by sandbox</li>
           <li>• No cookies, localStorage, or sessionStorage access from iframe</li>
