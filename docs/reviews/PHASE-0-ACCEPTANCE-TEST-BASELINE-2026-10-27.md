@@ -24,7 +24,7 @@
 | P0-ACC-004 | Diff correctness | Browser diff pane rendered-content assertions | Pass — CI run 152 | Diff view mounts; the modified pane shows the expected marker and the original pane shows the project name. |
 | P0-ACC-005 | Diff is read-only | Browser keyboard-edit rejection check | Pass — CI run 152 | A keyboard edit attempt does not alter the draft, and the editor retains the exact proposed content after leaving review. |
 | P0-ACC-006 | Reviewed content matches proposed save | Browser request payload assertion | Pass — CI run 152 | The approved POST payload content must exactly equal the reviewed editor draft. |
-| P0-ACC-007 | Multi-file diff review | Browser sequential two-file review test | Pass — CI run 152; sequential per-file scope | Two changed files can be reviewed independently; direct per-file rendered-content assertions remain pending. |
+| P0-ACC-007 | Multi-file diff review | `tests/browser/phase0-acceptance.spec.ts`; `tests/browser/phase0-hardening.spec.ts` | Added — awaiting CI for current head | Rendered original and modified panes must each show distinct expected content for both CSS and HTML. |
 | P0-ACC-008 | Rejected write changes no bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Missing approval returns 409 and original bytes are identical before/after. |
 | P0-ACC-009 | Cancel approval changes no bytes | Browser acceptance test | Pass — CI run 152 | Cancel closes the dialog; reload shows original saved content. |
 | P0-ACC-010 | Backup contains exact previous bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Backup bytes exactly equal file bytes before replacement. |
@@ -47,7 +47,7 @@
 - `tests/phase0-acceptance.test.ts`: disk-backed listing, byte-for-byte no-write-on-denial, exact backup bytes, backup failure safety, traversal sentinel, controlled parent-directory symlink swap at rename.
 - `tests/browser/phase0-acceptance.spec.ts`: project switch/reopen, production-server restart persistence, read-only diff editor and save-payload matching, create/load failure UX, sequential two-file review, approval cancel, preview parent isolation, external fetch restriction, top-level navigation attempt.
 - `tests/phase0-hardening.test.ts`: injected atomic-rename failure and final-target symlink-swap safety.
-- `tests/browser/phase0-hardening.spec.ts`: direct rendered diff assertions for changed CSS and HTML; preview CSP checks for default-deny resource policy and blocked form actions.
+- `tests/browser/phase0-hardening.spec.ts`: direct rendered diff assertions for changed CSS and HTML; preview CSP header checks and browser-level attempts to load external CSS, images, video, iframe, and form targets.
 
 ## Verification record — code commit `d6799772f08e244af6e7e8fe46ddcefbaff2842b`
 - `npm install`: passed
@@ -76,4 +76,4 @@
 | `tests/zip-export.test.ts` | Export behavior; supporting product regression, not a named Phase 0 acceptance criterion | Supporting regression evidence |
 
 ## Current decision
-**Phase 0 remains OPEN / PARTIAL until CI verifies the new tests against the latest branch head and the evidence is reviewed.** A passing test suite demonstrates only the exercised cases; controlled race tests do not prove resistance to every possible OS-level race, and passing CI does not certify production readiness.
+**Phase 0 remains OPEN / PARTIAL until CI verifies the new tests against the latest branch head and the evidence is reviewed.** The current branch adds direct multi-file diff assertions, rename-failure atomicity, final-target symlink-swap safety, browser checks for preview resource restrictions, and a legacy test crosswalk. A passing test suite demonstrates only the exercised cases; controlled race tests do not prove resistance to every possible OS-level race, and passing CI does not certify production readiness.
