@@ -23,7 +23,7 @@ function resolveReference(from: string, raw: string, files: Map<string, string>)
   const value = raw.split(/[?#]/, 1)[0];
   if (!value || EXTERNAL.test(value)) return true;
   if (/^javascript:/i.test(value)) return false;
-  const base = value.startsWith('/') ? value.slice(1) : path.posix.join(path.posix.dirname(from), value);
+  const base = value === '/' ? 'index.html' : value.startsWith('/') ? value.slice(1) : path.posix.join(path.posix.dirname(from), value);
   const clean = path.posix.normalize(base);
   if (clean === '..' || clean.startsWith('../') || path.posix.isAbsolute(clean)) return false;
   const candidates = [clean, clean + '.html', clean + '.css', clean + '.js', clean + '.mjs', clean + '.cjs',
@@ -90,7 +90,7 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
         missing.push(filePath + ' -> unsafe javascript: URL');
         continue;
       }
-      if (ref.raw.startsWith('.') || ref.raw.startsWith('/')) {
+      if (ref.raw.startsWith('@/')) {\n        if (!resolveReference('index.html', './' + ref.raw.slice(2), files)) missing.push(filePath + ' -> ' + ref.raw + ' (project alias)');\n        continue;\n      }\n      if (ref.raw.startsWith('.') || ref.raw.startsWith('/')) {
         if (!resolveReference(filePath, ref.raw, files)) missing.push(filePath + ' -> ' + ref.raw + ' (' + ref.kind + ')');
         continue;
       }
