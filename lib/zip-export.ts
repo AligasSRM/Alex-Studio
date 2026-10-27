@@ -8,8 +8,8 @@ const EXCLUDED_DIRS = new Set(['.git', '.alex', 'node_modules']);
 
 function crc32(data: Buffer): number {
   let crc = 0xffffffff;
-  for (const byte of data) {
-    crc ^= byte;
+  for (let index = 0; index < data.length; index++) {
+    crc ^= data[index];
     for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
   }
   return (crc ^ 0xffffffff) >>> 0;
