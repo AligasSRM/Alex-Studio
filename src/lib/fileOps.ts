@@ -2,16 +2,26 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 
-const WORKSPACE_ROOT = path.resolve(process.cwd(), "workspace");
+const APP_ROOT = path.resolve(process.cwd());
+const WORKSPACE_ROOT = path.join(APP_ROOT, "workspace");
 
 function isWithinRoot(candidate: string, root: string): boolean {
   const relative = path.relative(root, candidate);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+function getRealWorkspaceRoot(): string {
+  fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
+  const realRoot = fs.realpathSync(WORKSPACE_ROOT);
+  if (!isWithinRoot(realRoot, APP_ROOT)) {
+    throw new Error("Workspace root resolves outside the application directory");
+  }
+  return realRoot;
+}
+
 /**
- * Resolve a workspace-relative path and reject both lexical traversal and
- * existing symlink paths that resolve outside the workspace.
+ * Resolve a workspace-relative path and reject lexical traversal and existing
+ * symlinks that resolve outside the canonical workspace.
  */
 export function validatePath(relativePath: string): string {
   if (typeof relativePath !== "string" || relativePath.trim() === "") {
@@ -27,20 +37,12 @@ export function validatePath(relativePath: string): string {
     throw new Error("Path traversal (..) is not allowed");
   }
 
+  const realRoot = getRealWorkspaceRoot();
   const resolved = path.resolve(WORKSPACE_ROOT, relativePath);
   if (!isWithinRoot(resolved, WORKSPACE_ROOT)) {
     throw new Error("Path is outside workspace");
   }
 
-  // Ensure the workspace root itself is not redirected by a symlink.
-  if (fs.existsSync(WORKSPACE_ROOT)) {
-    const realRoot = fs.realpathSync(WORKSPACE_ROOT);
-    if (!isWithinRoot(resolved, realRoot) && !isWithinRoot(resolved, WORKSPACE_ROOT)) {
-      throw new Error("Path is outside workspace");
-    }
-  }
-
-  // If the target or an ancestor already exists, check its real path too.
   let existing = resolved;
   while (!fs.existsSync(existing)) {
     const parent = path.dirname(existing);
@@ -48,9 +50,6 @@ export function validatePath(relativePath: string): string {
     existing = parent;
   }
   if (fs.existsSync(existing)) {
-    const realRoot = fs.existsSync(WORKSPACE_ROOT)
-      ? fs.realpathSync(WORKSPACE_ROOT)
-      : WORKSPACE_ROOT;
     const realExisting = fs.realpathSync(existing);
     if (!isWithinRoot(realExisting, realRoot)) {
       throw new Error("Path resolves outside workspace");
@@ -77,11 +76,13 @@ export function writeFile(relativePath: string, content: string): void {
   const dir = path.dirname(fullPath);
   fs.mkdirSync(dir, { recursive: true });
 
-  // Revalidate after directory creation to catch symlinked ancestors.
+  // Revalidate after directory creation to detect symlinked ancestors.
   validatePath(relativePath);
   const tmpPath = path.join(dir, `.${path.basename(fullPath)}.${randomUUID()}.tmp`);
   try {
     fs.writeFileSync(tmpPath, content, { encoding: "utf-8", flag: "wx", mode: 0o600 });
+    // Revalidate immediately before replacement.
+    validatePath(relativePath);
     fs.renameSync(tmpPath, fullPath);
   } finally {
     if (fs.existsSync(tmpPath)) fs.rmSync(tmpPath, { force: true });
@@ -94,7 +95,7 @@ export function createBackup(relativePath: string): string {
     throw new Error(`Cannot backup missing or non-file path: ${relativePath}`);
   }
 
-  const backupDir = path.join(WORKSPACE_ROOT, ".alex", "backups");
+  const backupDir = path.join(getRealWorkspaceRoot(), ".alex", "backups");
   fs.mkdirSync(backupDir, { recursive: true });
   const backupPath = path.join(backupDir, `${Date.now()}-${randomUUID()}.bak`);
   fs.copyFileSync(fullPath, backupPath, fs.constants.COPYFILE_EXCL);
@@ -111,9 +112,5 @@ export function fileExists(relativePath: string): boolean {
 }
 
 export function ensureWorkspace(): void {
-  fs.mkdirSync(WORKSPACE_ROOT, { recursive: true });
-  const realRoot = fs.realpathSync(WORKSPACE_ROOT);
-  if (!isWithinRoot(realRoot, path.resolve(process.cwd()))) {
-    throw new Error("Workspace root resolves outside the application directory");
-  }
+  getRealWorkspaceRoot();
 }
