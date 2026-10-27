@@ -27,6 +27,10 @@ test('P0-ACC-007: rendered diff assertions cover CSS and HTML files independentl
   await expect(originalCssPane).toContainText('background:#101827');
 
   await page.getByRole('button', { name: 'Code', exact: true }).click();
+  await page.getByRole('button', { name: 'Review & save' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('status')).toContainText('Saved');
   await page.getByRole('button', { name: /index\.html/ }).click();
   await expect(page.locator('.editor-title h2')).toHaveText('index.html');
   const originalHtml = await editor.inputValue();
