@@ -200,7 +200,7 @@ export async function settleAiUsage(
     if (!reservation) throw new Error("AI_USAGE_RESERVATION_NOT_FOUND");
 
     const totals = projectTotals(ledger, reservation.month, reservation.projectId);
-    const actualCost = costFor(inputTokens, outputTokens, config);
+    const actualCost = usageEstimated ? reservation.reservedUsd : costFor(inputTokens, outputTokens, config);
     delete ledger.reservations[reservationId];
     ledger.months[reservation.month] ??= {};
     ledger.months[reservation.month][reservation.projectId] = {
