@@ -138,6 +138,12 @@ export default function ProjectsPage() {
                 >
                   Open
                 </a>
+                <a
+                  href={`/chat?project=${project.id}`}
+                  className="px-3 py-1 border border-blue-300 text-blue-700 text-sm rounded hover:bg-blue-50"
+                >
+                  AI Chat
+                </a>
                 <button
                   onClick={() => deleteProject(project.id)}
                   className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
