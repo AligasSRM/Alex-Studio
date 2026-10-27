@@ -87,14 +87,14 @@ test('P0-ACC-007: changed files can each be reviewed independently', async ({ pa
   await editor.fill('<!doctype html><html><body><h1>HTML file review</h1></body></html>');
   await saveCurrentFile(page);
 
-  await page.getByRole('button', { name: /styles\\.css/ }).click();
+  await page.getByRole('button', { name: /styles\.css/ }).click();
   await editor.fill('body { background: rgb(8, 9, 10); }');
   await page.getByRole('button', { name: 'Review diff', exact: true }).click();
   await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await saveCurrentFile(page);
 
-  await page.getByRole('button', { name: /index\\.html/ }).click();
+  await page.getByRole('button', { name: /index\.html/ }).click();
   await editor.fill('<!doctype html><html><body><h1>Second HTML review</h1></body></html>');
   await page.getByRole('button', { name: 'Review diff', exact: true }).click();
   await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
