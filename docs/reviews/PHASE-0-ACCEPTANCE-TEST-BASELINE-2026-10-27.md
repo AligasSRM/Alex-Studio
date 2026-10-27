@@ -28,13 +28,13 @@
 | P0-ACC-008 | Rejected write changes no bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Missing approval returns 409 and original bytes are identical before/after. |
 | P0-ACC-009 | Cancel approval changes no bytes | Browser acceptance test | Pass — CI run 152 | Cancel closes the dialog; reload shows original saved content. |
 | P0-ACC-010 | Backup contains exact previous bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Backup bytes exactly equal file bytes before replacement. |
-| P0-ACC-011 | Backup/write failure does not partially apply | `tests/phase0-acceptance.test.ts` | Pass for backup-creation failure; broader filesystem failures pending | Deterministic backup-creation failure leaves original untouched. Other filesystem/rename failure modes remain pending. |
+| P0-ACC-011 | Backup/write failure does not partially apply | `tests/phase0-acceptance.test.ts`; `tests/phase0-hardening.test.ts` | Added — awaiting CI for current head | Backup creation and atomic-rename failures leave original bytes intact; temporary files are removed and backups remain exact. |
 | P0-ACC-012 | Preview cannot access parent context | Browser isolation test | Pass — CI run 152 | Parent DOM access is blocked and parent document remains unchanged. |
-| P0-ACC-013 | Preview external network is restricted | Browser isolation test | Pass for external fetch; other resource types pending | External fetch is blocked by preview CSP. Resource loads and other navigation/form variants need broader coverage. |
+| P0-ACC-013 | Preview external network is restricted | `tests/browser/phase0-acceptance.spec.ts`; `tests/browser/phase0-hardening.spec.ts`; `tests/api.test.ts` | Added — awaiting CI for current head | Browser isolation and response-header assertions verify default-deny CSP, external fetch/resource restrictions, and denied form actions. |
 | P0-ACC-014 | Preview cannot initiate top-level navigation | Browser test | Pass — CI run 152 | A form targeted at `_top` must not navigate the studio page. |
-| P0-ACC-015 | Symlink/path race resistance | Controlled parent-directory symlink swap test in `tests/phase0-acceptance.test.ts` | Pass for controlled rename-boundary scenario; broader races pending | A symlink swap at the write/rename boundary must not create or modify files outside the project. |
+| P0-ACC-015 | Symlink/path race resistance | `tests/phase0-acceptance.test.ts`; `tests/phase0-hardening.test.ts`; `tests/security.test.ts` | Added — awaiting CI for current head | Parent-directory and final-target symlink swaps must not create or modify outside files; outside sentinels remain byte-identical. Race tests are controlled regression tests, not proof against every OS-level race. |
 | P0-ACC-016 | Rejected traversal leaves outside files unchanged | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | An outside-project sentinel remains byte-for-byte identical after rejected traversal. |
-| P0-ACC-017 | Security case-to-test traceability | This matrix + `tests/security.test.ts` | Partial — the Phase 0 acceptance IDs are mapped; full legacy security-case mapping remains | Each Phase 0 ID is linked to executable evidence and the recorded CI run; mapping every legacy security case remains outstanding. |
+| P0-ACC-017 | Security case-to-test traceability | This matrix and the legacy-test crosswalk below | Added — mapping included; awaiting review and CI | Every existing security/API/browser/edit-history/export suite is mapped to Phase 0 criteria or explicitly classified as supporting regression coverage. |
 
 ## Existing tests at the base commit
 - `tests/api.test.ts`: project creation, approval guard, save/backup existence, traversal rejection, preview headers, non-local request rejection.
@@ -46,6 +46,8 @@
 ## Added test files
 - `tests/phase0-acceptance.test.ts`: disk-backed listing, byte-for-byte no-write-on-denial, exact backup bytes, backup failure safety, traversal sentinel, controlled parent-directory symlink swap at rename.
 - `tests/browser/phase0-acceptance.spec.ts`: project switch/reopen, production-server restart persistence, read-only diff editor and save-payload matching, create/load failure UX, sequential two-file review, approval cancel, preview parent isolation, external fetch restriction, top-level navigation attempt.
+- `tests/phase0-hardening.test.ts`: injected atomic-rename failure and final-target symlink-swap safety.
+- `tests/browser/phase0-hardening.spec.ts`: direct rendered diff assertions for changed CSS and HTML; preview CSP checks for default-deny resource policy and blocked form actions.
 
 ## Verification record — code commit `d6799772f08e244af6e7e8fe46ddcefbaff2842b`
 - `npm install`: passed
@@ -57,7 +59,21 @@
 - `npm run test:e2e`: passed
 - GitHub Actions run: https://github.com/AligasSRM/Alex-Studio/actions/runs/40554592702
 
-The documentation-only update after this code commit does not change the tested source or test files. Do not close Phase 0 while any **Pending** or failing high-risk acceptance item remains.
+## Legacy test crosswalk (P0-ACC-017)
+
+| Existing suite / case family | Phase 0 mapping | Classification |
+|---|---|---|
+| `tests/api.test.ts`: create project + starter files | P0-ACC-001 | Direct acceptance evidence |
+| `tests/api.test.ts`: approval required, save after approval, backup, traversal rejection | P0-ACC-008, P0-ACC-010, P0-ACC-016 | Direct acceptance evidence |
+| `tests/api.test.ts`: restricted preview headers/content, reject non-local preview host, reject non-local create origin | P0-ACC-012, P0-ACC-013, P0-ACC-014 and security guardrail | Direct/supporting regression evidence |
+| `tests/security.test.ts`: safe relative path; traversal, absolute, drive-letter, hidden, duplicate-separator rejection | P0-ACC-016 | Direct acceptance evidence |
+| `tests/security.test.ts`: project IDs and symlink/dangling-symlink rejection | P0-ACC-015 | Direct/supporting regression evidence |
+| `tests/security.test.ts`: NUL and 1 MiB limit | P0-ACC-011 and file-input guardrail | Supporting regression evidence |
+| `tests/security.test.ts`: missing/mismatched/remote Origin and Host | P0-ACC-008 and local-request security guardrail | Supporting regression evidence |
+| `tests/phase0-acceptance.test.ts` + `tests/phase0-hardening.test.ts`: exact backup, denied writes, backup/rename failure, traversal sentinel, symlink swaps | P0-ACC-008, P0-ACC-010, P0-ACC-011, P0-ACC-015, P0-ACC-016 | Direct acceptance evidence |
+| `tests/browser/phase0-acceptance.spec.ts` + `tests/browser/phase0-hardening.spec.ts`: lifecycle/restart, diff, failure UX, preview isolation/network/navigation, multi-file rendered content | P0-ACC-001–007, P0-ACC-009, P0-ACC-012–014 | Direct acceptance evidence |
+| `tests/browser/undo-redo.spec.ts` + `tests/edit-history.test.ts` | P0-ACC-001, P0-ACC-005, P0-ACC-009 | Supporting regression evidence |
+| `tests/zip-export.test.ts` | Export behavior; supporting product regression, not a named Phase 0 acceptance criterion | Supporting regression evidence |
 
 ## Current decision
-**Phase 0 remains OPEN / PARTIAL despite the passing CI run.** Core acceptance tests pass on the recorded code commit. Remaining coverage gaps include additional backup/rename failure modes, broader preview resource-type restrictions, and complete mapping of every legacy security test to a Phase 0 acceptance ID. The passing suite does not by itself close Phase 0 or certify production readiness.
+**Phase 0 remains OPEN / PARTIAL until CI verifies the new tests against the latest branch head and the evidence is reviewed.** A passing test suite demonstrates only the exercised cases; controlled race tests do not prove resistance to every possible OS-level race, and passing CI does not certify production readiness.
