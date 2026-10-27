@@ -33,6 +33,10 @@ function assertProjectPath(projectDir: string): void {
   }
   if (fs.existsSync(projectDir)) {
     const realRoot = fs.realpathSync(WORKSPACE_ROOT);
+    const appRoot = path.resolve(process.cwd());
+    if (!isWithinRoot(realRoot, appRoot)) {
+      throw new Error("Workspace root resolves outside the application directory");
+    }
     const realProject = fs.realpathSync(projectDir);
     if (!isWithinRoot(realProject, realRoot)) {
       throw new Error("Project path resolves outside workspace");
