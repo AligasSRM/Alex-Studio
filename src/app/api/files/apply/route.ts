@@ -21,13 +21,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Request body must be an object" }, { status: 400 });
     }
 
-    const { path: canonicalRelativePath, content, expectedSha256 } = body as {
+    const { path: requestedPath, content, expectedSha256 } = body as {
       path?: unknown;
       content?: unknown;
       expectedSha256?: unknown;
     };
 
-    if (typeof relativePath !== "string" || relativePath.length === 0 || relativePath.length > 500) {
+    if (typeof requestedPath !== "string" || requestedPath.length === 0 || requestedPath.length > 500) {
       return NextResponse.json({ error: "Missing or invalid 'path'" }, { status: 400 });
     }
     if (typeof content !== "string") {
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
     let canonicalRelativePath: string;
     try {
-      canonicalRelativePath = validateProjectFilePath(relativePath);
+      canonicalRelativePath = validateProjectFilePath(requestedPath);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invalid project file path";
       const status = /outside project|outside workspace|resolves outside/i.test(message) ? 403 : 400;
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      path: relativePath,
+      path: canonicalRelativePath,
       backup: backupPath,
       created: !existed,
       sha256: sha256Content(content),
