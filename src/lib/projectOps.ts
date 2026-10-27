@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { execSync } from "node:child_process";
-import { ensureWorkspace } from "./fileOps";
+import { ensureWorkspace } from "./fileOps.ts";
 
 const WORKSPACE_ROOT = path.resolve(process.cwd(), "workspace");
 const PROJECT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
