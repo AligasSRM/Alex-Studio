@@ -4,8 +4,10 @@
 - Repository: `AligasSRM/Alex-Studio`
 - Base commit: `6096c8c210ad5e566a821ae63ace64af3ba2eabc`
 - Work branch: `test/phase-0-acceptance-suite`
-- Status: **CI passed for code commit `d6799772f08e244af6e7e8fe46ddcefbaff2842b`**
-- CI run: https://github.com/AligasSRM/Alex-Studio/actions/runs/40554592702
+- Status: **PHASE 0 ACCEPTANCE GATE CLOSED — all defined P0 acceptance checks passed on code commit `8ddef4083a17c578fc713cc93d640a5326bd4229`**
+- Verified CI run: https://github.com/AligasSRM/Alex-Studio/actions/runs/40567364737
+- Verified head: `8ddef4083a17c578fc713cc93d640a5326bd4229`
+- Result: 6 Jest suites / 35 tests passed; Playwright 14/14 passed; typecheck, lint and production build passed.
 - Scope: Phase 0 acceptance tests only. This document does not approve release or close Phase 0.
 
 ## Status vocabulary
@@ -18,23 +20,23 @@
 
 | ID | Criterion | Test/evidence | Status on this branch | Acceptance condition |
 |---|---|---|---|---|
-| P0-ACC-001 | Project lifecycle and switching | `tests/browser/phase0-acceptance.spec.ts`; `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Create two projects, switch back, and confirm saved content and project records persist on disk. |
-| P0-ACC-002 | Persistence across a real server restart | Production-server restart test in browser acceptance suite | Pass — CI run 152 | Stop and restart the production server process, then verify project metadata and exact saved content through the API. |
-| P0-ACC-003 | Project create/load failure UX | Browser fault-injection tests | Pass — CI run 152 | Failed create and project-list/file loading show visible errors; failed file loading preserves the previously active workspace. |
-| P0-ACC-004 | Diff correctness | Browser diff pane rendered-content assertions | Pass — CI run 152 | Diff view mounts; the modified pane shows the expected marker and the original pane shows the project name. |
-| P0-ACC-005 | Diff is read-only | Browser keyboard-edit rejection check | Pass — CI run 152 | A keyboard edit attempt does not alter the draft, and the editor retains the exact proposed content after leaving review. |
-| P0-ACC-006 | Reviewed content matches proposed save | Browser request payload assertion | Pass — CI run 152 | The approved POST payload content must exactly equal the reviewed editor draft. |
-| P0-ACC-007 | Multi-file diff review | `tests/browser/phase0-acceptance.spec.ts`; `tests/browser/phase0-hardening.spec.ts` | Added — awaiting CI for current head | Rendered original and modified panes must each show distinct expected content for both CSS and HTML. |
-| P0-ACC-008 | Rejected write changes no bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Missing approval returns 409 and original bytes are identical before/after. |
-| P0-ACC-009 | Cancel approval changes no bytes | Browser acceptance test | Pass — CI run 152 | Cancel closes the dialog; reload shows original saved content. |
-| P0-ACC-010 | Backup contains exact previous bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Backup bytes exactly equal file bytes before replacement. |
-| P0-ACC-011 | Backup/write failure does not partially apply | `tests/phase0-acceptance.test.ts`; `tests/phase0-hardening.test.ts` | Added — awaiting CI for current head | Backup creation and atomic-rename failures leave original bytes intact; temporary files are removed and backups remain exact. |
-| P0-ACC-012 | Preview cannot access parent context | Browser isolation test | Pass — CI run 152 | Parent DOM access is blocked and parent document remains unchanged. |
-| P0-ACC-013 | Preview external network is restricted | `tests/browser/phase0-acceptance.spec.ts`; `tests/browser/phase0-hardening.spec.ts`; `tests/api.test.ts` | Added — awaiting CI for current head | Browser isolation and response-header assertions verify default-deny CSP, external fetch/resource restrictions, and denied form actions. |
-| P0-ACC-014 | Preview cannot initiate top-level navigation | Browser test | Pass — CI run 152 | A form targeted at `_top` must not navigate the studio page. |
-| P0-ACC-015 | Symlink/path race resistance | `tests/phase0-acceptance.test.ts`; `tests/phase0-hardening.test.ts`; `tests/security.test.ts` | Added — awaiting CI for current head | Parent-directory and final-target symlink swaps must not create or modify outside files; outside sentinels remain byte-identical. Race tests are controlled regression tests, not proof against every OS-level race. |
-| P0-ACC-016 | Rejected traversal leaves outside files unchanged | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | An outside-project sentinel remains byte-for-byte identical after rejected traversal. |
-| P0-ACC-017 | Security case-to-test traceability | This matrix and the legacy-test crosswalk below | Added — mapping included; awaiting review and CI | Every existing security/API/browser/edit-history/export suite is mapped to Phase 0 criteria or explicitly classified as supporting regression coverage. |
+| P0-ACC-001 | Project lifecycle and switching | `tests/browser/phase0-acceptance.spec.ts`; `tests/phase0-acceptance.test.ts` | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Create two projects, switch back, and confirm saved content and project records persist on disk. |
+| P0-ACC-002 | Persistence across a real server restart | Production-server restart test in browser acceptance suite | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Stop and restart the production server process, then verify project metadata and exact saved content through the API. |
+| P0-ACC-003 | Project create/load failure UX | Browser fault-injection tests | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Failed create and project-list/file loading show visible errors; failed file loading preserves the previously active workspace. |
+| P0-ACC-004 | Diff correctness | Browser diff pane rendered-content assertions | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Diff view mounts; the modified pane shows the expected marker and the original pane shows the project name. |
+| P0-ACC-005 | Diff is read-only | Browser keyboard-edit rejection check | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | A keyboard edit attempt does not alter the draft, and the editor retains the exact proposed content after leaving review. |
+| P0-ACC-006 | Reviewed content matches proposed save | Browser request payload assertion | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | The approved POST payload content must exactly equal the reviewed editor draft. |
+| P0-ACC-007 | Multi-file diff review | `tests/browser/phase0-acceptance.spec.ts`; `tests/browser/phase0-hardening.spec.ts` | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Rendered original and modified panes must each show distinct expected content for both CSS and HTML. |
+| P0-ACC-008 | Rejected write changes no bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Missing approval returns 409 and original bytes are identical before/after. |
+| P0-ACC-009 | Cancel approval changes no bytes | Browser acceptance test | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Cancel closes the dialog; reload shows original saved content. |
+| P0-ACC-010 | Backup contains exact previous bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Backup bytes exactly equal file bytes before replacement. |
+| P0-ACC-011 | Backup/write failure does not partially apply | `tests/phase0-acceptance.test.ts`; `tests/phase0-hardening.test.ts` | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Backup creation and atomic-rename failures leave original bytes intact; temporary files are removed and backups remain exact. |
+| P0-ACC-012 | Preview cannot access parent context | Browser isolation test | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Parent DOM access is blocked and parent document remains unchanged. |
+| P0-ACC-013 | Preview external network is restricted | `tests/browser/phase0-acceptance.spec.ts`; `tests/browser/phase0-hardening.spec.ts`; `tests/api.test.ts` | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Browser isolation and response-header assertions verify default-deny CSP, external fetch/resource restrictions, and denied form actions. |
+| P0-ACC-014 | Preview cannot initiate top-level navigation | Browser test | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | A form targeted at `_top` must not navigate the studio page. |
+| P0-ACC-015 | Symlink/path race resistance | `tests/phase0-acceptance.test.ts`; `tests/phase0-hardening.test.ts`; `tests/security.test.ts` | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | Parent-directory and final-target symlink swaps must not create or modify outside files; outside sentinels remain byte-identical. Race tests are controlled regression tests, not proof against every OS-level race. |
+| P0-ACC-016 | Rejected traversal leaves outside files unchanged | `tests/phase0-acceptance.test.ts` | Pass — CI run `40567364737` (`8ddef4083a17c578fc713cc93d640a5326bd4229`) | An outside-project sentinel remains byte-for-byte identical after rejected traversal. |
+| P0-ACC-017 | Security case-to-test traceability | This matrix and the legacy-test crosswalk below | Pass — crosswalk reviewed; CI run `40567364737` passed | Every existing security/API/browser/edit-history/export suite is mapped to Phase 0 criteria or explicitly classified as supporting regression coverage. |
 
 ## Existing tests at the base commit
 - `tests/api.test.ts`: project creation, approval guard, save/backup existence, traversal rejection, preview headers, non-local request rejection.
@@ -50,14 +52,15 @@
 - `tests/browser/phase0-hardening.spec.ts`: direct rendered diff assertions for changed CSS and HTML; preview CSP header checks and browser-level attempts to load external CSS, images, video, iframe, and form targets.
 
 ## Verification record — code commit `d6799772f08e244af6e7e8fe46ddcefbaff2842b`
-- `npm install`: passed
-- Chromium installation: passed
-- `npm test`: passed
+- `npm install`: passed (npm reported 4 dependency advisories: 1 low, 1 moderate, 1 high, 1 critical; see release limitations below)
+- Playwright Chromium verification: passed (Playwright 1.64.1; preinstalled Chromium executable found)
+- `npm test`: passed — 6 suites, 35 tests
 - `npm run typecheck`: passed
 - `npm run lint`: passed
 - `npm run build`: passed
-- `npm run test:e2e`: passed
-- GitHub Actions run: https://github.com/AligasSRM/Alex-Studio/actions/runs/40554592702
+- `npm run test:e2e`: passed — 14/14 browser tests, 1 worker
+- GitHub Actions run: https://github.com/AligasSRM/Alex-Studio/actions/runs/40567364737
+- Exact code commit tested: `8ddef4083a17c578fc713cc93d640a5326bd4229`
 
 ## Legacy test crosswalk (P0-ACC-017)
 
@@ -76,4 +79,8 @@
 | `tests/zip-export.test.ts` | Export behavior; supporting product regression, not a named Phase 0 acceptance criterion | Supporting regression evidence |
 
 ## Current decision
-**Phase 0 remains OPEN / PARTIAL until CI verifies the new tests against the latest branch head and the evidence is reviewed.** The current branch adds direct multi-file diff assertions, rename-failure atomicity, final-target symlink-swap safety, browser checks for preview resource restrictions, and a legacy test crosswalk. A passing test suite demonstrates only the exercised cases; controlled race tests do not prove resistance to every possible OS-level race, and passing CI does not certify production readiness.
+**Formal decision: PHASE 0 ACCEPTANCE GATE = CLOSED / PASS for the defined P0-ACC-001–017 scope.** The exact tested code commit is `8ddef4083a17c578fc713cc93d640a5326bd4229`; CI run `40567364737` passed all required jobs, including the new multi-file diff assertions, backup/atomic-rename failure cases, symlink-swap regression tests, preview isolation/CSP checks, and the legacy test crosswalk.
+
+**Scope boundary / not release approval:** this closes only the Phase 0 acceptance-test gate. The README still lists first-release capabilities that are not complete, including AI-provider integration, rate limiting, usage/cost metering and monthly warning, secret scanning, and complete release-level validation. The same CI run's `npm install` reported 4 dependency advisories (1 low, 1 moderate, 1 high, 1 critical); those require a separate dependency-security review before any release approval. Do not deploy this prototype publicly; it remains local-only and has no user authentication.
+
+A passing suite proves only the exercised cases. Controlled race tests do not prove resistance to every possible OS-level race. Phase 1 is not authorized by this record; any next phase requires its own explicit acceptance gate.
