@@ -15,6 +15,7 @@ async function saveCurrentFile(page: Page) {
   await page.getByRole('button', { name: 'Review & save' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
   await expect(page.getByRole('status')).toContainText('Saved');
+  await page.getByRole('button', { name: 'Code', exact: true }).click();
 }
 
 test('edit, undo, redo, branch invalidation, and save/reopen preserve the expected content', async ({ page }) => {
