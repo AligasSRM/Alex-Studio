@@ -40,22 +40,25 @@ function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
     const value = raw?.trim();
     if (value) refs.push({ raw: value, kind });
   };
+
+  // Separate syntax families so unusual whitespace in generated files
+  // cannot make one broad expression swallow unrelated references.
   if (/\.(?:html?|xhtml)$/i.test(file.path)) {
-    // Handle single-, double-, and unquoted URL attributes.
-    const attrs = /\b(src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+))/gi;
-    for (const match of file.content.matchAll(attrs)) {
-      add(match[2] ?? match[3] ?? match[4], 'HTML src/href');
-    }
+    const quoted = /\b(?:src|href)\s*=\s*(["'])(.*?)\1/gi;
+    const unquoted = /\b(?:src|href)\s*=\s*([^\s"'<>]+)/gi;
+    for (const match of file.content.matchAll(quoted)) add(match[2], 'HTML src/href');
+    for (const match of file.content.matchAll(unquoted)) add(match[1], 'HTML src/href');
   }
   if (/\.css$/i.test(file.path)) {
-    for (const match of file.content.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) add(match[1], 'CSS url()');
-    for (const match of file.content.matchAll(/@import\s+(?:url\(\s*)?["']([^"']+)["']/gi)) add(match[1], 'CSS @import');
+    for (const match of file.content.matchAll(/url\(\s*(?:(["'])(.*?)\1|([^)'"\s]+))\s*\)/gi)) {
+      add(match[2] ?? match[3], 'CSS url()');
+    }
+    for (const match of file.content.matchAll(/@import\s+(?:url\(\s*)?(["'])(.*?)\1/gi)) add(match[2], 'CSS @import');
   }
   if (/\.(?:[cm]?[jt]sx?)$/i.test(file.path)) {
-    // Match side-effect imports, imports with from, re-exports, and require().
-    for (const match of file.content.matchAll(/\bimport\s+(?:[^;]*?\s+from\s+)?["']([^"']+)["']/g)) add(match[1], 'module import');
-    for (const match of file.content.matchAll(/\bexport\s+[^;]*?\s+from\s+["']([^"']+)["']/g)) add(match[1], 'module import');
-    for (const match of file.content.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) add(match[1], 'require()');
+    for (const match of file.content.matchAll(/\bimport\s*(?:[^"' ;]*?\sfrom\s*)?(["'])(.*?)\1/g)) add(match[2], 'module import');
+    for (const match of file.content.matchAll(/\bexport\s+[^"' ;]*?\sfrom\s*(["'])(.*?)\1/g)) add(match[2], 'module import');
+    for (const match of file.content.matchAll(/\brequire\(\s*(["'])(.*?)\1\s*\)/g)) add(match[2], 'require()');
   }
   return refs;
 }
