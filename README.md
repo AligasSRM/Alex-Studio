@@ -209,8 +209,10 @@
 
 ## Implementation status — 2026-10-27
 
-The current implementation pull request connects the home page to local project creation, project/file listing, text-file reading and explicitly approved saves. Existing files are backed up before replacement, and the preview uses a sandboxed iframe.
+**Phase 0 acceptance gate: CLOSED / PASS** for the defined P0-ACC-001–017 criteria. Evidence and the criterion-by-criterion matrix are recorded in [the Phase 0 acceptance report](docs/reviews/PHASE-0-ACCEPTANCE-TEST-BASELINE-2026-10-27.md). Verified code commit: `8ddef4083a17c578fc713cc93d640a5326bd4229`; [CI run](https://github.com/AligasSRM/Alex-Studio/actions/runs/40567364737) passed 35 unit tests, 14 browser tests, typecheck, lint, and production build.
 
-**Not complete / not yet accepted:** AI-provider integration, a proper line-by-line diff, CSP-backed preview hardening, archive export, change history/rollback, secret scanning, rate limiting, and the usage/cost meter remain outstanding. The current implementation must not be described as satisfying all first-release acceptance criteria.
+**This is not first-release acceptance or production approval.** The first-release criteria in §6 remain a separate gate. AI-provider integration, rate limiting, secret scanning, usage/cost metering and monthly warning, performance-threshold evidence, and full release-level security review remain outstanding. ZIP export and basic editor undo/redo have implementation and regression tests, but that does not by itself establish a durable approved-change ledger or Git-based rollback.
 
-**Local-only security boundary:** the current API rejects mutations unless the request is same-origin on localhost. There is no user authentication. Do not deploy this prototype publicly. CI results must be reviewed for the exact commit and are not a production-readiness certification.
+**Dependency security follow-up required:** the verified CI install reported 4 dependency advisories (1 low, 1 moderate, 1 high, 1 critical). Resolve and review these before any release approval.
+
+**Local-only security boundary:** the API rejects mutations unless the request is same-origin on localhost. There is no user authentication. Do not deploy this prototype publicly. CI results apply only to the exact tested commit and are not a production-readiness certification.
