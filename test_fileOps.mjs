@@ -30,18 +30,20 @@ test("validatePath rejects null bytes and empty paths", () => {
 });
 
 test("writeFile and readFile round-trip content and create backups", () => {
+  let backupPath;
   try {
     writeFile(fixturePath, "first");
     assert.equal(readFile(fixturePath), "first");
     assert.equal(fileExists(fixturePath), true);
 
-    const backup = createBackup(fixturePath);
-    assert.equal(fs.readFileSync(backup, "utf8"), "first");
+    backupPath = createBackup(fixturePath);
+    assert.equal(fs.readFileSync(backupPath, "utf8"), "first");
 
     writeFile(fixturePath, "second");
     assert.equal(readFile(fixturePath), "second");
-    assert.equal(fs.readFileSync(backup, "utf8"), "first");
+    assert.equal(fs.readFileSync(backupPath, "utf8"), "first");
   } finally {
+    if (backupPath) fs.rmSync(backupPath, { force: true });
     fs.rmSync(path.join(workspace, fixture), { recursive: true, force: true });
   }
 });
