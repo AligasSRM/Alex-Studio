@@ -36,6 +36,7 @@ test('edit, undo, redo, branch invalidation, and save/reopen preserve the expect
 
   await saveCurrentFile(page);
   await page.reload();
+  await page.getByLabel('Active project').selectOption({ label: projectName });
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'File editor' })).toHaveValue(branched);
 });
