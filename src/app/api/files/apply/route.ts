@@ -3,6 +3,7 @@ import { writeFile, createBackup, validatePath, fileExists, readFile } from "@/l
 import { validateProjectFilePath } from "@/lib/projectOps";
 import { sha256Content } from "@/lib/checksum";
 import fs from "node:fs";
+import path from "node:path";
 
 export async function POST(request: NextRequest) {
   const declaredLength = Number(request.headers.get("content-length") || 0);
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       path: canonicalRelativePath,
-      backup: backupPath,
+      backup: backupPath ? path.basename(backupPath) : null,
       created: !existed,
       sha256: sha256Content(content),
     });
