@@ -39,9 +39,10 @@ test('P0-ACC-001: project can be switched away from and reopened with saved file
   ]));
 });
 
-test('P0-ACC-004/005/006: diff review is read-only and the exact reviewed draft is submitted for approval', async ({ page }) => {
+test('P0-ACC-004/005/006: diff shows the edited content, rejects keyboard edits, and submits the exact draft', async ({ page }) => {
+  const name = `p0-diff-${Date.now()}`;
   await page.goto('/');
-  await createProject(page, `p0-diff-${Date.now()}`);
+  await createProject(page, name);
   const editor = page.getByRole('textbox', { name: 'File editor' });
   const original = await editor.inputValue();
   const modified = '<!doctype html><html><body><h1>Diff acceptance marker</h1></body></html>';
@@ -54,9 +55,11 @@ test('P0-ACC-004/005/006: diff review is read-only and the exact reviewed draft 
   await editor.fill(modified);
   await page.getByRole('button', { name: 'Review diff', exact: true }).click();
   await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
-  const inputAreas = page.locator('.diff-shell textarea.inputarea');
-  await expect.poll(async () => inputAreas.count()).toBeGreaterThan(0);
-  expect(await inputAreas.evaluateAll(nodes => nodes.every(node => (node as HTMLTextAreaElement).readOnly))).toBe(true);
+  await expect(page.locator('.diff-shell .view-lines')).toContainText('Diff acceptance marker');
+  await expect(page.locator('.diff-shell .view-lines')).toContainText(name);
+  await page.locator('.diff-shell .monaco-editor').last().click({ position: { x: 80, y: 50 } });
+  await page.keyboard.press('Control+A');
+  await page.keyboard.type('UNAUTHORIZED_DIFF_EDIT');
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await expect(editor).toHaveValue(modified);
   expect(await editor.inputValue()).not.toBe(original);
@@ -79,7 +82,7 @@ test('P0-ACC-003: a failed project creation shows an error and preserves the cur
   });
   await page.locator('#new-project').fill(`p0-failed-create-${Date.now()}`);
   await page.getByRole('button', { name: /Create$/ }).click();
-  await expect(page.getByRole('alert')).toContainText('Injected create failure');
+  await expect(page.locator('p.alert.error')).toContainText('Injected create failure');
   expect(await projectSelect.inputValue()).toBe(selectedBefore);
   await expect(page.locator('.files h2')).toHaveText(headingBefore);
 });
@@ -164,7 +167,10 @@ test('P0-ACC-002: saved project content survives a real production-server restar
     const child = spawn(process.execPath, [
       path.join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next'),
       'start', '--hostname', '127.0.0.1', '--port', String(port),
-    ], { cwd: process.cwd(), env: process.env, stdio: 'ignore' });
+    ], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: 'production' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let startupOutput = '';
+    child.stdout?.on('data', chunk => { startupOutput += chunk.toString(); });
+    child.stderr?.on('data', chunk => { startupOutput += chunk.toString(); });
     try {
       await expect.poll(async () => {
         try { return (await fetch(`${origin}/api/projects`)).status; } catch { return 0; }
@@ -172,7 +178,7 @@ test('P0-ACC-002: saved project content survives a real production-server restar
       return child;
     } catch (error) {
       child.kill('SIGKILL');
-      throw error;
+      throw new Error(`Production server failed to start. Output: ${startupOutput}\nCause: ${String(error)}`);
     }
   };
   const stopServer = async (child: ReturnType<typeof spawn>) => {
@@ -241,7 +247,7 @@ test('P0-ACC-003: a failed initial project-list load shows a visible error witho
     }
   });
   await page.goto('/');
-  await expect(page.getByRole('alert')).toContainText('Injected project-list failure');
+  await expect(page.locator('p.alert.error')).toContainText('Injected project-list failure');
   await expect(page.locator('.files h2')).toHaveText('No project selected');
 });
 
@@ -272,7 +278,7 @@ test('P0-ACC-003: failed project-file loading preserves the previously active wo
     }
   });
   await projectSelect.selectOption({ label: firstName });
-  await expect(page.getByRole('alert')).toContainText('Injected project-file load failure');
+  await expect(page.locator('p.alert.error')).toContainText('Injected project-file load failure');
   await expect(projectSelect).toHaveValue(secondId);
   await expect(page.locator('.files h2')).toHaveText(secondName);
   await expect(editor).toHaveValue(secondContent);
