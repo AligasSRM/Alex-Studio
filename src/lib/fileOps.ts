@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 const APP_ROOT = path.resolve(process.cwd());
 const WORKSPACE_ROOT = path.join(APP_ROOT, "workspace");
@@ -102,9 +102,42 @@ export function createBackup(relativePath: string): string {
   if (!isWithinRoot(realBackupDir, realRoot)) {
     throw new Error("Backup directory resolves outside workspace");
   }
-  const backupPath = path.join(realBackupDir, `${Date.now()}-${randomUUID()}.bak`);
+  const pathKey = createHash("sha256").update(relativePath).digest("hex").slice(0, 16);
+  const backupPath = path.join(realBackupDir, `${pathKey}-${Date.now()}-${randomUUID()}.bak`);
   fs.copyFileSync(fullPath, backupPath, fs.constants.COPYFILE_EXCL);
   return backupPath;
+}
+
+export function restoreBackup(relativePath: string, backupId: string): { safetyBackupPath: string | null; sha256: string } {
+  validatePath(relativePath);
+  if (typeof backupId !== "string" || !/^[a-f0-9]{16}-\\d+-[0-9a-f-]{36}\\.bak$/.test(backupId)) {
+    throw new Error("Invalid backup identifier");
+  }
+
+  const pathKey = createHash("sha256").update(relativePath).digest("hex").slice(0, 16);
+  if (!backupId.startsWith(`${pathKey}-`)) {
+    throw new Error("Backup does not belong to this file");
+  }
+
+  const realRoot = getRealWorkspaceRoot();
+  const backupDir = path.join(realRoot, ".alex", "backups");
+  if (!fs.existsSync(backupDir)) throw new Error("Backup directory not found");
+  const realBackupDir = fs.realpathSync(backupDir);
+  if (!isWithinRoot(realBackupDir, realRoot)) throw new Error("Backup directory resolves outside workspace");
+
+  const backupPath = path.resolve(realBackupDir, backupId);
+  if (!isWithinRoot(backupPath, realBackupDir) || path.basename(backupPath) !== backupId) {
+    throw new Error("Invalid backup path");
+  }
+  if (!fs.existsSync(backupPath) || !fs.statSync(backupPath).isFile() ||
+      !isWithinRoot(fs.realpathSync(backupPath), realBackupDir)) {
+    throw new Error("Backup file not found");
+  }
+
+  const content = fs.readFileSync(backupPath, "utf-8");
+  const safetyBackupPath = fileExists(relativePath) ? createBackup(relativePath) : null;
+  writeFile(relativePath, content);
+  return { safetyBackupPath, sha256: createHash("sha256").update(content).digest("hex") };
 }
 
 export function fileExists(relativePath: string): boolean {
