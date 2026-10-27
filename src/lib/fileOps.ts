@@ -95,9 +95,14 @@ export function createBackup(relativePath: string): string {
     throw new Error(`Cannot backup missing or non-file path: ${relativePath}`);
   }
 
-  const backupDir = path.join(getRealWorkspaceRoot(), ".alex", "backups");
+  const realRoot = getRealWorkspaceRoot();
+  const backupDir = path.join(realRoot, ".alex", "backups");
   fs.mkdirSync(backupDir, { recursive: true });
-  const backupPath = path.join(backupDir, `${Date.now()}-${randomUUID()}.bak`);
+  const realBackupDir = fs.realpathSync(backupDir);
+  if (!isWithinRoot(realBackupDir, realRoot)) {
+    throw new Error("Backup directory resolves outside workspace");
+  }
+  const backupPath = path.join(realBackupDir, `${Date.now()}-${randomUUID()}.bak`);
   fs.copyFileSync(fullPath, backupPath, fs.constants.COPYFILE_EXCL);
   return backupPath;
 }
