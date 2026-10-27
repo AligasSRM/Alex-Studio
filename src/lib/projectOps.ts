@@ -43,15 +43,46 @@ function assertProjectPath(projectDir: string): void {
   if (!isWithinRoot(path.resolve(projectDir), WORKSPACE_ROOT)) {
     throw new Error("Project path is outside workspace");
   }
-  if (fs.existsSync(projectDir)) {
-    const realRoot = fs.realpathSync(WORKSPACE_ROOT);
-    const appRoot = path.resolve(process.cwd());
-    if (!isWithinRoot(realRoot, appRoot)) {
-      throw new Error("Workspace root resolves outside the application directory");
+  if (!fs.existsSync(projectDir)) return;
+
+  const realRoot = fs.realpathSync(WORKSPACE_ROOT);
+  const appRoot = path.resolve(process.cwd());
+  if (!isWithinRoot(realRoot, appRoot)) {
+    throw new Error("Workspace root resolves outside the application directory");
+  }
+
+  // Do not follow a project-directory symlink, even if its target happens to
+  // be another directory inside the workspace.
+  if (fs.lstatSync(projectDir).isSymbolicLink()) {
+    throw new Error("Project directory cannot be a symbolic link");
+  }
+  const realProject = fs.realpathSync(projectDir);
+  if (!isWithinRoot(realProject, realRoot)) {
+    throw new Error("Project path resolves outside workspace");
+  }
+
+  // Project metadata is privileged internal state. A replaced .alex directory
+  // or project.json symlink must not redirect reads or writes outside project.
+  const metadataDir = path.join(projectDir, ".alex");
+  if (fs.existsSync(metadataDir)) {
+    const metadataStat = fs.lstatSync(metadataDir);
+    if (metadataStat.isSymbolicLink() || !metadataStat.isDirectory()) {
+      throw new Error("Project metadata directory is invalid");
     }
-    const realProject = fs.realpathSync(projectDir);
-    if (!isWithinRoot(realProject, realRoot)) {
-      throw new Error("Project path resolves outside workspace");
+    const realMetadataDir = fs.realpathSync(metadataDir);
+    if (!isWithinRoot(realMetadataDir, realProject)) {
+      throw new Error("Project metadata directory resolves outside project");
+    }
+
+    const metadataPath = path.join(metadataDir, "project.json");
+    if (fs.existsSync(metadataPath)) {
+      const metadataStat = fs.lstatSync(metadataPath);
+      if (metadataStat.isSymbolicLink() || !metadataStat.isFile()) {
+        throw new Error("Project metadata file is invalid");
+      }
+      if (!isWithinRoot(fs.realpathSync(metadataPath), realMetadataDir)) {
+        throw new Error("Project metadata file resolves outside project");
+      }
     }
   }
 }
