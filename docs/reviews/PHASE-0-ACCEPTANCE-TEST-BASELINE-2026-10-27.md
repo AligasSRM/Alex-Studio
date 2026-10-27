@@ -43,8 +43,8 @@
 - `tests/zip-export.test.ts`: ZIP structure and excluded files.
 
 ## Added test files
-- `tests/phase0-acceptance.test.ts`: disk-backed listing, byte-for-byte no-write-on-denial, exact backup bytes, backup failure safety, traversal sentinel.
-- `tests/browser/phase0-acceptance.spec.ts`: project switch/reopen, read-only diff editor, approval cancel, preview parent isolation, external fetch restriction, top-level navigation attempt.
+- `tests/phase0-acceptance.test.ts`: disk-backed listing, byte-for-byte no-write-on-denial, exact backup bytes, backup failure safety, traversal sentinel, controlled parent-directory symlink swap at rename.
+- `tests/browser/phase0-acceptance.spec.ts`: project switch/reopen, production-server restart persistence, read-only diff editor and save-payload matching, create/load failure UX, sequential two-file review, approval cancel, preview parent isolation, external fetch restriction, top-level navigation attempt.
 
 ## Required verification before marking ready
 1. `npm test`
@@ -56,4 +56,4 @@
 7. Do not close Phase 0 while any **Pending** or failing high-risk acceptance item remains.
 
 ## Current decision
-**Phase 0 remains OPEN / PARTIAL.** This branch adds executable acceptance coverage but does not itself prove a pass, close the stage, or certify production readiness. Real server-restart persistence, load-failure fault injection, rendered diff-line assertions, controlled filesystem race coverage, and complete case-to-test traceability remain explicit gaps.
+**Phase 0 remains OPEN / PARTIAL.** The server-restart, project-load failure, and controlled rename-boundary race scenarios now have executable tests on this branch; they remain unverified until CI finishes on the code commit. Remaining coverage gaps include rendered diff-line comparison, broader preview resource/form/navigation variants, additional write/rename failure modes, and final case-to-test result traceability. This test baseline does not itself close Phase 0 or certify production readiness.
