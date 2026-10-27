@@ -37,13 +37,15 @@ export function recordAIUsage(projectId: string, entry: AIUsageEntry) {
     throw error;
   }
   const month = entry.timestamp.slice(0, 7);
-  const monthlyCostUsd = entries
-    .filter((item) => item.timestamp.slice(0, 7) === month)
-    .reduce((sum, item) => sum + (typeof item.estimatedCostUsd === 'number' ? item.estimatedCostUsd : 0), 0);
+  const monthlyEntries = entries.filter((item) => item.timestamp.slice(0, 7) === month);
+  const hasCompleteCostData = monthlyEntries.every((item) => typeof item.estimatedCostUsd === 'number');
+  const monthlyCostUsd = hasCompleteCostData
+    ? monthlyEntries.reduce((sum, item) => sum + (item.estimatedCostUsd as number), 0)
+    : null;
   const warningAt = Number(process.env.AI_MONTHLY_WARNING_USD);
   return {
-    monthlyCostUsd: Number(monthlyCostUsd.toFixed(6)),
-    budgetWarning: Number.isFinite(warningAt) && warningAt > 0 && monthlyCostUsd >= warningAt,
+    monthlyCostUsd: monthlyCostUsd === null ? null : Number(monthlyCostUsd.toFixed(6)),
+    budgetWarning: monthlyCostUsd !== null && Number.isFinite(warningAt) && warningAt > 0 && monthlyCostUsd >= warningAt,
   };
 }
 
