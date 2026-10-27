@@ -2,8 +2,7 @@ export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
 import { createProjectZip } from '@/lib/zip-export';
-import { assertLocalRequest } from '@/lib/path-security';
-import { projectRoot } from '@/lib/path-security';
+import { assertLocalRequest, projectRoot } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
 
 export async function GET(request: Request) {
