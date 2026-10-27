@@ -1,9 +1,14 @@
-// AI Client — configurable via environment variables
-// Set AI_API_KEY and AI_API_URL in .env.local
-
+// AI Client — configurable via environment variables.
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
+}
+
+export interface ChatResult {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  usageEstimated: boolean;
 }
 
 export interface PlanResult {
@@ -17,14 +22,20 @@ export interface PlanResult {
   estimatedTokens: number;
 }
 
-export async function chatWithAI(messages: ChatMessage[]): Promise<string> {
+export async function chatWithAI(messages: ChatMessage[]): Promise<ChatResult> {
   const apiKey = process.env.AI_API_KEY;
   const apiUrl = process.env.AI_API_URL || "https://api.openai.com/v1/chat/completions";
   const model = process.env.AI_MODEL || "gpt-4o-mini";
 
   if (!apiKey) {
     if (process.env.NODE_ENV !== "production" && process.env.AI_ALLOW_MOCK === "true") {
-      return mockAIResponse(messages);
+      const text = mockAIResponse(messages);
+      return {
+        text,
+        inputTokens: estimateTokens(messages.map((message) => message.content).join("\n")),
+        outputTokens: estimateTokens(text),
+        usageEstimated: true,
+      };
     }
     throw new Error("AI_NOT_CONFIGURED");
   }
@@ -41,19 +52,42 @@ export async function chatWithAI(messages: ChatMessage[]): Promise<string> {
       temperature: 0.7,
       max_tokens: 2000,
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`AI API error: ${response.status} - ${error}`);
+    // Do not include provider response text because it may contain sensitive details.
+    throw new Error(`AI_PROVIDER_HTTP_${response.status}`);
   }
 
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "No response";
+  let data: {
+    choices?: Array<{ message?: { content?: unknown } }>;
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+  };
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error("AI_PROVIDER_INVALID_RESPONSE");
+  }
+
+  const text = data.choices?.[0]?.message?.content;
+  if (typeof text !== "string") throw new Error("AI_PROVIDER_INVALID_RESPONSE");
+
+  const inputTokens = data.usage?.prompt_tokens;
+  const outputTokens = data.usage?.completion_tokens;
+  const usageValid = Number.isSafeInteger(inputTokens) && Number(inputTokens) >= 0
+    && Number.isSafeInteger(outputTokens) && Number(outputTokens) >= 0;
+
+  return {
+    text,
+    inputTokens: usageValid ? Number(inputTokens) : estimateTokens(messages.map((message) => message.content).join("\n")),
+    outputTokens: usageValid ? Number(outputTokens) : estimateTokens(text),
+    usageEstimated: !usageValid,
+  };
 }
 
 function mockAIResponse(messages: ChatMessage[]): string {
-  const lastUser = messages.filter((m) => m.role === "user").pop();
+  const lastUser = messages.filter((message) => message.role === "user").pop();
   const request = lastUser?.content || "";
 
   return `## Plan for: "${request}"
@@ -97,6 +131,5 @@ I'll create a simple HTML page based on your request. Here's what I plan to do:
 }
 
 export function estimateTokens(text: string): number {
-  // Rough estimate: ~4 chars per token
   return Math.ceil(text.length / 4);
 }
