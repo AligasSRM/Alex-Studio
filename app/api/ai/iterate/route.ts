@@ -15,7 +15,7 @@ import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
 const MAX_BODY_BYTES = 3 * 1024 * 1024;
-const SENSITIVE_PATH = /(^|\/)(\.env(?:\.|$)|credentials(?:\.|$)|id_rsa|id_ed25519|secrets?(?:\.|$)|node_modules|\.git|\.alex)(\/|$)/i;
+const SENSITIVE_PATH = /(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*|node_modules|\.git|\.alex)(\/|$)/i;
 const IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble';
 const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 type FileDraft = { path: string; content: string; baseHash: string | null };
