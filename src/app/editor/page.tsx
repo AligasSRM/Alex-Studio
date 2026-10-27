@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import DiffEditor from "@/components/DiffEditor";
 
 interface Project {
@@ -18,6 +19,7 @@ interface Draft {
 }
 
 export default function EditorPage() {
+  const router = useRouter();
   const [projectId, setProjectId] = useState("");
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<string[]>([]);
@@ -30,62 +32,72 @@ export default function EditorPage() {
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
-    const id = new URLSearchParams(window.location.search).get("project") || "";
-    setProjectId(id);
-    if (!id) {
-      setError("Open this editor from the Projects page by selecting a project.");
-      setLoading(false);
-      return;
-    }
-
     let active = true;
-    (async () => {
-      try {
-        const response = await fetch(`/api/projects/${encodeURIComponent(id)}`);
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Unable to load project");
-        if (!active) return;
-        setProject(data.project);
-        setFiles(Array.isArray(data.files) ? data.files : []);
-        if (Array.isArray(data.files) && data.files.length > 0) {
-          setSelectedFile(data.files[0]);
-        } else {
-          setNotice("This project has no editable files yet.");
-          setLoading(false);
-        }
-      } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : "Unable to load project");
-        if (active) setLoading(false);
+    const timer = window.setTimeout(() => {
+      const id = new URLSearchParams(window.location.search).get("project") || "";
+      setProjectId(id);
+      if (!id) {
+        setError("Open this editor from the Projects page by selecting a project.");
+        setLoading(false);
+        return;
       }
-    })();
 
-    return () => { active = false; };
+      void (async () => {
+        try {
+          const response = await fetch(`/api/projects/${encodeURIComponent(id)}`);
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Unable to load project");
+          if (!active) return;
+          setProject(data.project);
+          setFiles(Array.isArray(data.files) ? data.files : []);
+          if (Array.isArray(data.files) && data.files.length > 0) {
+            setSelectedFile(data.files[0]);
+          } else {
+            setNotice("This project has no editable files yet.");
+            setLoading(false);
+          }
+        } catch (e) {
+          if (active) setError(e instanceof Error ? e.message : "Unable to load project");
+          if (active) setLoading(false);
+        }
+      })();
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, []);
 
   useEffect(() => {
     if (!projectId || !selectedFile) return;
     let active = true;
-    setLoading(true);
-    setError("");
-    setNotice("");
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError("");
+      setNotice("");
 
-    (async () => {
-      try {
-        const filePath = `${projectId}/${selectedFile}`;
-        const response = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Unable to read file");
-        if (!active) return;
-        setOriginal(data.content);
-        setContent(data.content);
-      } catch (e) {
-        if (active) setError(e instanceof Error ? e.message : "Unable to read file");
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
+      void (async () => {
+        try {
+          const filePath = `${projectId}/${selectedFile}`;
+          const response = await fetch(`/api/files/read?path=${encodeURIComponent(filePath)}`);
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || "Unable to read file");
+          if (!active) return;
+          setOriginal(data.content);
+          setContent(data.content);
+        } catch (e) {
+          if (active) setError(e instanceof Error ? e.message : "Unable to read file");
+        } finally {
+          if (active) setLoading(false);
+        }
+      })();
+    }, 0);
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [projectId, selectedFile]);
 
   const reviewChange = async () => {
@@ -96,7 +108,7 @@ export default function EditorPage() {
       const baseHash = await sha256(original);
       const draft: Draft = { projectId, path: selectedFile, baseContent: original, modifiedContent: content, baseHash };
       sessionStorage.setItem(draftKey(projectId, selectedFile), JSON.stringify(draft));
-      window.location.href = `/review?project=${encodeURIComponent(projectId)}&path=${encodeURIComponent(selectedFile)}`;
+      router.push(`/review?project=${encodeURIComponent(projectId)}&path=${encodeURIComponent(selectedFile)}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to prepare review");
       setSavingDraft(false);
