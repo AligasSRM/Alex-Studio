@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
         costUsd: usage.costUsd,
         monthlyLimitUsd: usage.monthlyLimitUsd,
         remainingUsd: usage.remainingUsd,
+        monthToDateUsd: Math.max(0, usage.monthlyLimitUsd - usage.remainingUsd),
         month: usage.month,
         requests: usage.requests,
         costTracked: true,
