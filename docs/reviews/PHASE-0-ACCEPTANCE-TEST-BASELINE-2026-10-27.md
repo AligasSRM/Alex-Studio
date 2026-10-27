@@ -21,10 +21,10 @@
 | P0-ACC-001 | Project lifecycle and switching | `tests/browser/phase0-acceptance.spec.ts`; `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Create two projects, switch back, and confirm saved content and project records persist on disk. |
 | P0-ACC-002 | Persistence across a real server restart | Production-server restart test in browser acceptance suite | Pass — CI run 152 | Stop and restart the production server process, then verify project metadata and exact saved content through the API. |
 | P0-ACC-003 | Project create/load failure UX | Browser fault-injection tests | Pass — CI run 152 | Failed create and project-list/file loading show visible errors; failed file loading preserves the previously active workspace. |
-| P0-ACC-004 | Diff correctness | Browser diff pane rendered-content assertions | Pass — CI run 152 | Diff view mounts after a known edit. Rendered-line comparison remains pending. |
-| P0-ACC-005 | Diff is read-only | Browser keyboard-edit rejection check | Pass — CI run 152 | Monaco diff input areas report read-only; draft remains unchanged after leaving review. |
+| P0-ACC-004 | Diff correctness | Browser diff pane rendered-content assertions | Pass — CI run 152 | Diff view mounts; the modified pane shows the expected marker and the original pane shows the project name. |
+| P0-ACC-005 | Diff is read-only | Browser keyboard-edit rejection check | Pass — CI run 152 | A keyboard edit attempt does not alter the draft, and the editor retains the exact proposed content after leaving review. |
 | P0-ACC-006 | Reviewed content matches proposed save | Browser request payload assertion | Pass — CI run 152 | The approved POST payload content must exactly equal the reviewed editor draft. |
-| P0-ACC-007 | Multi-file diff review | Browser sequential two-file review test | Pass — CI run 152; sequential per-file scope | Two changed files can be reviewed independently; direct rendered-line comparison remains pending. |
+| P0-ACC-007 | Multi-file diff review | Browser sequential two-file review test | Pass — CI run 152; sequential per-file scope | Two changed files can be reviewed independently; direct per-file rendered-content assertions remain pending. |
 | P0-ACC-008 | Rejected write changes no bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Missing approval returns 409 and original bytes are identical before/after. |
 | P0-ACC-009 | Cancel approval changes no bytes | Browser acceptance test | Pass — CI run 152 | Cancel closes the dialog; reload shows original saved content. |
 | P0-ACC-010 | Backup contains exact previous bytes | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | Backup bytes exactly equal file bytes before replacement. |
@@ -34,7 +34,7 @@
 | P0-ACC-014 | Preview cannot initiate top-level navigation | Browser test | Pass — CI run 152 | A form targeted at `_top` must not navigate the studio page. |
 | P0-ACC-015 | Symlink/path race resistance | Controlled parent-directory symlink swap test in `tests/phase0-acceptance.test.ts` | Pass for controlled rename-boundary scenario; broader races pending | A symlink swap at the write/rename boundary must not create or modify files outside the project. |
 | P0-ACC-016 | Rejected traversal leaves outside files unchanged | `tests/phase0-acceptance.test.ts` | Pass — CI run 152 | An outside-project sentinel remains byte-for-byte identical after rejected traversal. |
-| P0-ACC-017 | Security case-to-test traceability | This matrix + `tests/security.test.ts` | Partial — the Phase 0 acceptance IDs are mapped; full legacy security-case mapping remains | Each required case is linked to an executable test and its observed result; results must be filled from CI. |
+| P0-ACC-017 | Security case-to-test traceability | This matrix + `tests/security.test.ts` | Partial — the Phase 0 acceptance IDs are mapped; full legacy security-case mapping remains | Each Phase 0 ID is linked to executable evidence and the recorded CI run; mapping every legacy security case remains outstanding. |
 
 ## Existing tests at the base commit
 - `tests/api.test.ts`: project creation, approval guard, save/backup existence, traversal rejection, preview headers, non-local request rejection.
