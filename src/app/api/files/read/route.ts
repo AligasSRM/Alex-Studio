@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readFile, validatePath } from "@/lib/fileOps";
+import { readFile } from "@/lib/fileOps";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
