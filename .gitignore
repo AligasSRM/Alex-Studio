@@ -1,0 +1,9 @@
+node_modules/
+.next/
+out/
+.env.local
+.env
+workspace/*
+!workspace/.gitkeep
+.DS_Store
+npm-debug.log*

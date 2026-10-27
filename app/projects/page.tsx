@@ -1,0 +1,1 @@
+import {StudioWorkspace} from '@/components/StudioWorkspace';export default function ProjectsPage(){return <StudioWorkspace initialTab="projects"/>;}

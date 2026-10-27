@@ -203,3 +203,14 @@
 **الغرض:** مرجع تنفيذي بعد موافقتك على Phase 0  
 **لا تدّعي:** تنفيذاً، أو اختباراً، أو قياساً  
 **الخطوة التالية:** موافقتك + معلومات نظام التشغيل/Node.js → بدء Phase 0
+
+
+---
+
+## Implementation status — 2026-10-27
+
+The current implementation pull request connects the home page to local project creation, project/file listing, text-file reading and explicitly approved saves. Existing files are backed up before replacement, and the preview uses a sandboxed iframe.
+
+**Not complete / not yet accepted:** AI-provider integration, a proper line-by-line diff, CSP-backed preview hardening, archive export, change history/rollback, secret scanning, rate limiting, and the usage/cost meter remain outstanding. The current implementation must not be described as satisfying all first-release acceptance criteria.
+
+**Local-only security boundary:** the current API rejects mutations unless the request is same-origin on localhost. There is no user authentication. Do not deploy this prototype publicly. CI results must be reviewed for the exact commit and are not a production-readiness certification.

@@ -1,0 +1,27 @@
+name: Alex Studio CI
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [feature/alex-studio-implementation-2026-10-27]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: alex-studio-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: Tests, types, lint and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build

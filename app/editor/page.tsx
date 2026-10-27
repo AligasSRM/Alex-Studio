@@ -1,0 +1,1 @@
+import {StudioWorkspace} from '@/components/StudioWorkspace';export default function EditorPage(){return <StudioWorkspace initialTab="editor"/>;}
