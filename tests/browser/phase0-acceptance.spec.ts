@@ -55,8 +55,10 @@ test('P0-ACC-004/005/006: diff shows the edited content, rejects keyboard edits,
   await editor.fill(modified);
   await page.getByRole('button', { name: 'Review diff', exact: true }).click();
   await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
-  await expect(page.locator('.diff-shell .view-lines')).toContainText('Diff acceptance marker');
-  await expect(page.locator('.diff-shell .view-lines')).toContainText(name);
+  const modifiedLines = page.locator('.diff-shell .monaco-editor.modified-in-monaco-diff-editor .view-lines');
+  const originalLines = page.locator('.diff-shell .monaco-editor.original-in-monaco-diff-editor .view-lines');
+  await expect(modifiedLines).toContainText('Diff acceptance marker');
+  await expect(originalLines).toContainText(name);
   await page.locator('.diff-shell .monaco-editor').last().click({ position: { x: 80, y: 50 } });
   await page.keyboard.press('Control+A');
   await page.keyboard.type('UNAUTHORIZED_DIFF_EDIT');
@@ -173,7 +175,7 @@ test('P0-ACC-002: saved project content survives a real production-server restar
     child.stderr?.on('data', chunk => { startupOutput += chunk.toString(); });
     try {
       await expect.poll(async () => {
-        try { return (await fetch(`${origin}/api/projects`)).status; } catch { return 0; }
+        try { return (await fetch(`${origin}/api/projects`, { headers: { origin } })).status; } catch { return 0; }
       }, { timeout: 35_000 }).toBe(200);
       return child;
     } catch (error) {
@@ -222,13 +224,13 @@ test('P0-ACC-002: saved project content survives a real production-server restar
     server = undefined;
 
     server = await startServer();
-    const projectsResponse = await fetch(`${origin}/api/projects`);
+    const projectsResponse = await fetch(`${origin}/api/projects`, { headers: { origin } });
     expect(projectsResponse.status).toBe(200);
     const projectsData = await projectsResponse.json() as { projects: Array<{ id: string; name: string }> };
     expect(projectsData.projects).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: projectId, name: projectName }),
     ]));
-    const fileResponse = await fetch(`${origin}/api/files?projectId=${encodeURIComponent(projectId!)}&path=index.html`);
+    const fileResponse = await fetch(`${origin}/api/files?projectId=${encodeURIComponent(projectId!)}&path=index.html`, { headers: { origin } });
     expect(fileResponse.status).toBe(200);
     const fileData = await fileResponse.json() as { content: string };
     expect(fileData.content).toBe(savedContent);
