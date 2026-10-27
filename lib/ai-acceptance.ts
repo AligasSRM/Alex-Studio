@@ -24,9 +24,8 @@ const SCRIPT_EXTENSIONS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
 function resolveReference(from: string, raw: string, files: Map<string, string>): boolean {
   const value = raw.trim().split(/[?#]/, 1)[0];
   if (!value) return true;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^javascript:/i.test(value)) return true;
-  if (EXTERNAL.test(value)) return true;
   if (/^javascript:/i.test(value)) return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value) || EXTERNAL.test(value)) return true;
   const base = value === '/' ? 'index.html' : value.startsWith('/') ? value.slice(1) : path.posix.join(path.posix.dirname(from), value);
   const clean = path.posix.normalize(base);
   if (clean === '..' || clean.startsWith('../') || path.posix.isAbsolute(clean)) return false;
@@ -39,22 +38,21 @@ function resolveReference(from: string, raw: string, files: Map<string, string>)
 function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
   const refs: { raw: string; kind: string }[] = [];
   const addMatches = (pattern: RegExp, kind: string) => {
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(file.content)) !== null) {
+    for (const match of file.content.matchAll(pattern)) {
       const value = match.slice(1).find((part) => typeof part === 'string' && part.length > 0)?.trim();
       if (value) refs.push({ raw: value, kind });
-      if (match[0].length === 0) pattern.lastIndex++;
     }
   };
 
-  if (HTML_EXTENSIONS.has(path.posix.extname(file.path).toLowerCase())) {
+  const extension = path.posix.extname(file.path).toLowerCase();
+  if (HTML_EXTENSIONS.has(extension)) {
     addMatches(/\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+))/gi, 'HTML src/href');
   }
-  if (path.posix.extname(file.path).toLowerCase() === '.css') {
-    addMatches(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]+))\s*\)/gi, 'CSS url()');
+  if (extension === '.css') {
+    addMatches(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)\s"'"]+))\s*\)/gi, 'CSS url()');
     addMatches(/@import\s+(?:url\(\s*)?(?:"([^"]*)"|'([^']*)')/gi, 'CSS @import');
   }
-  if (SCRIPT_EXTENSIONS.has(path.posix.extname(file.path).toLowerCase())) {
+  if (SCRIPT_EXTENSIONS.has(extension)) {
     addMatches(/\bimport\s*["']([^"']+)["']/g, 'module import');
     addMatches(/\bimport\b[^;\n]*?\bfrom\s*["']([^"']+)["']/g, 'module import');
     addMatches(/\bexport\b[^;\n]*?\bfrom\s*["']([^"']+)["']/g, 'module import');
@@ -63,6 +61,7 @@ function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
   }
   return refs;
 }
+
 export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequirements: unknown): AcceptanceReport {
   const files = new Map<string, string>();
   const checks: AcceptanceCheck[] = [];
@@ -99,12 +98,7 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
   const undeclared: string[] = [];
   for (const [filePath, content] of files) {
     for (const ref of collectReferences({ path: filePath, content })) {
-      if (ref.raw.toLowerCase().startsWith(['java', 'script:'].join(''))) {
-        missing.push(filePath + ' -> unsafe active-content URL');
-        continue;
-      }
       const reference = ref.raw.trim();
-      if (/^(?:https?:|mailto:|tel:|data:|blob:|file:|\/\/|#)/i.test(reference)) continue;
       if (['HTML src/href', 'CSS url()', 'CSS @import'].includes(ref.kind)) {
         if (!resolveReference(filePath, reference, files)) missing.push(filePath + ' -> ' + reference + ' (' + ref.kind + ')');
         continue;
@@ -118,7 +112,7 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
         continue;
       }
       const pkg = reference.startsWith('@') ? reference.split('/').slice(0, 2).join('/') : reference.split('/')[0];
-      if (!BUILTINS.has(ref.raw) && !BUILTINS.has(pkg) &&
+      if (!BUILTINS.has(reference) && !BUILTINS.has(pkg) &&
           !packageJson?.dependencies?.[pkg] && !packageJson?.devDependencies?.[pkg]) {
         undeclared.push(filePath + ' -> ' + pkg);
       }
@@ -133,13 +127,9 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
   const commands = ['build', 'test', 'lint', 'typecheck'].filter((name) => typeof scripts[name] === 'string')
     .map((name) => ({ command: 'npm run ' + name, status: 'unverified' as const,
       reason: 'Not executed by the static preflight. Execution requires an explicitly isolated runtime and available project dependencies.' }));
-  if (commands.length) {
-    checks.push({ id: 'CMD-RUN', name: 'Project-specific commands', status: 'unverified',
-      evidence: 'Discovered scripts: ' + commands.map((item) => item.command).join(', ') + '. They are listed but were not executed by this preflight.' });
-  } else {
-    checks.push({ id: 'CMD-RUN', name: 'Project-specific commands', status: 'unverified',
-      evidence: 'No standard build/test/lint/typecheck scripts discovered, or no package.json. No project command was executed.' });
-  }
+  checks.push({ id: 'CMD-RUN', name: 'Project-specific commands', status: 'unverified',
+    evidence: commands.length ? 'Discovered scripts: ' + commands.map((item) => item.command).join(', ') + '. They were not executed by this preflight.' :
+      'No standard build/test/lint/typecheck scripts discovered, or no package.json. No project command was executed.' });
 
   const rawRequirements = Array.isArray(requestedRequirements) ? requestedRequirements : [];
   const requirements = rawRequirements.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
@@ -150,7 +140,6 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
       evidence: 'The generator did not supply a usable requirement list.' });
   }
 
-  const statuses = checks.map((check) => check.status);
-  const status: AcceptanceStatus = statuses.includes('fail') ? 'fail' : 'unverified';
+  const status: AcceptanceStatus = checks.some((check) => check.status === 'fail') ? 'fail' : 'unverified';
   return { status, requirements, checks, commands };
 }
