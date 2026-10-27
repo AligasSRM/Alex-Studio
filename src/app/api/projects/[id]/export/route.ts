@@ -6,7 +6,7 @@ import { validatePath } from "@/lib/fileOps";
 import { buildZip, type ZipEntry } from "@/lib/zip";
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const SECRET_NAME = /(^|\/)(?:\.env(?:\.[^/]*)?|\.npmrc|\.pypirc|\.netrc|credentials?(?:\.[^/]*)?|secrets?(?:\.[^/]*)?|id_rsa|id_ed25519)(?:$|\/)/i;
+const SECRET_NAME = /(^|\/)(?:\.env(?:\.[^/]*)?|\.npmrc|\.pypirc|\.netrc|(?:service[-_]?account|api[-_]?key|access[-_]?token|refresh[-_]?token|private(?:[-_]?key)?|credentials?|secrets?|tokens?)(?:\.[^/]*)?|id_rsa|id_ed25519)(?:$|\/)/i;
 const SECRET_EXTENSION = /\.(?:pem|key|p12|pfx|keystore|jks|secret)$/i;
 const GENERATED_SEGMENT = /^(?:\.next|node_modules|\.git|\.alex|coverage|dist|build)$/i;
 
