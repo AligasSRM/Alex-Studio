@@ -56,8 +56,8 @@ function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
     for (const match of file.content.matchAll(/@import\s+(?:url\(\s*)?(["'])(.*?)\1/gi)) add(match[2], 'CSS @import');
   }
   if (/\.(?:[cm]?[jt]sx?)$/i.test(file.path)) {
-    for (const match of file.content.matchAll(/\bimport\s*(?:[^"' ;]*?\sfrom\s*)?(["'])(.*?)\1/g)) add(match[2], 'module import');
-    for (const match of file.content.matchAll(/\bexport\s+[^"' ;]*?\sfrom\s*(["'])(.*?)\1/g)) add(match[2], 'module import');
+    for (const match of file.content.matchAll(/\bimport\s*(?:[^"';]*?\sfrom\s*)?(["'])(.*?)\1/g)) add(match[2], 'module import');
+    for (const match of file.content.matchAll(/\bexport\s+[^"';]*?\sfrom\s*(["'])(.*?)\1/g)) add(match[2], 'module import');
     for (const match of file.content.matchAll(/\brequire\(\s*(["'])(.*?)\1\s*\)/g)) add(match[2], 'require()');
   }
   return refs;
