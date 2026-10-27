@@ -15,6 +15,7 @@ test('P0-ACC-007: rendered diff assertions cover CSS and HTML files independentl
   const editor = page.getByRole('textbox', { name: 'File editor' });
 
   await page.getByRole('button', { name: /styles\.css/ }).click();
+  await expect(page.locator('.editor-title h2')).toHaveText('styles.css');
   const originalCss = await editor.inputValue();
   const changedCss = '/* P0-CSS-DIFF-MARKER */\nbody { color: rgb(1, 2, 3); }';
   expect(originalCss).toContain('background:#101827');
@@ -27,6 +28,7 @@ test('P0-ACC-007: rendered diff assertions cover CSS and HTML files independentl
 
   await page.getByRole('button', { name: 'Code', exact: true }).click();
   await page.getByRole('button', { name: /index\.html/ }).click();
+  await expect(page.locator('.editor-title h2')).toHaveText('index.html');
   const originalHtml = await editor.inputValue();
   const changedHtml = '<!doctype html><html><body><h1>P0-HTML-DIFF-MARKER</h1></body></html>';
   expect(originalHtml).toContain(name);
