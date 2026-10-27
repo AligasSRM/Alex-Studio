@@ -261,7 +261,7 @@ export function getProjectFiles(projectId: string): string[] {
   function walk(dir: string, prefix: string): void {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isSymbolicLink() || entry.name === ".alex" || entry.name === ".git" || entry.name === "node_modules") continue;
+      if (entry.isSymbolicLink() || [".alex", ".git", "node_modules", ".next", "coverage", "dist", "build", ".cache", ".turbo"].includes(entry.name)) continue;
       const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(path.join(dir, entry.name), relativePath);
       else if (entry.isFile()) files.push(relativePath);
