@@ -7,6 +7,18 @@ import { ensureWorkspace } from "./fileOps.ts";
 const WORKSPACE_ROOT = path.resolve(process.cwd(), "workspace");
 const PROJECT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+// Project contents can be opened in the browser, so secrets must never be
+// readable/editable through project-file APIs even when they are inside a
+// project directory.
+const SENSITIVE_SEGMENT = /^(?:\.env(?:\..*)?|\.npmrc|\.pypirc|\.netrc|(?:service[-_]?account|api[-_]?key|access[-_]?token|refresh[-_]?token|private(?:[-_]?key)?|credentials?|secrets?|tokens?)(?:\..*)?|id_rsa|id_ed25519)$/i;
+const SENSITIVE_EXTENSION = /\.(?:pem|key|p12|pfx|keystore|jks|secret)$/i;
+
+function isProtectedProjectPath(relativePath: string): boolean {
+  return relativePath.split("/").some((part) =>
+    part.startsWith(".") || SENSITIVE_SEGMENT.test(part) || SENSITIVE_EXTENSION.test(part)
+  );
+}
+
 export interface ProjectMeta {
   id: string;
   name: string;
@@ -85,7 +97,7 @@ export function validateProjectFilePath(value: string): string {
   const fileParts = parts.slice(1);
   if (!projectId || fileParts.length === 0 || fileParts.some((part) =>
     !part || part === "." || part === ".." || part === ".alex" || part === ".git" || part === "node_modules"
-  )) {
+  ) || isProtectedProjectPath(fileParts.join("/"))) {
     throw new Error("Invalid project file path");
   }
   assertProjectId(projectId);
@@ -268,7 +280,7 @@ export function getProjectFiles(projectId: string): string[] {
       if (entry.isSymbolicLink() || [".alex", ".git", "node_modules", ".next", "coverage", "dist", "build", ".cache", ".turbo"].includes(entry.name)) continue;
       const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) walk(path.join(dir, entry.name), relativePath);
-      else if (entry.isFile()) files.push(relativePath);
+      else if (entry.isFile() && !isProtectedProjectPath(relativePath)) files.push(relativePath);
     }
   }
 
