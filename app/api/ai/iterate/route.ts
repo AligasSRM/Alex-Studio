@@ -125,13 +125,13 @@ export async function POST(request: Request) {
       originals.set(entry.path, content); working.set(entry.path, content);
     }
     for (const file of parseDraft(body.projectId, body.files, originals, true)) working.set(file.path, file.content);
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-'));
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755);
     const writeFiles = () => {
       for (const [filePath, content] of working) {
         const target = path.resolve(root, ...filePath.split('/')); const relative = path.relative(root, target);
         if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Sandbox path escape denied');
-        fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
-        fs.writeFileSync(target, content, { encoding: 'utf8', flag: 'w', mode: 0o600 });
+        fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o755 });
+        fs.writeFileSync(target, content, { encoding: 'utf8', flag: 'w', mode: 0o644 });
       }
     };
     writeFiles();
@@ -149,7 +149,7 @@ export async function POST(request: Request) {
       try { next = await getRepair(apiKey, model, body.projectId, body.prompt, context, diagnostic, working); }
       catch (e) { repairs.push({ round, summary: e instanceof Error ? e.message : 'AI repair failed', diagnostic }); break; }
       for (const file of next.files) working.set(file.path, file.content);
-      fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); writeFiles();
+      fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755); writeFiles();
       diagnostic = await runSandbox(root);
       repairs.push({ round, summary: next.summary, diagnostic });
       if (!diagnostic.available) break;
