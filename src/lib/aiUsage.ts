@@ -79,6 +79,9 @@ function readLedger(): Ledger {
   fs.mkdirSync(INTERNAL_DIR, { recursive: true });
   if (fs.lstatSync(INTERNAL_DIR).isSymbolicLink()) throw new Error("AI_USAGE_LEDGER_INVALID:internal_directory_symlink");
   if (!fs.existsSync(LEDGER_PATH)) return emptyLedger();
+  if (fs.lstatSync(LEDGER_PATH).isSymbolicLink()) {
+    throw new Error("AI_USAGE_LEDGER_INVALID:ledger_symlink");
+  }
 
   try {
     const parsed = JSON.parse(fs.readFileSync(LEDGER_PATH, "utf8")) as Ledger;
