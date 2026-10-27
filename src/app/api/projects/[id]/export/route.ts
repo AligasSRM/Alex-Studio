@@ -60,7 +60,10 @@ export async function GET(
     }
 
     const archive = buildZip(entries);
-    return new NextResponse(archive, {
+    // NextResponse's BodyInit typing rejects Node's generic Buffer type on newer
+    // TypeScript/Node definitions. A fresh Uint8Array is a standards-based body.
+    const body = new Uint8Array(archive);
+    return new NextResponse(body, {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
