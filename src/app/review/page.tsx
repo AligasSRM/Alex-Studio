@@ -12,7 +12,7 @@ interface Draft {
   baseHash: string;
 }
 
-type ReviewStatus = "pending" | "approved" | "rejected";
+type ReviewStatus = "pending" | "approved" | "rejected" | "restored";
 
 export default function ReviewPage() {
   const router = useRouter();
@@ -25,6 +25,7 @@ export default function ReviewPage() {
   const [message, setMessage] = useState("");
   const [checksumBefore, setChecksumBefore] = useState("");
   const [checksumAfter, setChecksumAfter] = useState("");
+  const [backupId, setBackupId] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -101,6 +102,7 @@ export default function ReviewPage() {
       }
 
       setStatus("approved");
+      setBackupId(typeof data.backup === "string" ? data.backup : "");
       sessionStorage.removeItem(draftKey(draft.projectId, draft.path));
       const verifyResponse = await fetch(`/api/files/read?path=${encodeURIComponent(`${draft.projectId}/${draft.path}`)}`);
       const verifyData = await verifyResponse.json();
@@ -117,6 +119,41 @@ export default function ReviewPage() {
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Apply failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!draft || !backupId || (status !== "approved" && status !== "restored") || !checksumAfter || busy) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/files/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: `${draft.projectId}/${draft.path}`,
+          backupId,
+          expectedSha256: checksumAfter,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 409) setReady(false);
+        setError(data.error || "Restore failed");
+        return;
+      }
+      setChecksumAfter(data.sha256);
+      setBackupId(typeof data.backup === "string" ? data.backup : "");
+      const nextStatus = status === "approved" ? "restored" : "approved";
+      setStatus(nextStatus);
+      setMessage(data.verified
+        ? (nextStatus === "restored" ? "Previous version restored and hash-verified." : "Reviewed version restored again and hash-verified.")
+        : "Restore completed without verification evidence.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Restore failed");
     } finally {
       setBusy(false);
     }
@@ -170,29 +207,41 @@ export default function ReviewPage() {
 
           <DiffEditor original={draft.baseContent} modified={draft.modifiedContent} language={languageFor(draft.path)} height="440px" />
 
-          {status === "pending" && (
-            <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap gap-3">
+            {status === "pending" && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleApprove}
+                  disabled={!ready || busy || loading}
+                  className="rounded bg-green-600 px-5 py-3 font-medium text-white disabled:opacity-50"
+                >
+                  {busy ? "Processing…" : "Approve & apply"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReject}
+                  disabled={!ready || busy || loading}
+                  className="rounded bg-red-600 px-5 py-3 font-medium text-white disabled:opacity-50"
+                >
+                  Reject change
+                </button>
+              </>
+            )}
+            {(status === "approved" || status === "restored") && backupId && (
               <button
                 type="button"
-                onClick={handleApprove}
-                disabled={!ready || busy || loading}
-                className="rounded bg-green-600 px-5 py-3 font-medium text-white disabled:opacity-50"
+                onClick={handleRestore}
+                disabled={busy || !checksumAfter}
+                className="rounded border border-amber-500 px-5 py-3 font-medium text-amber-900 disabled:opacity-50"
               >
-                {busy ? "Processing…" : "Approve & apply"}
+                {busy ? "Restoring…" : status === "approved" ? "Restore previous version" : "Reapply reviewed version"}
               </button>
-              <button
-                type="button"
-                onClick={handleReject}
-                disabled={!ready || busy || loading}
-                className="rounded bg-red-600 px-5 py-3 font-medium text-white disabled:opacity-50"
-              >
-                Reject change
-              </button>
-              <button type="button" onClick={() => router.push(`/editor?project=${encodeURIComponent(draft.projectId)}`)} className="rounded border border-gray-300 px-5 py-3">
-                Return to editor
-              </button>
-            </div>
-          )}
+            )}
+            <button type="button" onClick={() => router.push(`/editor?project=${encodeURIComponent(draft.projectId)}`)} className="rounded border border-gray-300 px-5 py-3">
+              Return to editor
+            </button>
+          </div>
         </>
       )}
     </div>
