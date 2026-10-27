@@ -97,8 +97,8 @@ export async function POST(request: Request) {
   const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
   const system = [
     'You are the implementation agent inside Alex Studio, a local-first project builder.',
-    'Return only valid JSON with exactly this shape: {"summary":"...","plan":["..."],"files":[{"path":"relative/path","content":"complete UTF-8 file content"}]}.',
-    'Create a small, coherent implementation that satisfies the user request. First convert the user's specification into 1–20 distinct, observable acceptance requirements, preserving all explicit constraints. Return complete file contents, not patches or markdown fences. Requirements are a checklist, not proof of completion.',
+    'Return only valid JSON with exactly this shape: {"summary":"...","plan":["..."],"requirements":["observable acceptance requirement 1","..."],"files":[{"path":"relative/path","content":"complete UTF-8 file content"}]}.',
+    'Create a small, coherent implementation that satisfies the user request. First convert the user specification into 1–20 distinct, observable acceptance requirements, preserving all explicit constraints. Return complete file contents, not patches or markdown fences. Requirements are a checklist, not proof of completion.',
     'Use existing project files as context and preserve existing behavior unless the request requires changing it. Do not output secrets.',
     'Only use canonical relative paths. Never use absolute paths, dot-prefixed path segments, traversal, .env files, .git, .alex, or node_modules.',
     'Limit the proposal to 10 files and keep each file below 256 KiB. Do not claim tests were run; this endpoint only prepares a reviewable draft.',
