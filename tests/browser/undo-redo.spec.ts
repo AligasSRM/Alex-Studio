@@ -40,7 +40,7 @@ test('edit, undo, redo, branch invalidation, and save/reopen preserve the expect
   await expect(page.getByRole('textbox', { name: 'File editor' })).toHaveValue(branched);
 });
 
-test('switching projects resets undo/redo history and restores each project file', async ({ page }) => {
+test('switching files and projects restores content and resets stale undo/redo history', async ({ page }) => {
   const firstName = `history-first-${Date.now()}`;
   const secondName = `history-second-${Date.now()}`;
   await page.goto('/');
@@ -50,6 +50,18 @@ test('switching projects resets undo/redo history and restores each project file
   const firstContent = '<!doctype html><html><body><h1>First project saved</h1></body></html>';
   await editor.fill(firstContent);
   await saveCurrentFile(page);
+
+  const cssContent = 'body { background: rgb(1, 2, 3); }';
+  await page.getByRole('button', { name: /styles\.css/ }).click();
+  await expect(editor).toBeVisible();
+  await editor.fill(cssContent);
+  await saveCurrentFile(page);
+  await page.getByRole('button', { name: /index\.html/ }).click();
+  await expect(editor).toHaveValue(firstContent);
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: /styles\.css/ }).click();
+  await expect(editor).toHaveValue(cssContent);
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
 
   await createProject(page, secondName);
   const secondContent = '<!doctype html><html><body><h1>Second project edit</h1></body></html>';
