@@ -43,7 +43,6 @@ test("writeFile and readFile round-trip content and create backups", () => {
     assert.equal(fs.readFileSync(backup, "utf8"), "first");
   } finally {
     fs.rmSync(path.join(workspace, fixture), { recursive: true, force: true });
-    fs.rmSync(outsideDir, { recursive: true, force: true });
   }
 });
 
@@ -51,6 +50,8 @@ test("path through a symlink to outside workspace is rejected", () => {
   const linkPath = path.join(workspace, `${fixture}-outside-link`);
   try {
     fs.mkdirSync(workspace, { recursive: true });
+    fs.mkdirSync(outsideDir, { recursive: true });
+    fs.writeFileSync(path.join(outsideDir, "secret.txt"), "private");
     fs.symlinkSync(outsideDir, linkPath, "dir");
     assert.throws(
       () => validatePath(`${fixture}-outside-link/secret.txt`),
