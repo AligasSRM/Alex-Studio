@@ -28,29 +28,6 @@ afterEach(() => {
   for (const id of ids.splice(0)) fs.rmSync(projectRoot(id), { recursive: true, force: true });
   if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
 
-  it('rejects environment variants and secret paths', async () => {
-    const id = await project();
-    process.env.OPENAI_API_KEY = 'test-server-secret';
-    for (const filePath of ['.env.local', 'config/credentials.json', 'secrets.json']) {
-      const response = await iteratePost(localPost('http://localhost:3000/api/ai/iterate', {
-        projectId: id, prompt: 'Change configuration', approved: true,
-        files: [{ path: filePath, content: 'NOT_A_REAL_SECRET', baseHash: null }],
-      }));
-      expect(response.status).toBe(400);
-    }
-  });
-
-  it('rejects oversized request bodies before JSON parsing or sandbox execution', async () => {
-    const id = await project();
-    const request = new Request('http://localhost:3000/api/ai/iterate', {
-      method: 'POST',
-      headers: { host: 'localhost:3000', origin: 'http://localhost:3000', 'content-type': 'application/json' },
-      body: JSON.stringify({ projectId: id, prompt: 'x'.repeat(3 * 1024 * 1024), approved: true, files: [] }),
-    });
-    const response = await iteratePost(request);
-    expect(response.status).toBe(413);
-  });
-
 });
 
 describe('isolated AI verify and repair loop', () => {
@@ -83,4 +60,28 @@ describe('isolated AI verify and repair loop', () => {
     }));
     expect(response.status).toBe(400);
   });
+
+  it('rejects environment variants and secret paths', async () => {
+    const id = await project();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    for (const filePath of ['.env.local', 'config/credentials.json', 'secrets.json']) {
+      const response = await iteratePost(localPost('http://localhost:3000/api/ai/iterate', {
+        projectId: id, prompt: 'Change configuration', approved: true,
+        files: [{ path: filePath, content: 'NOT_A_REAL_SECRET', baseHash: null }],
+      }));
+      expect(response.status).toBe(400);
+    }
+  });
+
+  it('rejects oversized request bodies before JSON parsing or sandbox execution', async () => {
+    const id = await project();
+    const request = new Request('http://localhost:3000/api/ai/iterate', {
+      method: 'POST',
+      headers: { host: 'localhost:3000', origin: 'http://localhost:3000', 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: id, prompt: 'x'.repeat(3 * 1024 * 1024), approved: true, files: [] }),
+    });
+    const response = await iteratePost(request);
+    expect(response.status).toBe(413);
+  });
+
 });
