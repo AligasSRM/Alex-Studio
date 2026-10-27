@@ -38,7 +38,10 @@ function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
   const refs: { raw: string; kind: string }[] = [];
   const add = (raw: string | undefined, kind: string) => { if (raw) refs.push({ raw, kind }); };
   if (/\.(?:html?|xhtml)$/i.test(file.path)) {
-    for (const match of file.content.matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi)) add(match[1], 'HTML src/href');
+    // Match quoted and unquoted HTML URL attributes; generated markup may omit quotes.
+    for (const match of file.content.matchAll(/\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>\x60]+))/gi)) {
+      add(match[1] ?? match[2] ?? match[3], 'HTML src/href');
+    }
   }
   if (/\.css$/i.test(file.path)) {
     for (const match of file.content.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) add(match[1].trim(), 'CSS url()');
@@ -91,9 +94,10 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
         missing.push(filePath + ' -> unsafe active-content URL');
         continue;
       }
-      if (EXTERNAL.test(ref.raw) || ref.raw.startsWith('#') || /^(?:data:|mailto:|tel:|blob:)/i.test(ref.raw)) continue;
+      const reference = ref.raw.trim();
+      if (/^(?:https?:|mailto:|tel:|data:|blob:|file:|\/\/|#)/i.test(reference)) continue;
       if (['HTML src/href', 'CSS url()', 'CSS @import'].includes(ref.kind)) {
-        if (!resolveReference(filePath, ref.raw, files)) missing.push(filePath + ' -> ' + ref.raw + ' (' + ref.kind + ')');
+        if (!resolveReference(filePath, reference, files)) missing.push(filePath + ' -> ' + reference + ' (' + ref.kind + ')');
         continue;
       }
       if (ref.raw.startsWith('@/')) {
@@ -101,10 +105,10 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
         continue;
       }
       if (ref.raw.startsWith('.') || ref.raw.startsWith('/')) {
-        if (!resolveReference(filePath, ref.raw, files)) missing.push(filePath + ' -> ' + ref.raw + ' (' + ref.kind + ')');
+        if (!resolveReference(filePath, reference, files)) missing.push(filePath + ' -> ' + reference + ' (' + ref.kind + ')');
         continue;
       }
-      const pkg = ref.raw.startsWith('@') ? ref.raw.split('/').slice(0, 2).join('/') : ref.raw.split('/')[0];
+      const pkg = reference.startsWith('@') ? reference.split('/').slice(0, 2).join('/') : reference.split('/')[0];
       if (!BUILTINS.has(ref.raw) && !BUILTINS.has(pkg) &&
           !packageJson?.dependencies?.[pkg] && !packageJson?.devDependencies?.[pkg]) {
         undeclared.push(filePath + ' -> ' + pkg);
