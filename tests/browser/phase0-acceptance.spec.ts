@@ -228,3 +228,36 @@ test('P0-ACC-003: a failed initial project-list load shows a visible error witho
   await expect(page.getByRole('alert')).toContainText('Injected project-list failure');
   await expect(page.locator('.files h2')).toHaveText('No project selected');
 });
+
+
+test('P0-ACC-003: failed project-file loading preserves the previously active workspace', async ({ page }) => {
+  await page.goto('/');
+  const projectSelect = page.getByLabel('Active project');
+  await createProject(page, `p0-load-first-${Date.now()}`);
+  const firstName = await page.locator('.files h2').innerText();
+  const firstId = await projectSelect.inputValue();
+  const editor = page.getByRole('textbox', { name: 'File editor' });
+  await editor.fill('<!doctype html><html><body><h1>First saved project</h1></body></html>');
+  await saveCurrentFile(page);
+
+  await createProject(page, `p0-load-second-${Date.now()}`);
+  const secondName = await page.locator('.files h2').innerText();
+  const secondId = await projectSelect.inputValue();
+  const secondContent = '<!doctype html><html><body><h1>Second saved project</h1></body></html>';
+  await editor.fill(secondContent);
+  await saveCurrentFile(page);
+
+  await page.route('**/api/files*', async route => {
+    const url = new URL(route.request().url());
+    if (route.request().method() === 'GET' && url.searchParams.get('projectId') === firstId && !url.searchParams.has('path')) {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Injected project-file load failure' }) });
+    } else {
+      await route.continue();
+    }
+  });
+  await projectSelect.selectOption({ label: firstName });
+  await expect(page.getByRole('alert')).toContainText('Injected project-file load failure');
+  await expect(projectSelect).toHaveValue(secondId);
+  await expect(page.locator('.files h2')).toHaveText(secondName);
+  await expect(editor).toHaveValue(secondContent);
+});
