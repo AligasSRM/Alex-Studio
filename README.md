@@ -46,40 +46,6 @@
 - **استراتيجية معالجة الأخطاء:** معالجة أخطاء API، أخطاء الملفات، وانهيار preview مع رسائل واضحة للمستخدم.
 - **نسخ احتياطي:** نسخ احتياطي دوري (ZIP) للمشروع completo، أو Git remote اختياري (بمصادقة).
 
-## 4.1 دورة العمل الإلزامية للذكاء الاصطناعي
-
-دورة العمل المطلوبة داخل Alex Studio هي:
-
-**فهم ← تخطيط ← تنفيذ ← اختبار ← تشخيص ← إصلاح ← إعادة اختبار ← تسليم موثّق.**
-
-ويجب أن يعمل المساعد كوكيل تطوير يتبع هذه الدورة، لا كمولّد نصوص أو اقتراحات منفصلة فقط:
-
-1. **الفهم:** تحليل طلب المستخدم وسياق المشروع وملفاته ذات الصلة، وتحديد الهدف والقيود وأي معلومات ناقصة.
-2. **التخطيط:** إعداد خطة تنفيذ قصيرة تحدد الملفات المتأثرة، والتغييرات المتوقعة، والفحوص المناسبة قبل تعديل الملفات.
-3. **التنفيذ:** إنشاء التغييرات البرمجية الفعلية على ملفات المشروع داخل مساحة العمل المعزولة، مع إبقاء التغييرات المقترحة قابلة للمراجعة وعدم تجاوز موافقة المستخدم الصريحة قبل تطبيقها.
-4. **الاختبار:** تشغيل الفحوص المتاحة والملائمة لنوع المشروع، مثل فحص الأنواع والتنسيق والاختبارات والبناء واختبارات المتصفح عند توفرها.
-5. **التشخيص:** عند الفشل، جمع مخرجات الفحص وتحديد السبب المرجح بدليل من الخطأ، لا التخمين أو إخفاء الفشل.
-6. **الإصلاح:** تعديل السبب المحدد ضمن نطاق المهمة، مع المحافظة على التغييرات السابقة والقيود الأمنية.
-7. **إعادة الاختبار:** إعادة الفحوص التي فشلت، ثم الفحوص المرتبطة بالتغييرات؛ ولا يُعلن النجاح إلا بناءً على نتيجة فعلية للنسخة المختبرة.
-8. **التسليم الموثّق:** عرض ملخص التغييرات والملفات المتأثرة ونتائج الفحوص الفعلية والفحوص غير المنفذة وأي مخاطر أو عمل متبقٍ.
-
-### ما أصبح منفذاً في مسار بناء المشروع
-
-- يمكن للمستخدم وصف فكرة أو لصق مواصفات، ويقرأ النظام سياق ملفات المشروع المحفوظة ثم يطلب من نموذج الذكاء الاصطناعي خطة وملفات كاملة مقترحة بصيغة منظمة.
-- تظهر الخطة وكل ملف مقترح للمراجعة قبل التطبيق؛ التوليد لا يكتب الملفات تلقائياً.
-- يمكن اعتماد دفعة متعددة الملفات صراحةً، مع فحص المسارات وحماية الملفات الحساسة والتحقق من أن الملفات لم تتغير منذ إنشاء المسودة.
-- عند استبدال ملف موجود، تستخدم آلية النسخ الاحتياطي الحالية. إذا فشل تطبيق الدفعة، تُجرّب استعادة الملفات التي سبق تطبيقها.
-- **الحدود الحالية:** هذا مسار توليد ومراجعة وتطبيق للملفات، وليس بعدُ وكيلاً مستقلاً يشغّل المشروع أو أوامر الاختبار داخل sandbox، ويشخّص أخطاء التشغيل، ويصلحها تلقائياً ويعيد الاختبار. لا تُعرض نتائج اختبار على أنها ناجحة ما لم تُنفذ فعلياً.
-
-### ضوابط حلقة الإصلاح
-
-- تُكرر دورة التشخيص والإصلاح وإعادة الاختبار حتى تنجح الفحوص المطلوبة أو يظهر مانع واضح، مع حدّ محاولات قابل للضبط لمنع التكرار غير المنتهي.
-- إذا تعذر إصلاح الفشل أو تشغيل فحص، يجب إظهار السبب والنتيجة المتبقية بوضوح؛ لا يجوز الادعاء بأن المهمة نجحت.
-- يجب أن تكون كل محاولة إصلاح مرتبطة برسالة خطأ أو نتيجة اختبار قابلة للفحص، لا بتغييرات عشوائية.
-- تُعامل مخرجات النموذج والكود المقترح على أنها غير موثوقة، وتبقى ضوابط عزل الملفات والبيئة والأسرار وموافقة المستخدم نافذة طوال الدورة.
-- لا تُطبّق تغييرات الملفات بصمت. يجب عرض Diff واضح والحصول على موافقة صريحة قبل الكتابة؛ ولا يعني نجاح الاختبارات موافقة تلقائية على الدمج.
-- يُسجّل التقرير النهائي معرّف النسخة أو commit الذي جرى اختباره، وأسماء الأوامر أو الفحوص ونتائجها، وأي فحوص تخطّتها البيئة.
-
 ## 5. ترتيب التنفيذ المعتمد
 
 1. **الأساسيات والأمان:** تأسيس المشاريع والملفات، نظام الحفظ وإعادة الفتح، **عزل الملفات وحماية المفاتيح**.
@@ -96,8 +62,6 @@
 
 - [ ] **إدارة المشاريع:** إنشاء مشروع، حفظه، وإعادة فتحه بنجاح وبشكل كامل.
 - [ ] **عرض التعديلات:** عرض خطة التعديلات والملفات المتأثرة قبل التطبيق.
-- [ ] **دورة الذكاء الاصطناعي الكاملة:** إثبات عملي لمسار الفهم والتخطيط والتنفيذ والاختبار والتشخيص والإصلاح وإعادة الاختبار والتسليم الموثّق، مع إظهار نتائج الفحوص الفعلية.
-- [ ] **حلقة إصلاح منضبطة:** عند فشل اختبار، يظهر السبب من مخرجاته، ويُنفذ إصلاح مرتبط به، ثم يعاد الاختبار؛ وعند تعذر النجاح تُعرض الحالة المتبقية دون ادعاء النجاح.
 - [ ] **الموافقة/الرفض:** إمكانية قبول التغييرات أو رفضها، مع تطبيقها فقط عند الموافقة الصريحة.
 - [ ] **ضمان عدم التطبيق الصامت:** إثبات عملياً عدم تطبيق أي تعديل دون موافقة (فحص checksum قبل/بعد الرفض).
 - [ ] **عزل الملفات:** إثبات منع الوصول إلى الملفات خارج نطاق المشروع (اختبار Path Traversal).
@@ -247,7 +211,7 @@
 
 **Phase 0 acceptance gate: CLOSED / PASS** for the defined P0-ACC-001–017 criteria. Evidence and the criterion-by-criterion matrix are recorded in [the Phase 0 acceptance report](docs/reviews/PHASE-0-ACCEPTANCE-TEST-BASELINE-2026-10-27.md). Verified code commit: `8ddef4083a17c578fc713cc93d640a5326bd4229`; [CI run](https://github.com/AligasSRM/Alex-Studio/actions/runs/40567364737) passed 35 unit tests, 14 browser tests, typecheck, lint, and production build.
 
-**This is not first-release acceptance or production approval.** The first-release criteria in §6 remain a separate gate. The provider integration now supports text suggestions and reviewable multi-file project drafts with explicit batch application. The autonomous sandboxed execution/test/diagnose/repair/retest loop, secret scanning, performance-threshold evidence, and full release-level security review remain outstanding. Rate limiting and usage/cost metering exist for provider requests, but the cost ledger and monthly warning still need release-level verification. ZIP export and basic editor undo/redo have implementation and regression tests, but that does not by itself establish a durable approved-change ledger or Git-based rollback.
+**This is not first-release acceptance or production approval.** The first-release criteria in §6 remain a separate gate. AI-provider integration, rate limiting, secret scanning, usage/cost metering and monthly warning, performance-threshold evidence, and full release-level security review remain outstanding. ZIP export and basic editor undo/redo have implementation and regression tests, but that does not by itself establish a durable approved-change ledger or Git-based rollback.
 
 **Dependency security follow-up required:** the verified CI install reported 4 dependency advisories (1 low, 1 moderate, 1 high, 1 critical). Resolve and review these before any release approval.
 
