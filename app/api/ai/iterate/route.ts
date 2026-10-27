@@ -10,7 +10,7 @@ import { assertLocalMutation, resolveProjectPath } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
 import { listProjectFiles, readProjectFile } from '@/lib/files';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
+import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';\nimport { analyzeGeneratedProject } from '@/lib/ai-acceptance';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -113,7 +113,7 @@ export async function POST(request: Request) {
   if (contentLength > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
   const rawBody = await request.text().catch(() => '');
   if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
-  type IterateRequestBody = { projectId?: unknown; prompt?: unknown; files?: unknown; approved?: unknown };
+  type IterateRequestBody = { projectId?: unknown; prompt?: unknown; files?: unknown; requirements?: unknown; approved?: unknown };
   let body: IterateRequestBody;
   try { body = JSON.parse(rawBody) as IterateRequestBody; } catch { return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 }); }
   if (!body || typeof body.projectId !== 'string' || typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 12000 || !Array.isArray(body.files)) {
@@ -168,7 +168,7 @@ export async function POST(request: Request) {
       const old = originals.get(filePath); changed.push({ path: filePath, content, baseHash: old === undefined ? null : hash(old) });
     }
     if (!changed.length || changed.length > MAX_FILES) return NextResponse.json({ error: 'Final draft must contain 1–10 changed files', diagnostic, repairs }, { status: 422 });
-    return NextResponse.json({ ok: diagnostic.ok, summary: diagnostic.ok ? 'Isolated browser smoke test passed after the bounded repair loop.' : 'Repair loop ended with failures; inspect diagnostics before applying.', diagnostic, repairs,
+    const acceptance = analyzeGeneratedProject(Array.from(working.entries()).map(([filePath, content]) => ({ path: filePath, content })), body.requirements);\n    return NextResponse.json({ ok: diagnostic.ok && acceptance.status === 'pass', summary: diagnostic.ok ? 'Isolated browser smoke test passed; inspect the acceptance report for checks that remain unverified.' : 'Repair loop ended with failures; inspect diagnostics before applying.', diagnostic, repairs, acceptance,
       build: { summary: 'Verified draft; not applied to the real project.', plan: repairs.map(x => 'Repair round ' + x.round + ': ' + x.summary), files: changed }, appliedToProject: false }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'AI verify/repair failed' }, { status: 400 });
