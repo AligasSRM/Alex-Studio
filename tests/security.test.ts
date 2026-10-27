@@ -32,7 +32,7 @@ describe('workspace path security', () => {
     }
   });
 
-  it('rejects missing origin headers', () => {
+  it('rejects NUL bytes and oversized content', () => {\n    const { assertTextContent } = require('../lib/path-security');\n    expect(() => assertTextContent('bad\\0text')).toThrow();\n    expect(() => assertTextContent('x'.repeat(1024 * 1024 + 1))).toThrow();\n  });\n\n  it('rejects missing origin headers', () => {
     expect(assertLocalMutation(new Request('http://localhost:3000/api/files', { method: 'POST' }))).toBe(false);
   });
 
