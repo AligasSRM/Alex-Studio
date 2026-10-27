@@ -36,29 +36,32 @@ function resolveReference(from: string, raw: string, files: Map<string, string>)
 
 function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
   const refs: { raw: string; kind: string }[] = [];
-  const add = (raw: string | undefined, kind: string) => {
-    const value = raw?.trim();
-    if (value) refs.push({ raw: value, kind });
+  const scan = (pattern: RegExp, kind: string, group = 1) => {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(file.content)) !== null) {
+      const value = match[group]?.trim();
+      if (value) refs.push({ raw: value, kind });
+      if (match[0].length === 0) pattern.lastIndex++;
+    }
   };
 
   if (/\.(?:html?|xhtml)$/i.test(file.path)) {
-    // Capture the URL itself, not a quote/backreference pair.
-    for (const match of file.content.matchAll(/\b(?:src|href)\s*=\s*["']([^"']*)["']/gi)) {
-      add(match[1], 'HTML src/href');
-    }
-    for (const match of file.content.matchAll(/\b(?:src|href)\s*=\s*([^\s"'<>]+)/gi)) {
-      add(match[1], 'HTML src/href');
-    }
+    scan(/\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+))/gi, 'HTML src/href', 1);
+    // Attribute values may use either quote style; collect each form explicitly.
+    scan(/\b(?:src|href)\s*=\s*"([^"]*)"/gi, 'HTML src/href', 1);
+    scan(/\b(?:src|href)\s*=\s*'([^']*)'/gi, 'HTML src/href', 1);
+    scan(/\b(?:src|href)\s*=\s*([^\s"'<>]+)/gi, 'HTML src/href', 1);
   }
   if (/\.css$/i.test(file.path)) {
-    for (const match of file.content.matchAll(/url\(\s*["']?([^"')\s]+)["']?\s*\)/gi)) add(match[1], 'CSS url()');
-    for (const match of file.content.matchAll(/@import\s+(?:url\(\s*)?["']([^"']+)["']/gi)) add(match[1], 'CSS @import');
+    scan(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]+))\s*\)/gi, 'CSS url()', 1);
+    scan(/@import\s+(?:url\(\s*)?(?:"([^"]*)"|'([^']*)')/gi, 'CSS @import', 1);
   }
   if (/\.(?:[cm]?[jt]sx?)$/i.test(file.path)) {
-    for (const match of file.content.matchAll(/\bimport\s*["']([^"']+)["']/g)) add(match[1], 'module import');
-    for (const match of file.content.matchAll(/\bimport\b[\s\S]{0,300}?\bfrom\s*["']([^"']+)["']/g)) add(match[1], 'module import');
-    for (const match of file.content.matchAll(/\bexport\b[\s\S]{0,300}?\bfrom\s*["']([^"']+)["']/g)) add(match[1], 'module import');
-    for (const match of file.content.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) add(match[1], 'require()');
+    scan(/\bimport\s*["']([^"']+)["']/g, 'module import', 1);
+    scan(/\bimport\b[\s\S]{0,500}?\bfrom\s*["']([^"']+)["']/g, 'module import', 1);
+    scan(/\bexport\b[\s\S]{0,500}?\bfrom\s*["']([^"']+)["']/g, 'module import', 1);
+    scan(/\brequire\(\s*["']([^"']+)["']\s*\)/g, 'require()', 1);
   }
   return refs;
 }
