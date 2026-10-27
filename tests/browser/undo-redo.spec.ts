@@ -9,6 +9,9 @@ async function createProject(page: Page, name: string) {
 }
 
 async function saveCurrentFile(page: Page) {
+  await page.getByRole('button', { name: 'Review diff first' }).click();
+  await expect(page.locator('.diff-shell .monaco-diff-editor')).toBeVisible();
+  await page.getByRole('button', { name: "I've reviewed this diff" }).click();
   await page.getByRole('button', { name: 'Review & save' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
   await expect(page.getByRole('status')).toContainText('Saved');
