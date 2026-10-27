@@ -113,8 +113,9 @@ export async function POST(request: Request) {
   if (contentLength > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
   const rawBody = await request.text().catch(() => '');
   if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
-  let body: { projectId?: unknown; prompt?: unknown; files?: unknown; approved?: unknown } | null = null;
-  try { body = JSON.parse(rawBody) as typeof body; } catch { return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 }); }
+  type IterateRequestBody = { projectId?: unknown; prompt?: unknown; files?: unknown; approved?: unknown };
+  let body: IterateRequestBody;
+  try { body = JSON.parse(rawBody) as IterateRequestBody; } catch { return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 }); }
   if (!body || typeof body.projectId !== 'string' || typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 12000 || !Array.isArray(body.files)) {
     return NextResponse.json({ error: 'projectId, prompt, and draft files are required' }, { status: 400 });
   }
