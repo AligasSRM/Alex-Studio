@@ -157,6 +157,7 @@ test('P0-ACC-014: preview sandbox blocks top-level navigation initiated by proje
 
 
 test('P0-ACC-002: saved project content survives a real production-server restart', async () => {
+  test.setTimeout(90_000);
   const port = 3101;
   const origin = `http://127.0.0.1:${port}`;
   const startServer = async () => {
@@ -164,16 +165,31 @@ test('P0-ACC-002: saved project content survives a real production-server restar
       path.join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next'),
       'start', '--hostname', '127.0.0.1', '--port', String(port),
     ], { cwd: process.cwd(), env: process.env, stdio: 'ignore' });
-    await expect.poll(async () => {
-      try { return (await fetch(`${origin}/api/projects`)).status; } catch { return 0; }
-    }, { timeout: 45_000 }).toBe(200);
-    return child;
+    try {
+      await expect.poll(async () => {
+        try { return (await fetch(`${origin}/api/projects`)).status; } catch { return 0; }
+      }, { timeout: 35_000 }).toBe(200);
+      return child;
+    } catch (error) {
+      child.kill('SIGKILL');
+      throw error;
+    }
   };
   const stopServer = async (child: ReturnType<typeof spawn>) => {
     if (child.exitCode !== null || child.signalCode !== null) return;
     const exited = once(child, 'exit');
     child.kill('SIGTERM');
-    await exited;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const graceful = await Promise.race([
+      exited.then(() => true),
+      new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), 3_000); }),
+    ]);
+    if (timer) clearTimeout(timer);
+    if (!graceful && child.exitCode === null && child.signalCode === null) {
+      const forcedExit = once(child, 'exit');
+      child.kill('SIGKILL');
+      await forcedExit;
+    }
   };
 
   let server: ReturnType<typeof spawn> | undefined;
