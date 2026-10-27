@@ -26,6 +26,7 @@ afterEach(() => {
 describe('local project API', () => {
   it('creates a project with starter files', async () => {
     const response = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'API Test Project' }));
+    if (response.status !== 201) throw new Error('Project creation failed: ' + await response.clone().text());
     expect(response.status).toBe(201);
     const data = await response.json();
     const id = data.project.id as string;
@@ -37,6 +38,7 @@ describe('local project API', () => {
 
   it('refuses file writes without explicit approval and saves after approval', async () => {
     const created = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'Approval Test Project' }));
+    if (created.status !== 201) throw new Error('Project creation failed: ' + await created.clone().text());
     const { project } = await created.json();
     createdIds.push(project.id);
     const payload = { projectId: project.id, path: 'index.html', content: '<h1>Approved content</h1>' };
