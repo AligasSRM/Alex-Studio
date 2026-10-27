@@ -10,7 +10,8 @@ import { assertLocalMutation, resolveProjectPath } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
 import { listProjectFiles, readProjectFile } from '@/lib/files';
 import { checkRateLimit } from '@/lib/rate-limit';
-import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';\nimport { analyzeGeneratedProject } from '@/lib/ai-acceptance';
+import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
+import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -168,7 +169,8 @@ export async function POST(request: Request) {
       const old = originals.get(filePath); changed.push({ path: filePath, content, baseHash: old === undefined ? null : hash(old) });
     }
     if (!changed.length || changed.length > MAX_FILES) return NextResponse.json({ error: 'Final draft must contain 1–10 changed files', diagnostic, repairs }, { status: 422 });
-    const acceptance = analyzeGeneratedProject(Array.from(working.entries()).map(([filePath, content]) => ({ path: filePath, content })), body.requirements);\n    return NextResponse.json({ ok: diagnostic.ok, summary: diagnostic.ok ? 'Isolated browser smoke test passed; inspect the acceptance report for checks that remain unverified.' : 'Repair loop ended with failures; inspect diagnostics before applying.', diagnostic, repairs, acceptance,
+    const acceptance = analyzeGeneratedProject(Array.from(working.entries()).map(([filePath, content]) => ({ path: filePath, content })), body.requirements);
+    return NextResponse.json({ ok: diagnostic.ok, summary: diagnostic.ok ? 'Isolated browser smoke test passed; inspect the acceptance report for checks that remain unverified.' : 'Repair loop ended with failures; inspect diagnostics before applying.', diagnostic, repairs, acceptance,
       build: { summary: 'Verified draft; not applied to the real project.', plan: repairs.map(x => 'Repair round ' + x.round + ': ' + x.summary), files: changed }, appliedToProject: false }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'AI verify/repair failed' }, { status: 400 });
