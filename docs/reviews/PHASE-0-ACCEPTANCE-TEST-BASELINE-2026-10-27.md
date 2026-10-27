@@ -18,8 +18,8 @@
 | ID | Criterion | Test/evidence | Status on this branch | Acceptance condition |
 |---|---|---|---|---|
 | P0-ACC-001 | Project lifecycle and switching | `tests/browser/phase0-acceptance.spec.ts`; `tests/phase0-acceptance.test.ts` | Added | Create two projects, switch back, and confirm saved content and project records persist on disk. |
-| P0-ACC-002 | Persistence across a real server restart | CI/manual restart evidence | Pending | Stop and restart the server process, then re-open the project and compare saved file bytes. Disk-backed listing alone is not a server-restart test. |
-| P0-ACC-003 | Project create failure UX | Browser fault-injection test | Added, partial | Failed create displays a visible error and preserves selection. Load-failure UX remains pending. |
+| P0-ACC-002 | Persistence across a real server restart | Production-server restart test in browser acceptance suite | Added, CI pending | Stop and restart the production server process, then verify project metadata and exact saved content through the API. |
+| P0-ACC-003 | Project create/load failure UX | Browser fault-injection tests | Added, partial | Failed create and initial project-list load show visible errors. Per-project file-load failure remains pending. |
 | P0-ACC-004 | Diff correctness | Browser diff view smoke test | Added, partial | Diff view mounts after a known edit. Rendered-line comparison remains pending. |
 | P0-ACC-005 | Diff is read-only | Browser Monaco input-area check | Added | Monaco diff input areas report read-only; draft remains unchanged after leaving review. |
 | P0-ACC-006 | Reviewed content matches proposed save | Browser request payload assertion | Added | The approved POST payload content must exactly equal the reviewed editor draft. |
