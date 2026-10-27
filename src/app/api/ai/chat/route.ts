@@ -1,5 +1,3 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
 import { chatWithAI, estimateTokens, type ChatMessage } from "@/lib/aiClient";
 
