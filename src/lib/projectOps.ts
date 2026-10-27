@@ -1,9 +1,11 @@
-import fs from "fs";
-import path from "path";
-import { execSync } from "child_process";
-import { validatePath, ensureWorkspace } from "./fileOps";
+import fs from "node:fs";
+import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { execSync } from "node:child_process";
+import { ensureWorkspace } from "./fileOps";
 
 const WORKSPACE_ROOT = path.resolve(process.cwd(), "workspace");
+const PROJECT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export interface ProjectMeta {
   id: string;
@@ -14,8 +16,56 @@ export interface ProjectMeta {
   description?: string;
 }
 
+function assertProjectId(projectId: string): void {
+  if (typeof projectId !== "string" || !PROJECT_ID_PATTERN.test(projectId)) {
+    throw new Error("Invalid project id");
+  }
+}
+
+function isWithinRoot(candidate: string, root: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function assertProjectPath(projectDir: string): void {
+  if (!isWithinRoot(path.resolve(projectDir), WORKSPACE_ROOT)) {
+    throw new Error("Project path is outside workspace");
+  }
+  if (fs.existsSync(projectDir)) {
+    const realRoot = fs.realpathSync(WORKSPACE_ROOT);
+    const realProject = fs.realpathSync(projectDir);
+    if (!isWithinRoot(realProject, realRoot)) {
+      throw new Error("Project path resolves outside workspace");
+    }
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+    };
+    return entities[char];
+  });
+}
+
+function validateText(value: unknown, label: string, maxLength: number, allowEmpty = false): string {
+  if (typeof value !== "string") throw new Error(`${label} must be a string`);
+  const normalized = value.trim();
+  if (!allowEmpty && normalized.length === 0) throw new Error(`${label} is required`);
+  if (normalized.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or fewer`);
+  return normalized;
+}
+
 export function getProjectDir(projectId: string): string {
-  return path.join(WORKSPACE_ROOT, projectId);
+  assertProjectId(projectId);
+  const projectDir = path.resolve(WORKSPACE_ROOT, projectId);
+  assertProjectPath(projectDir);
+  return projectDir;
 }
 
 export function getProjectMetaPath(projectId: string): string {
@@ -25,7 +75,7 @@ export function getProjectMetaPath(projectId: string): string {
 export function projectExists(projectId: string): boolean {
   try {
     const metaPath = getProjectMetaPath(projectId);
-    return fs.existsSync(metaPath);
+    return fs.existsSync(metaPath) && fs.statSync(metaPath).isFile();
   } catch {
     return false;
   }
@@ -33,61 +83,60 @@ export function projectExists(projectId: string): boolean {
 
 export function createProject(name: string, description?: string): ProjectMeta {
   ensureWorkspace();
+  const safeName = validateText(name, "Project name", 100);
+  const safeDescription = description === undefined
+    ? undefined
+    : validateText(description, "Project description", 1000, true);
 
-  // Generate unique ID
-  const id = name
+  const baseId = safeName
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    + "-" + Date.now().toString(36);
-
+    .replace(/^-|-$/g, "") || "project";
+  const id = `${baseId}-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
   const projectDir = getProjectDir(id);
   const alexDir = path.join(projectDir, ".alex");
 
-  // Create directories
-  fs.mkdirSync(projectDir, { recursive: true });
-  fs.mkdirSync(alexDir, { recursive: true });
-  fs.mkdirSync(path.join(alexDir, "backups"), { recursive: true });
+  fs.mkdirSync(projectDir, { recursive: false });
+  fs.mkdirSync(alexDir, { recursive: false });
+  fs.mkdirSync(path.join(alexDir, "backups"), { recursive: false });
 
   const now = new Date().toISOString();
   const meta: ProjectMeta = {
     id,
-    name,
+    name: safeName,
     createdAt: now,
     updatedAt: now,
     type: "html-static",
-    description,
+    description: safeDescription,
   };
 
-  // Write project metadata
   fs.writeFileSync(
     path.join(alexDir, "project.json"),
     JSON.stringify(meta, null, 2),
-    "utf-8"
+    { encoding: "utf-8", flag: "wx", mode: 0o600 }
   );
 
-  // Create initial index.html
+  const escapedName = escapeHtml(safeName);
   const initialHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${name}</title>
+  <title>${escapedName}</title>
   <style>
     body { font-family: sans-serif; padding: 20px; }
     h1 { color: #333; }
   </style>
 </head>
 <body>
-  <h1>${name}</h1>
+  <h1>${escapedName}</h1>
   <p>Project created. Start building!</p>
 </body>
 </html>`;
 
-  fs.writeFileSync(path.join(projectDir, "index.html"), initialHtml, "utf-8");
+  fs.writeFileSync(path.join(projectDir, "index.html"), initialHtml, { encoding: "utf-8", flag: "wx", mode: 0o600 });
 
-  // Initialize git repo
   try {
     execSync("git init", { cwd: projectDir, stdio: "pipe" });
     execSync('git config user.email "alex-studio@local"', { cwd: projectDir, stdio: "pipe" });
@@ -95,7 +144,7 @@ export function createProject(name: string, description?: string): ProjectMeta {
     execSync("git add -A", { cwd: projectDir, stdio: "pipe" });
     execSync('git commit -m "Initial project creation"', { cwd: projectDir, stdio: "pipe" });
   } catch {
-    // Git init failed - non-critical, continue
+    // Project creation remains usable if Git is unavailable; surface this in a future status field.
   }
 
   return meta;
@@ -104,9 +153,11 @@ export function createProject(name: string, description?: string): ProjectMeta {
 export function getProject(projectId: string): ProjectMeta | null {
   try {
     const metaPath = getProjectMetaPath(projectId);
-    if (!fs.existsSync(metaPath)) return null;
+    if (!fs.existsSync(metaPath) || !fs.statSync(metaPath).isFile()) return null;
     const content = fs.readFileSync(metaPath, "utf-8");
-    return JSON.parse(content) as ProjectMeta;
+    const meta = JSON.parse(content) as ProjectMeta;
+    if (meta.id !== projectId || !PROJECT_ID_PATTERN.test(meta.id)) return null;
+    return meta;
   } catch {
     return null;
   }
@@ -115,47 +166,48 @@ export function getProject(projectId: string): ProjectMeta | null {
 export function listProjects(): ProjectMeta[] {
   ensureWorkspace();
   const projects: ProjectMeta[] = [];
-
-  try {
-    const entries = fs.readdirSync(WORKSPACE_ROOT, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory() && !entry.name.startsWith(".")) {
-        const meta = getProject(entry.name);
-        if (meta) {
-          projects.push(meta);
-        }
-      }
-    }
-  } catch {
-    // Directory read failed
+  const entries = fs.readdirSync(WORKSPACE_ROOT, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.isSymbolicLink() || entry.name.startsWith(".")) continue;
+    const meta = getProject(entry.name);
+    if (meta) projects.push(meta);
   }
-
-  // Sort by updatedAt (newest first)
   projects.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-
   return projects;
 }
 
-export function updateProject(projectId: string, updates: Partial<Pick<ProjectMeta, "name" | "description">>): ProjectMeta | null {
+export function updateProject(
+  projectId: string,
+  updates: Partial<Pick<ProjectMeta, "name" | "description">>
+): ProjectMeta | null {
   const meta = getProject(projectId);
   if (!meta) return null;
 
-  if (updates.name) meta.name = updates.name;
-  if (updates.description !== undefined) meta.description = updates.description;
+  if (updates.name !== undefined) meta.name = validateText(updates.name, "Project name", 100);
+  if (updates.description !== undefined) {
+    meta.description = validateText(updates.description, "Project description", 1000, true);
+  }
   meta.updatedAt = new Date().toISOString();
 
   const metaPath = getProjectMetaPath(projectId);
-  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2), "utf-8");
-
+  const tmpPath = `${metaPath}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(tmpPath, JSON.stringify(meta, null, 2), { encoding: "utf-8", flag: "wx", mode: 0o600 });
+    fs.renameSync(tmpPath, metaPath);
+  } finally {
+    if (fs.existsSync(tmpPath)) fs.rmSync(tmpPath, { force: true });
+  }
   return meta;
 }
 
 export function deleteProject(projectId: string): boolean {
-  const projectDir = getProjectDir(projectId);
-  if (!fs.existsSync(projectDir)) return false;
-
   try {
-    fs.rmSync(projectDir, { recursive: true, force: true });
+    const projectDir = getProjectDir(projectId);
+    if (!fs.existsSync(projectDir)) return false;
+    assertProjectPath(projectDir);
+    const meta = getProject(projectId);
+    if (!meta) return false;
+    fs.rmSync(projectDir, { recursive: true, force: false });
     return true;
   } catch {
     return false;
@@ -165,19 +217,15 @@ export function deleteProject(projectId: string): boolean {
 export function getProjectFiles(projectId: string): string[] {
   const projectDir = getProjectDir(projectId);
   if (!fs.existsSync(projectDir)) return [];
-
   const files: string[] = [];
 
-  function walk(dir: string, prefix: string) {
+  function walk(dir: string, prefix: string): void {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.name === ".alex" || entry.name === ".git" || entry.name === "node_modules") continue;
+      if (entry.isSymbolicLink() || entry.name === ".alex" || entry.name === ".git" || entry.name === "node_modules") continue;
       const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) {
-        walk(path.join(dir, entry.name), relativePath);
-      } else {
-        files.push(relativePath);
-      }
+      if (entry.isDirectory()) walk(path.join(dir, entry.name), relativePath);
+      else if (entry.isFile()) files.push(relativePath);
     }
   }
 
