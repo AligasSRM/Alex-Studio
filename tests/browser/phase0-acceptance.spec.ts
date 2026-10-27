@@ -1,3 +1,7 @@
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
 async function createProject(page: Page, name: string) {
@@ -149,4 +153,78 @@ test('P0-ACC-014: preview sandbox blocks top-level navigation initiated by proje
   await page.frameLocator('iframe[title="HTML preview"]').getByRole('button', { name: 'Try top navigation' }).click();
   await page.waitForTimeout(300);
   expect(page.url()).toBe(before);
+});
+
+
+test('P0-ACC-002: saved project content survives a real production-server restart', async () => {
+  const port = 3101;
+  const origin = `http://127.0.0.1:${port}`;
+  const startServer = async () => {
+    const child = spawn(process.execPath, [
+      path.join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next'),
+      'start', '--hostname', '127.0.0.1', '--port', String(port),
+    ], { cwd: process.cwd(), env: process.env, stdio: 'ignore' });
+    await expect.poll(async () => {
+      try { return (await fetch(`${origin}/api/projects`)).status; } catch { return 0; }
+    }, { timeout: 45_000 }).toBe(200);
+    return child;
+  };
+  const stopServer = async (child: ReturnType<typeof spawn>) => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    const exited = once(child, 'exit');
+    child.kill('SIGTERM');
+    await exited;
+  };
+
+  let server: ReturnType<typeof spawn> | undefined;
+  let projectId: string | undefined;
+  const projectName = `p0-restart-${Date.now()}`;
+  try {
+    server = await startServer();
+    const created = await fetch(`${origin}/api/projects`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin },
+      body: JSON.stringify({ name: projectName }),
+    });
+    expect(created.status).toBe(201);
+    const createdData = await created.json() as { project: { id: string } };
+    projectId = createdData.project.id;
+    const savedContent = '<!doctype html><html><body><h1>Survives server restart</h1></body></html>';
+    const write = await fetch(`${origin}/api/files`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin },
+      body: JSON.stringify({ projectId, path: 'index.html', content: savedContent, approved: true }),
+    });
+    expect(write.status).toBe(200);
+    await stopServer(server);
+    server = undefined;
+
+    server = await startServer();
+    const projectsResponse = await fetch(`${origin}/api/projects`);
+    expect(projectsResponse.status).toBe(200);
+    const projectsData = await projectsResponse.json() as { projects: Array<{ id: string; name: string }> };
+    expect(projectsData.projects).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: projectId, name: projectName }),
+    ]));
+    const fileResponse = await fetch(`${origin}/api/files?projectId=${encodeURIComponent(projectId!)}&path=index.html`);
+    expect(fileResponse.status).toBe(200);
+    const fileData = await fileResponse.json() as { content: string };
+    expect(fileData.content).toBe(savedContent);
+  } finally {
+    if (server) await stopServer(server);
+    if (projectId) fs.rmSync(path.join(process.cwd(), 'workspace', projectId), { recursive: true, force: true });
+  }
+});
+
+test('P0-ACC-003: a failed initial project-list load shows a visible error without selecting a project', async ({ page }) => {
+  await page.route('**/api/projects', async route => {
+    if (route.request().method() === 'GET') {
+      await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: 'Injected project-list failure' }) });
+    } else {
+      await route.continue();
+    }
+  });
+  await page.goto('/');
+  await expect(page.getByRole('alert')).toContainText('Injected project-list failure');
+  await expect(page.locator('.files h2')).toHaveText('No project selected');
 });
