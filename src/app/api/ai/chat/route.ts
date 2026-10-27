@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { chatWithAI, estimateTokens, type ChatMessage } from "@/lib/aiClient";
+import { projectExists } from "@/lib/projectOps";
+import { getBudgetConfig, reserveAiUsage, settleAiUsage, releaseAiUsage } from "@/lib/aiUsage";
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 20_000;
@@ -24,17 +26,14 @@ export async function POST(request: NextRequest) {
   }
 
   const { messages, projectId } = body as { messages?: unknown; projectId?: unknown };
-
+  if (typeof projectId !== "string" || !PROJECT_ID_PATTERN.test(projectId) || !projectExists(projectId)) {
+    return NextResponse.json({ error: "A valid projectId is required for project-scoped AI usage tracking" }, { status: 400 });
+  }
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "Messages array is required" }, { status: 400 });
   }
   if (messages.length > MAX_MESSAGES) {
     return NextResponse.json({ error: `At most ${MAX_MESSAGES} messages are allowed` }, { status: 400 });
-  }
-  if (projectId !== undefined && (
-    typeof projectId !== "string" || !PROJECT_ID_PATTERN.test(projectId)
-  )) {
-    return NextResponse.json({ error: "Invalid project id" }, { status: 400 });
   }
 
   let totalChars = 0;
@@ -59,31 +58,90 @@ export async function POST(request: NextRequest) {
     }
     validatedMessages.push({ role: item.role, content: item.content });
   }
-
   if (!validatedMessages.some((message) => message.role === "user")) {
     return NextResponse.json({ error: "At least one user message is required" }, { status: 400 });
   }
 
+  const mockMode = !process.env.AI_API_KEY && process.env.NODE_ENV !== "production" && process.env.AI_ALLOW_MOCK === "true";
+  if (!process.env.AI_API_KEY && !mockMode) {
+    return NextResponse.json({ error: "AI is not configured. Set AI_API_KEY, or explicitly enable AI_ALLOW_MOCK in development." }, { status: 503 });
+  }
+
+  if (mockMode) {
+    try {
+      const result = await chatWithAI(validatedMessages);
+      return NextResponse.json({
+        response: result.text,
+        projectId,
+        usage: {
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          totalTokens: result.inputTokens + result.outputTokens,
+          usageEstimated: true,
+          costUsd: 0,
+          costTracked: false,
+        },
+      });
+    } catch {
+      return NextResponse.json({ error: "Development mock response failed" }, { status: 500 });
+    }
+  }
+
+  let budgetConfig;
   try {
-    const inputTokens = validatedMessages.reduce((sum, message) => sum + estimateTokens(message.content), 0);
-    const response = await chatWithAI(validatedMessages);
-    const outputTokens = estimateTokens(response);
+    budgetConfig = getBudgetConfig();
+  } catch {
+    return NextResponse.json({
+      error: "AI cost controls are not configured. Set AI_MONTHLY_LIMIT_USD and both per-million token rates before enabling real AI calls.",
+    }, { status: 503 });
+  }
+
+  let reservationId = "";
+  try {
+    const reservation = await reserveAiUsage(projectId, totalChars, 2000, budgetConfig);
+    reservationId = reservation.reservationId;
+  } catch (error) {
+    if (error instanceof Error && error.message === "AI_BUDGET_EXCEEDED") {
+      return NextResponse.json({ error: "This project's monthly AI budget has been reached." }, { status: 429 });
+    }
+    return NextResponse.json({ error: "AI usage ledger is unavailable; request blocked safely." }, { status: 503 });
+  }
+
+  let settled = false;
+  try {
+    const result = await chatWithAI(validatedMessages);
+    const usage = await settleAiUsage(
+      reservationId,
+      result.inputTokens,
+      result.outputTokens,
+      result.usageEstimated,
+      budgetConfig
+    );
+    settled = true;
 
     return NextResponse.json({
-      response,
-      projectId: projectId ?? null,
+      response: result.text,
+      projectId,
       usage: {
-        inputTokens,
-        outputTokens,
-        totalTokens: inputTokens + outputTokens,
-        estimateOnly: true,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        totalTokens: usage.inputTokens + usage.outputTokens,
+        usageEstimated: usage.usageEstimated,
+        costUsd: usage.costUsd,
+        monthlyLimitUsd: usage.monthlyLimitUsd,
+        remainingUsd: usage.remainingUsd,
+        month: usage.month,
+        requests: usage.requests,
+        costTracked: true,
       },
     });
   } catch (error) {
-    // Do not return provider response bodies or credentials to the client.
-    if (error instanceof Error && error.message === "AI_NOT_CONFIGURED") {
-      return NextResponse.json({ error: "AI is not configured. Set AI_API_KEY, or explicitly enable AI_ALLOW_MOCK in development." }, { status: 503 });
+    if (!settled) {
+      try { await releaseAiUsage(reservationId); } catch { /* fail closed; inspect the usage ledger */ }
     }
-    return NextResponse.json({ error: "AI provider request failed" }, { status: 502 });
+    if (error instanceof Error && error.message === "AI_NOT_CONFIGURED") {
+      return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
+    }
+    return NextResponse.json({ error: "AI provider or usage accounting failed; inspect server logs before retrying." }, { status: 502 });
   }
 }
