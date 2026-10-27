@@ -54,8 +54,11 @@ function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
     scan(/\b(?:src|href)\s*=\s*([^\s"'<>]+)/gi, 'HTML src/href', 1);
   }
   if (/\.css$/i.test(file.path)) {
-    scan(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)'"\s]+))\s*\)/gi, 'CSS url()', 1);
-    scan(/@import\s+(?:url\(\s*)?(?:"([^"]*)"|'([^']*)')/gi, 'CSS @import', 1);
+    scan(/url\(\s*"([^"]*)"\s*\)/gi, 'CSS url()', 1);
+    scan(/url\(\s*'([^']*)'\s*\)/gi, 'CSS url()', 1);
+    scan(/url\(\s*([^)'"\s]+)\s*\)/gi, 'CSS url()', 1);
+    scan(/@import\s+(?:url\(\s*)?"([^"]*)"/gi, 'CSS @import', 1);
+    scan(/@import\s+(?:url\(\s*)?'([^']*)'/gi, 'CSS @import', 1);
   }
   if (/\.(?:[cm]?[jt]sx?)$/i.test(file.path)) {
     scan(/\bimport\s*["']([^"']+)["']/g, 'module import', 1);
