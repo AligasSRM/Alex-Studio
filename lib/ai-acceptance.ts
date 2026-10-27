@@ -36,24 +36,29 @@ function resolveReference(from: string, raw: string, files: Map<string, string>)
 
 function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
   const refs: { raw: string; kind: string }[] = [];
-  const add = (raw: string | undefined, kind: string) => { if (raw) refs.push({ raw, kind }); };
+  const add = (raw: string | undefined, kind: string) => {
+    const value = raw?.trim();
+    if (value) refs.push({ raw: value, kind });
+  };
   if (/\.(?:html?|xhtml)$/i.test(file.path)) {
-    // Match quoted and unquoted HTML URL attributes; generated markup may omit quotes.
-    for (const match of file.content.matchAll(/\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>\x60]+))/gi)) {
-      add(match[1] ?? match[2] ?? match[3], 'HTML src/href');
+    // Handle single-, double-, and unquoted URL attributes.
+    const attrs = /\b(src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+))/gi;
+    for (const match of file.content.matchAll(attrs)) {
+      add(match[2] ?? match[3] ?? match[4], 'HTML src/href');
     }
   }
   if (/\.css$/i.test(file.path)) {
-    for (const match of file.content.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) add(match[1].trim(), 'CSS url()');
-    for (const match of file.content.matchAll(/@import\s+(?:url\()?\s*["']([^"']+)["']/gi)) add(match[1], 'CSS @import');
+    for (const match of file.content.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/gi)) add(match[1], 'CSS url()');
+    for (const match of file.content.matchAll(/@import\s+(?:url\(\s*)?["']([^"']+)["']/gi)) add(match[1], 'CSS @import');
   }
   if (/\.(?:[cm]?[jt]sx?)$/i.test(file.path)) {
-    for (const match of file.content.matchAll(/\b(?:import|export)\s+(?:[^;'"]*?\s+from\s+)?["']([^"']+)["']/g)) add(match[1], 'module import');
+    // Match side-effect imports, imports with from, re-exports, and require().
+    for (const match of file.content.matchAll(/\bimport\s+(?:[^;]*?\s+from\s+)?["']([^"']+)["']/g)) add(match[1], 'module import');
+    for (const match of file.content.matchAll(/\bexport\s+[^;]*?\s+from\s+["']([^"']+)["']/g)) add(match[1], 'module import');
     for (const match of file.content.matchAll(/\brequire\(\s*["']([^"']+)["']\s*\)/g)) add(match[1], 'require()');
   }
   return refs;
 }
-
 export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequirements: unknown): AcceptanceReport {
   const files = new Map<string, string>();
   const checks: AcceptanceCheck[] = [];
