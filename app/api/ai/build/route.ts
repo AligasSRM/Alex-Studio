@@ -79,7 +79,7 @@ export async function POST(request: Request) {
   const contextFiles: { path: string; content: string }[] = [];
   try {
     for (const entry of listProjectFiles(input.projectId).filter((item) => item.type === 'file').slice(0, 20)) {
-      if (/(^|\/)(\.env(?:\.|$)|credentials(?:\.|$)|id_rsa|id_ed25519)(\/|$)/i.test(entry.path)) continue;
+      if (/(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*)(\/|$)/i.test(entry.path)) continue;
       const content = readProjectFile(input.projectId, entry.path);
       const excerpt = content.slice(0, 8000);
       const bytes = Buffer.byteLength(excerpt, 'utf8');
