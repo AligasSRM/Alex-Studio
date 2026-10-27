@@ -1,7 +1,8 @@
 import '../../globals.css';
 import { PreviewFrame } from '@/components/PreviewFrame';
 
-export default function PreviewPage({ params }: { params: { projectId: string } }) {
+export default async function PreviewPage({ params }: { params: Promise<{ projectId: string }> }) {
+  const { projectId } = await params;
   const html = `
     <html>
       <head>
@@ -11,7 +12,7 @@ export default function PreviewPage({ params }: { params: { projectId: string } 
         </style>
       </head>
       <body>
-        <h1>Preview for project ${params.projectId}</h1>
+        <h1>Preview for project ${projectId}</h1>
         <p>Sandboxed render area.</p>
       </body>
     </html>
