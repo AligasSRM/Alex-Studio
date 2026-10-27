@@ -144,6 +144,12 @@ export default function ProjectsPage() {
                 >
                   AI Chat
                 </a>
+                <a
+                  href={`/api/projects/${project.id}/export`}
+                  className="px-3 py-1 border border-slate-300 text-slate-700 text-sm rounded hover:bg-slate-50"
+                >
+                  Export ZIP
+                </a>
                 <button
                   onClick={() => deleteProject(project.id)}
                   className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700"
