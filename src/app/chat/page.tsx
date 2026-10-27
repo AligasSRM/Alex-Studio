@@ -20,6 +20,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [projectId, setProjectId] = useState("");
   const [totalCostUsd, setTotalCostUsd] = useState(0);
+  const [monthlySpentUsd, setMonthlySpentUsd] = useState<number | null>(null);
+  const [monthlyLimitUsd, setMonthlyLimitUsd] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [totalTokens, setTotalTokens] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -73,7 +75,11 @@ export default function ChatPage() {
         { role: "assistant", content: data.response, tokens: data.usage?.totalTokens, costUsd: data.usage?.costTracked ? data.usage?.costUsd : undefined },
       ]);
       setTotalTokens((prev) => prev + (data.usage?.totalTokens || 0));
-      if (data.usage?.costTracked) setTotalCostUsd((prev) => prev + (data.usage?.costUsd || 0));
+      if (data.usage?.costTracked) {
+        setTotalCostUsd((prev) => prev + (data.usage?.costUsd || 0));
+        setMonthlySpentUsd(data.usage?.monthToDateUsd ?? null);
+        setMonthlyLimitUsd(data.usage?.monthlyLimitUsd ?? null);
+      }
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -99,6 +105,9 @@ export default function ChatPage() {
           <div className="text-right text-sm text-gray-500">
             <div>Tokens used (estimate/provider): {totalTokens}</div>
             <div>Tracked cost this session: ${totalCostUsd.toFixed(6)}</div>
+            {monthlySpentUsd !== null && monthlyLimitUsd !== null && (
+              <div>Project month-to-date: ${monthlySpentUsd.toFixed(4)} / ${monthlyLimitUsd.toFixed(2)}</div>
+            )}
             <div className="text-xs">Project: {projectId || "not selected"}</div>
           </div>
         </div>
