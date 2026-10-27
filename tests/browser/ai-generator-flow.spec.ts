@@ -43,15 +43,18 @@ test('AI builder prepares a multi-file draft without writes, then applies it aft
     });
   });
 
+  let verificationAttempt = 0;
   await page.route('**/api/ai/iterate', async route => {
+    verificationAttempt += 1;
     const request = route.request().postDataJSON() as { files: { path: string; content: string; baseHash: string | null }[] };
+    const passed = verificationAttempt > 1;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        ok: true,
-        build: { summary: 'Verified draft', plan: ['Browser smoke test passed'], files: request.files },
-        diagnostic: { ok: true, available: true, summary: 'Isolated browser test passed', output: '{"ok":true,"title":"Generated flow","errors":[]}' },
+        ok: passed,
+        build: { summary: passed ? 'Verified draft' : 'Unverified draft', plan: [passed ? 'Browser smoke test passed' : 'Browser smoke test failed'], files: request.files },
+        diagnostic: { ok: passed, available: true, summary: passed ? 'Isolated browser test passed' : 'Isolated browser test failed', output: passed ? '{"ok":true,"title":"Generated flow","errors":[]}' : '{"ok":false,"errors":["The page body is empty"]}' },
         repairs: [],
       }),
     });
@@ -71,7 +74,11 @@ test('AI builder prepares a multi-file draft without writes, then applies it aft
   const applyButton = page.getByRole('button', { name: 'Approve & apply all files' });
   await expect(applyButton).toBeDisabled();
 
-  // A draft cannot be applied until the verification endpoint reports a successful check.
+  // A failed check must keep apply locked; only a subsequent verified pass unlocks it.
+  await page.getByRole('button', { name: 'Verify & auto-repair in sandbox' }).click();
+  await expect(page.locator('.ai-result')).toContainText('Isolated browser test failed');
+  await expect(applyButton).toBeDisabled();
+
   await page.getByRole('button', { name: 'Verify & auto-repair in sandbox' }).click();
   await expect(page.locator('.ai-result')).toContainText('Isolated browser test passed');
   await expect(applyButton).toBeEnabled();
