@@ -63,6 +63,14 @@
 7. **إعادة الاختبار:** إعادة الفحوص التي فشلت، ثم الفحوص المرتبطة بالتغييرات؛ ولا يُعلن النجاح إلا بناءً على نتيجة فعلية للنسخة المختبرة.
 8. **التسليم الموثّق:** عرض ملخص التغييرات والملفات المتأثرة ونتائج الفحوص الفعلية والفحوص غير المنفذة وأي مخاطر أو عمل متبقٍ.
 
+### ما أصبح منفذاً في مسار بناء المشروع
+
+- يمكن للمستخدم وصف فكرة أو لصق مواصفات، ويقرأ النظام سياق ملفات المشروع المحفوظة ثم يطلب من نموذج الذكاء الاصطناعي خطة وملفات كاملة مقترحة بصيغة منظمة.
+- تظهر الخطة وكل ملف مقترح للمراجعة قبل التطبيق؛ التوليد لا يكتب الملفات تلقائياً.
+- يمكن اعتماد دفعة متعددة الملفات صراحةً، مع فحص المسارات وحماية الملفات الحساسة والتحقق من أن الملفات لم تتغير منذ إنشاء المسودة.
+- عند استبدال ملف موجود، تستخدم آلية النسخ الاحتياطي الحالية. إذا فشل تطبيق الدفعة، تُجرّب استعادة الملفات التي سبق تطبيقها.
+- **الحدود الحالية:** هذا مسار توليد ومراجعة وتطبيق للملفات، وليس بعدُ وكيلاً مستقلاً يشغّل المشروع أو أوامر الاختبار داخل sandbox، ويشخّص أخطاء التشغيل، ويصلحها تلقائياً ويعيد الاختبار. لا تُعرض نتائج اختبار على أنها ناجحة ما لم تُنفذ فعلياً.
+
 ### ضوابط حلقة الإصلاح
 
 - تُكرر دورة التشخيص والإصلاح وإعادة الاختبار حتى تنجح الفحوص المطلوبة أو يظهر مانع واضح، مع حدّ محاولات قابل للضبط لمنع التكرار غير المنتهي.
@@ -239,7 +247,7 @@
 
 **Phase 0 acceptance gate: CLOSED / PASS** for the defined P0-ACC-001–017 criteria. Evidence and the criterion-by-criterion matrix are recorded in [the Phase 0 acceptance report](docs/reviews/PHASE-0-ACCEPTANCE-TEST-BASELINE-2026-10-27.md). Verified code commit: `8ddef4083a17c578fc713cc93d640a5326bd4229`; [CI run](https://github.com/AligasSRM/Alex-Studio/actions/runs/40567364737) passed 35 unit tests, 14 browser tests, typecheck, lint, and production build.
 
-**This is not first-release acceptance or production approval.** The first-release criteria in §6 remain a separate gate. AI-provider integration, rate limiting, secret scanning, usage/cost metering and monthly warning, performance-threshold evidence, and full release-level security review remain outstanding. ZIP export and basic editor undo/redo have implementation and regression tests, but that does not by itself establish a durable approved-change ledger or Git-based rollback.
+**This is not first-release acceptance or production approval.** The first-release criteria in §6 remain a separate gate. The provider integration now supports text suggestions and reviewable multi-file project drafts with explicit batch application. The autonomous sandboxed execution/test/diagnose/repair/retest loop, secret scanning, performance-threshold evidence, and full release-level security review remain outstanding. Rate limiting and usage/cost metering exist for provider requests, but the cost ledger and monthly warning still need release-level verification. ZIP export and basic editor undo/redo have implementation and regression tests, but that does not by itself establish a durable approved-change ledger or Git-based rollback.
 
 **Dependency security follow-up required:** the verified CI install reported 4 dependency advisories (1 low, 1 moderate, 1 high, 1 critical). Resolve and review these before any release approval.
 
