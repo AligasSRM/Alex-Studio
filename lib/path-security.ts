@@ -16,9 +16,8 @@ export function resolveWorkspacePath(inputPath: string): string {
   }
 
   const resolved = path.resolve(WORKSPACE_ROOT, normalized);
-  const workspaceReal = fs.realpathSync.native(WORKSPACE_ROOT);
-
-  if (!resolved.startsWith(workspaceReal)) {
+  const realWorkspace = fs.realpathSync.native(WORKSPACE_ROOT);
+  if (!resolved.startsWith(realWorkspace)) {
     throw new Error('Path escapes workspace');
   }
 
@@ -28,7 +27,10 @@ export function resolveWorkspacePath(inputPath: string): string {
 export function isPathAllowed(targetPath: string): boolean {
   try {
     const realWorkspace = fs.realpathSync.native(WORKSPACE_ROOT);
-    const realTarget = fs.existsSync(targetPath) ? fs.realpathSync.native(targetPath) : targetPath;
+    const realTarget = fs.existsSync(targetPath)
+      ? fs.realpathSync.native(targetPath)
+      : targetPath;
+
     return realTarget.startsWith(realWorkspace);
   } catch {
     return false;

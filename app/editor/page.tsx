@@ -1,4 +1,4 @@
-import './globals.css';
+import '../globals.css';
 import { DiffEditor } from '@/components/DiffEditor';
 
 export default function EditorPage() {

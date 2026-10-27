@@ -5,14 +5,10 @@ export function computeDiff(before: string, after: string) {
   let added = 0;
   let removed = 0;
 
-  changes.forEach((part) => {
+  for (const part of changes) {
     if (part.added) added += part.value.split('\n').length - 1;
     if (part.removed) removed += part.value.split('\n').length - 1;
-  });
+  }
 
-  return {
-    changes,
-    added,
-    removed,
-  };
+  return { changes, added, removed };
 }

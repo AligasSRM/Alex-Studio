@@ -6,15 +6,14 @@ export function DiffEditor({ original, modified }: { original: string; modified:
   return (
     <div className="diff-shell">
       <Editor
-        height="420px"
+        height="240px"
         language="html"
         theme="vs-dark"
         options={{ readOnly: true, minimap: { enabled: false } }}
         defaultValue={original}
       />
-      <div style={{ height: 12 }} />
       <Editor
-        height="420px"
+        height="240px"
         language="html"
         theme="vs-dark"
         options={{ readOnly: true, minimap: { enabled: false } }}

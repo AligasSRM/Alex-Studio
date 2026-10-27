@@ -1,4 +1,4 @@
-import './globals.css';
+import '../../globals.css';
 import { PreviewFrame } from '@/components/PreviewFrame';
 
 export default function PreviewPage({ params }: { params: { projectId: string } }) {
