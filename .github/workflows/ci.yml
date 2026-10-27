@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/alex-studio-implementation-2026-10-27, test/phase-0-acceptance-suite]
+    branches: [main, feature/alex-studio-implementation-2026-10-27, test/phase-0-acceptance-suite, fix/security-review-apply-gate-2026-10-27]
   workflow_dispatch:
 permissions:
   contents: read
