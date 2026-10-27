@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feature/alex-studio-implementation-2026-10-27]
+    branches: [main, feature/alex-studio-implementation-2026-10-27, test/phase-0-acceptance-suite]
   workflow_dispatch:
 permissions:
   contents: read
