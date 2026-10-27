@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { assertLocalMutation, assertTextContent, projectRoot, resolveProjectPath } from '../lib/path-security';
+import { assertLocalMutation, assertLocalRequest, assertTextContent, projectRoot, resolveProjectPath } from '../lib/path-security';
 
 describe('workspace path security', () => {
   const project = path.join(process.cwd(), 'workspace', 'test-project');
+
   beforeEach(() => fs.mkdirSync(project, { recursive: true }));
   afterEach(() => fs.rmSync(project, { recursive: true, force: true }));
 
@@ -39,21 +40,35 @@ describe('workspace path security', () => {
     expect(() => assertTextContent('x'.repeat(1024 * 1024 + 1))).toThrow();
   });
 
-  it('rejects missing origin headers', () => {
+  it('rejects missing origin headers for mutations', () => {
     expect(assertLocalMutation(new Request('http://localhost:3000/api/files', { method: 'POST' }))).toBe(false);
   });
 
-  it('allows same-origin localhost mutations', () => {
-    expect(assertLocalMutation(new Request('http://localhost:3000/api/files', {
-      method: 'POST',
-      headers: { origin: 'http://localhost:3000', host: 'localhost:3000' }
+  it('allows same-origin localhost requests', () => {
+    expect(assertLocalRequest(new Request('http://localhost:3000/api/files', {
+      headers: { host: 'localhost:3000', origin: 'http://localhost:3000' },
     }))).toBe(true);
+  });
+
+  it('rejects a remote request URL even when the Host header is spoofed as localhost', () => {
+    expect(assertLocalRequest(new Request('http://example.com/api/files', {
+      headers: { host: 'localhost:3000', origin: 'http://localhost:3000' },
+    }))).toBe(false);
+  });
+
+  it('rejects mismatched host headers and origins', () => {
+    expect(assertLocalRequest(new Request('http://localhost:3000/api/files', {
+      headers: { host: '127.0.0.1:3000', origin: 'http://localhost:3000' },
+    }))).toBe(false);
+    expect(assertLocalRequest(new Request('http://localhost:3000/api/files', {
+      headers: { host: 'localhost:3000', origin: 'http://127.0.0.1:3000' },
+    }))).toBe(false);
   });
 
   it('rejects non-local hosts', () => {
     expect(assertLocalMutation(new Request('https://example.com/api/files', {
       method: 'POST',
-      headers: { origin: 'https://example.com', host: 'example.com' }
+      headers: { origin: 'https://example.com', host: 'example.com' },
     }))).toBe(false);
   });
 });
