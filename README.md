@@ -39,7 +39,7 @@ Draft content is held in the browser's session storage until review is completed
 
 Copy `.env.local.example` to `.env.local` and configure `AI_API_KEY`, `AI_API_URL`, and `AI_MODEL` to use a real provider. Without a key, chat returns a configuration error. Mock responses are allowed only when `AI_ALLOW_MOCK=true` in development and are never used in production.
 
-The token count shown by the current UI is an estimate. Persistent provider-reported usage, monthly spend aggregation, and hard monthly budget enforcement are **not implemented yet**.
+For real-provider calls, Alex Studio requires configured input/output prices per million tokens and a monthly USD limit. It reserves a conservative estimate before the call, records provider-reported token usage by project and month, and rejects calls when the reservation would exceed that project's limit. If the provider omits usage, estimates are recorded as estimated. This is a local ledger, not a substitute for checking the provider's billing dashboard.
 
 ## Security boundaries
 
@@ -57,7 +57,8 @@ See [A0–A5 engineering gates](docs/engineering/ACCEPTANCE-GATES-A0-A5.md). A s
 ## Known gaps
 
 - AI-generated changes are not yet converted automatically into a structured, project-scoped change plan.
-- Persistent AI usage/cost tracking and hard budget enforcement are not implemented.
+- AI pricing must be configured correctly for the selected model; provider billing remains the authoritative charge record.
+- Per-project request-rate limiting and multi-process ledger stress testing remain outstanding.
 - ZIP export with secret exclusions is not implemented.
 - Browser-level end-to-end coverage and real-world preview isolation checks are still required.
 - Git-based project history, rollback UX, and recovery tests need further work.
