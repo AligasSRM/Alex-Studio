@@ -1,244 +1,215 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import DiffEditor from "@/components/DiffEditor";
 
-interface ProposedChange {
+interface Draft {
+  projectId: string;
   path: string;
-  original: string;
-  modified: string;
-  description: string;
+  baseContent: string;
+  modifiedContent: string;
+  baseHash: string;
 }
 
+type ReviewStatus = "pending" | "approved" | "rejected";
+
 export default function ReviewPage() {
-  const [changes, setChanges] = useState<ProposedChange[]>([
-    {
-      path: "index.html",
-      original: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>My Page</title>
-</head>
-<body>
-  <h1>Hello World</h1>
-</body>
-</html>`,
-      modified: `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>My Page - Updated</title>
-</head>
-<body>
-  <h1>Hello World</h1>
-  <p>Updated content from AI</p>
-</body>
-</html>`,
-      description: "Update index.html with new content",
-    },
-  ]);
-  const [selectedChange, setSelectedChange] = useState(0);
-  const [status, setStatus] = useState<"pending" | "approved" | "rejected">("pending");
+  const router = useRouter();
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [status, setStatus] = useState<ReviewStatus>("pending");
+  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [checksumBefore, setChecksumBefore] = useState("");
   const [checksumAfter, setChecksumAfter] = useState("");
-  const [message, setMessage] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const handleApprove = async () => {
-    if (status !== "pending") return;
-    setLoading(true);
-    setMessage("");
-
-    try {
-      const change = changes[selectedChange];
-
-      // Record checksum before
-      const beforeRes = await fetch(`/api/files/read?path=${encodeURIComponent(change.path)}`);
-      const beforeData = await beforeRes.json();
-      const beforeHash = beforeData.content
-        ? await sha256(beforeData.content)
-        : "FILE_NOT_EXISTS";
-      setChecksumBefore(beforeHash);
-
-      // Apply the change
-      const applyRes = await fetch("/api/files/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: change.path, content: change.modified }),
-      });
-
-      if (!applyRes.ok) {
-        const data = await applyRes.json();
-        setMessage(`❌ Apply failed: ${data.error}`);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const projectId = params.get("project") || "";
+      const filePath = params.get("path") || "";
+      if (!projectId || !filePath) {
+        setError("Missing project or file. Return to the editor and prepare a change.");
+        setLoading(false);
         return;
       }
 
-      // Record checksum after
-      const afterRes = await fetch(`/api/files/read?path=${encodeURIComponent(change.path)}`);
-      const afterData = await afterRes.json();
-      const afterHash = await sha256(afterData.content);
-      setChecksumAfter(afterHash);
+      try {
+        const stored = sessionStorage.getItem(draftKey(projectId, filePath));
+        if (!stored) throw new Error("No pending draft was found. Return to the editor and prepare the change again.");
+        const parsed = JSON.parse(stored) as Draft;
+        if (parsed.projectId !== projectId || parsed.path !== filePath ||
+          typeof parsed.baseContent !== "string" || typeof parsed.modifiedContent !== "string" ||
+          typeof parsed.baseHash !== "string" || !/^[a-f0-9]{64}$/.test(parsed.baseHash)) {
+          throw new Error("The stored draft is invalid. Return to the editor and prepare the change again.");
+        }
+        if (await sha256(parsed.baseContent) !== parsed.baseHash) {
+          throw new Error("Draft integrity check failed. Return to the editor and prepare the change again.");
+        }
+
+        const response = await fetch(`/api/files/read?path=${encodeURIComponent(`${projectId}/${filePath}`)}`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to verify the current file");
+        const currentHash = await sha256(data.content);
+        if (currentHash !== parsed.baseHash) {
+          throw new Error("This file changed after the draft was prepared. Return to the editor, reload it, and review the change again.");
+        }
+        if (!active) return;
+        setDraft(parsed);
+        setChecksumBefore(parsed.baseHash);
+        setChecksumAfter(currentHash);
+        setReady(true);
+      } catch (e) {
+        if (active) setError(e instanceof Error ? e.message : "Unable to load review");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const handleApprove = async () => {
+    if (!draft || status !== "pending" || !ready || busy) return;
+    setBusy(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/files/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          path: `${draft.projectId}/${draft.path}`,
+          content: draft.modifiedContent,
+          expectedSha256: draft.baseHash,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        if (response.status === 409) setReady(false);
+        setError(data.error || "Apply failed");
+        return;
+      }
 
       setStatus("approved");
-      setMessage("✅ Change approved and applied successfully.");
+      sessionStorage.removeItem(draftKey(draft.projectId, draft.path));
+      const verifyResponse = await fetch(`/api/files/read?path=${encodeURIComponent(`${draft.projectId}/${draft.path}`)}`);
+      const verifyData = await verifyResponse.json();
+      if (!verifyResponse.ok) {
+        setMessage("Change was applied, but the post-write read-back could not verify the file.");
+        return;
+      }
+      const afterHash = await sha256(verifyData.content);
+      setChecksumAfter(afterHash);
+      if (afterHash === data.sha256) {
+        setMessage("Change applied and verified: the saved file hash matches the server response.");
+      } else {
+        setMessage("Warning: the saved file hash differs from the write response. Stop and inspect the file.");
+      }
     } catch (e) {
-      setMessage(`❌ Error: ${e instanceof Error ? e.message : "Unknown error"}`);
+      setError(e instanceof Error ? e.message : "Apply failed");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
   const handleReject = async () => {
-    if (status !== "pending") return;
-    setLoading(true);
+    if (!draft || status !== "pending" || !ready || busy) return;
+    setBusy(true);
+    setError("");
     setMessage("");
-
     try {
-      const change = changes[selectedChange];
-
-      // Record checksum before
-      const beforeRes = await fetch(`/api/files/read?path=${encodeURIComponent(change.path)}`);
-      const beforeData = await beforeRes.json();
-      const beforeHash = beforeData.content
-        ? await sha256(beforeData.content)
-        : "FILE_NOT_EXISTS";
-      setChecksumBefore(beforeHash);
-
-      // Do NOT apply — just record checksum after (should be same)
-      const afterRes = await fetch(`/api/files/read?path=${encodeURIComponent(change.path)}`);
-      const afterData = await afterRes.json();
-      const afterHash = afterData.content
-        ? await sha256(afterData.content)
-        : "FILE_NOT_EXISTS";
+      const response = await fetch(`/api/files/read?path=${encodeURIComponent(`${draft.projectId}/${draft.path}`)}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not verify file after rejection");
+      const afterHash = await sha256(data.content);
       setChecksumAfter(afterHash);
-
-      if (beforeHash === afterHash) {
-        setStatus("rejected");
-        setMessage("✅ Change rejected. File unchanged (checksums match).");
+      setStatus("rejected");
+      sessionStorage.removeItem(draftKey(draft.projectId, draft.path));
+      if (afterHash === draft.baseHash) {
+        setMessage("Change rejected. The file's current hash matches the original hash.");
       } else {
-        setMessage("⚠️ Warning: File changed despite rejection! Checksums differ.");
+        setMessage("Change rejected, but the file hash changed independently. Inspect the file before continuing.");
       }
     } catch (e) {
-      setMessage(`❌ Error: ${e instanceof Error ? e.message : "Unknown error"}`);
+      setError(e instanceof Error ? e.message : "Unable to verify the file");
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
-  const change = changes[selectedChange];
-
   return (
     <div className="min-h-screen p-4 sm:p-8">
-      <h1 className="text-2xl font-bold mb-4">Review & Approve Changes</h1>
+      <header className="mb-6">
+        <h1 className="text-2xl font-bold">Review proposed change</h1>
+        <p className="mt-1 text-sm text-gray-600">Inspect the actual project file diff before approving or rejecting it.</p>
+      </header>
 
-      {/* Change selector */}
-      {changes.length > 1 && (
-        <div className="mb-4">
-          <label className="text-sm font-medium">Select change:</label>
-          <select
-            value={selectedChange}
-            onChange={(e) => {
-              setSelectedChange(Number(e.target.value));
-              setStatus("pending");
-              setMessage("");
-            }}
-            className="ml-2 p-2 border border-gray-300 rounded"
-          >
-            {changes.map((c, i) => (
-              <option key={i} value={i}>
-                {c.path} — {c.description}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      {loading && <p role="status">Loading draft and verifying the current file…</p>}
+      {error && <div role="alert" className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-red-700">{error}</div>}
+      {message && <div role="status" className="mb-4 rounded border border-gray-200 bg-gray-50 p-3 text-sm">{message}</div>}
 
-      {/* Status badge */}
-      <div className="mb-4">
-        <span
-          className={`px-3 py-1 rounded text-sm font-medium ${
-            status === "pending"
-              ? "bg-yellow-100 text-yellow-800"
-              : status === "approved"
-              ? "bg-green-100 text-green-800"
-              : "bg-red-100 text-red-800"
-          }`}
-        >
-          {status === "pending" ? "⏳ Pending Review" : status === "approved" ? "✅ Approved" : "❌ Rejected"}
-        </span>
-      </div>
+      {draft && (
+        <>
+          <div className="mb-4 rounded border border-gray-200 p-3">
+            <div><strong>Project:</strong> {draft.projectId}</div>
+            <div><strong>File:</strong> {draft.path}</div>
+            <div><strong>Status:</strong> {status}</div>
+            <div className="mt-2 break-all font-mono text-xs"><strong>Original SHA-256:</strong> {checksumBefore}</div>
+            {checksumAfter && <div className="break-all font-mono text-xs"><strong>Verified SHA-256:</strong> {checksumAfter}</div>}
+          </div>
 
-      {/* Diff viewer */}
-      <DiffEditor
-        original={change.original}
-        modified={change.modified}
-        language="html"
-        height="400px"
-      />
+          <DiffEditor original={draft.baseContent} modified={draft.modifiedContent} language={languageFor(draft.path)} height="440px" />
 
-      {/* Action buttons */}
-      {status === "pending" && (
-        <div className="mt-4 flex gap-3">
-          <button
-            onClick={handleApprove}
-            disabled={loading}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-          >
-            {loading ? "Applying..." : "✅ Approve & Apply"}
-          </button>
-          <button
-            onClick={handleReject}
-            disabled={loading}
-            className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-          >
-            {loading ? "Checking..." : "❌ Reject"}
-          </button>
-        </div>
-      )}
-
-      {/* Message */}
-      {message && (
-        <div className="mt-4 p-3 rounded bg-gray-50 border border-gray-200 text-sm">
-          {message}
-        </div>
-      )}
-
-      {/* Checksum verification */}
-      {(checksumBefore || checksumAfter) && (
-        <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-xs font-mono">
-          <div>Before: {checksumBefore}</div>
-          <div>After:  {checksumAfter}</div>
-          {checksumBefore && checksumAfter && (
-            <div className="mt-1 font-bold">
-              {checksumBefore === checksumAfter
-                ? "🔒 Checksums match — file unchanged"
-                : "⚠️ Checksums differ — file was modified"}
+          {status === "pending" && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={!ready || busy || loading}
+                className="rounded bg-green-600 px-5 py-3 font-medium text-white disabled:opacity-50"
+              >
+                {busy ? "Processing…" : "Approve & apply"}
+              </button>
+              <button
+                type="button"
+                onClick={handleReject}
+                disabled={!ready || busy || loading}
+                className="rounded bg-red-600 px-5 py-3 font-medium text-white disabled:opacity-50"
+              >
+                Reject change
+              </button>
+              <button type="button" onClick={() => router.push(`/editor?project=${encodeURIComponent(draft.projectId)}`)} className="rounded border border-gray-300 px-5 py-3">
+                Return to editor
+              </button>
             </div>
           )}
-        </div>
+        </>
       )}
-
-      {/* Security note */}
-      <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded">
-        <h2 className="font-bold text-yellow-800 mb-2">Approval Rules</h2>
-        <ul className="text-sm text-yellow-700 space-y-1">
-          <li>• No changes are applied without explicit approval</li>
-          <li>• Checksums are recorded before and after every action</li>
-          <li>• Rejected changes leave the file completely unchanged</li>
-          <li>• All changes are applied atomically (tmp → rename)</li>
-          <li>• Backup is created before every approved change</li>
-        </ul>
-      </div>
     </div>
   );
 }
 
-// Client-side SHA-256 helper (Web Crypto API)
-async function sha256(content: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+function draftKey(projectId: string, filePath: string): string {
+  return `alex-studio-draft:${projectId}:${filePath}`;
+}
+
+function languageFor(path: string): string {
+  const extension = path.split(".").pop()?.toLowerCase();
+  if (extension === "html") return "html";
+  if (extension === "css") return "css";
+  if (extension === "js" || extension === "mjs") return "javascript";
+  if (extension === "ts" || extension === "tsx") return "typescript";
+  if (extension === "json") return "json";
+  return "plaintext";
+}
+
+async function sha256(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
