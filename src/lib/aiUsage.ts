@@ -158,6 +158,11 @@ export async function reserveAiUsage(
 
   return withLock(() => {
     const ledger = readLedger();
+    const now = Date.now();
+    for (const [id, reservation] of Object.entries(ledger.reservations)) {
+      // Calls have a 30-second provider timeout; release abandoned reservations after five minutes.
+      if (now - reservation.createdAt > 5 * 60_000) delete ledger.reservations[id];
+    }
     const totals = projectTotals(ledger, month, projectId);
     const otherReservations = Object.values(ledger.reservations)
       .filter((reservation) => reservation.month === month && reservation.projectId === projectId)
