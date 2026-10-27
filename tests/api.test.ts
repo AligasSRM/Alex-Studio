@@ -47,6 +47,16 @@ describe('local project API', () => {
     const approved = await writeFileRoute(localRequest('http://localhost:3000/api/files', { ...payload, approved: true }));
     expect(approved.status).toBe(200);
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(payload.content);
+    const backupDir = path.join(projectRoot(project.id), '.alex', 'backups');
+    const backups = fs.readdirSync(backupDir);
+    expect(backups).toHaveLength(1);
+    expect(fs.readFileSync(path.join(backupDir, backups[0]), 'utf8')).toContain('Approval Test Project');
+
+    const traversal = await writeFileRoute(localRequest('http://localhost:3000/api/files', {
+      ...payload, path: '../outside.txt', approved: true,
+    }));
+    expect(traversal.status).toBe(400);
+    expect(fs.existsSync(path.join(projectRoot(project.id), '..', 'outside.txt'))).toBe(false);
     expect(approved.headers.get('content-type')).toContain('application/json');
   });
 
