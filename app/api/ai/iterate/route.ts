@@ -14,6 +14,8 @@ import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
+const MAX_BODY_BYTES = 3 * 1024 * 1024;
+const SENSITIVE_PATH = /(^|\/)(\.env(?:\.|$)|credentials(?:\.|$)|id_rsa|id_ed25519|secrets?(?:\.|$)|node_modules|\.git|\.alex)(\/|$)/i;
 const IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble';
 const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 type FileDraft = { path: string; content: string; baseHash: string | null };
@@ -39,7 +41,7 @@ function safePath(projectId: string, value: unknown) {
   if (typeof value !== 'string') throw new Error('Invalid AI file path');
   const normalized = value.replace(/\\/g, '/');
   resolveProjectPath(projectId, normalized);
-  if (normalized !== value || /(^|\/)(\.env|credentials|id_rsa|id_ed25519|node_modules|\.git|\.alex)(\/|$)/i.test(normalized)) {
+  if (normalized !== value || SENSITIVE_PATH.test(normalized)) {
     throw new Error('Protected or non-canonical path denied');
   }
   return normalized;
@@ -107,7 +109,12 @@ export async function POST(request: Request) {
   if (!assertLocalMutation(request)) return NextResponse.json({ error: 'Local same-origin requests only' }, { status: 403 });
   const rate = checkRateLimit('ai-iterate:' + new URL(request.url).host, 3, 60000);
   if (!rate.allowed) return NextResponse.json({ error: 'AI verify/repair rate limit exceeded' }, { status: 429 });
-  const body = await request.json().catch(() => null) as { projectId?: unknown; prompt?: unknown; files?: unknown; approved?: unknown } | null;
+  const contentLength = Number(request.headers.get('content-length') || 0);
+  if (contentLength > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
+  const rawBody = await request.text().catch(() => '');
+  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
+  let body: { projectId?: unknown; prompt?: unknown; files?: unknown; approved?: unknown } | null = null;
+  try { body = JSON.parse(rawBody) as typeof body; } catch { return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 }); }
   if (!body || typeof body.projectId !== 'string' || typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 12000 || !Array.isArray(body.files)) {
     return NextResponse.json({ error: 'projectId, prompt, and draft files are required' }, { status: 400 });
   }
@@ -119,7 +126,7 @@ export async function POST(request: Request) {
   try {
     const originals = new Map<string, string>(); const working = new Map<string, string>(); let total = 0;
     for (const entry of listProjectFiles(body.projectId).filter(x => x.type === 'file')) {
-      if (/(^|\/)(node_modules|\.git|\.alex)(\/|$)/i.test(entry.path)) continue;
+      if (SENSITIVE_PATH.test(entry.path)) continue;
       const content = readProjectFile(body.projectId, entry.path); total += Buffer.byteLength(content, 'utf8');
       if (total > 5 * 1024 * 1024) throw new Error('Project exceeds 5 MiB sandbox limit');
       originals.set(entry.path, content); working.set(entry.path, content);
@@ -142,6 +149,7 @@ export async function POST(request: Request) {
     for (let round = 1; !diagnostic.ok && round <= MAX_ROUNDS; round++) {
       const context: { path: string; content: string }[] = []; let bytes = 0;
       for (const [filePath, content] of Array.from(working.entries())) {
+        if (SENSITIVE_PATH.test(filePath)) continue;
         const excerpt = content.slice(0, 8000); bytes += Buffer.byteLength(excerpt, 'utf8');
         if (bytes > 48 * 1024) break; context.push({ path: filePath, content: excerpt });
       }
