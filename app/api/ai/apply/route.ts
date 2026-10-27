@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       const normalized = file.path.replace(/\\/g, '/');
       resolveProjectPath(body.projectId, normalized);
       if (normalized !== file.path || seen.has(normalized)) throw new Error('Duplicate or non-canonical file path');
-      if (/(^|\/)(\.env(?:\.|$)|id_rsa|id_ed25519|credentials(?:\.|$)|node_modules|\.git|\.alex)(\/|$)/i.test(normalized)) {
+      if (/(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*|node_modules|\.git|\.alex)(\/|$)/i.test(normalized)) {
         throw new Error('Protected path denied');
       }
       seen.add(normalized);
