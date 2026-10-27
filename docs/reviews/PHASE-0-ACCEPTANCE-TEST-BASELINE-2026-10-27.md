@@ -19,7 +19,7 @@
 |---|---|---|---|---|
 | P0-ACC-001 | Project lifecycle and switching | `tests/browser/phase0-acceptance.spec.ts`; `tests/phase0-acceptance.test.ts` | Added | Create two projects, switch back, and confirm saved content and project records persist on disk. |
 | P0-ACC-002 | Persistence across a real server restart | Production-server restart test in browser acceptance suite | Added, CI pending | Stop and restart the production server process, then verify project metadata and exact saved content through the API. |
-| P0-ACC-003 | Project create/load failure UX | Browser fault-injection tests | Added, partial | Failed create and initial project-list load show visible errors. Per-project file-load failure remains pending. |
+| P0-ACC-003 | Project create/load failure UX | Browser fault-injection tests | Added, CI pending | Failed create and project-list/file loading show visible errors; failed file loading preserves the previously active workspace. |
 | P0-ACC-004 | Diff correctness | Browser diff view smoke test | Added, partial | Diff view mounts after a known edit. Rendered-line comparison remains pending. |
 | P0-ACC-005 | Diff is read-only | Browser Monaco input-area check | Added | Monaco diff input areas report read-only; draft remains unchanged after leaving review. |
 | P0-ACC-006 | Reviewed content matches proposed save | Browser request payload assertion | Added | The approved POST payload content must exactly equal the reviewed editor draft. |
@@ -31,7 +31,7 @@
 | P0-ACC-012 | Preview cannot access parent context | Browser isolation test | Added | Parent DOM access is blocked and parent document remains unchanged. |
 | P0-ACC-013 | Preview external network is restricted | Browser isolation test | Added, partial | External fetch is blocked by preview CSP. Resource loads and other navigation/form variants need broader coverage. |
 | P0-ACC-014 | Preview cannot initiate top-level navigation | Browser test | Added | A form targeted at `_top` must not navigate the studio page. |
-| P0-ACC-015 | Symlink/path race resistance | Existing static symlink tests; race-specific test pending | Pending | A controlled race test must prove path validation cannot be invalidated between check and write. |
+| P0-ACC-015 | Symlink/path race resistance | Controlled parent-directory symlink swap test in `tests/phase0-acceptance.test.ts` | Added, CI pending | A symlink swap at the write/rename boundary must not create or modify files outside the project. |
 | P0-ACC-016 | Rejected traversal leaves outside files unchanged | `tests/phase0-acceptance.test.ts` | Added | An outside-project sentinel remains byte-for-byte identical after rejected traversal. |
 | P0-ACC-017 | Security case-to-test traceability | This matrix + `tests/security.test.ts` | Added, partial | Each required case is linked to an executable test and its observed result; results must be filled from CI. |
 
