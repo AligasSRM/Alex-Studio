@@ -17,11 +17,13 @@ export type AcceptanceReport = {
 
 type ProjectFile = { path: string; content: string };
 const BUILTINS = new Set(builtinModules.flatMap((name) => [name, name.replace(/^node:/, '')]));
-const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i;
+const EXTERNAL = /^(?:https?:|mailto:|tel:|data:|blob:|file:|\/\/|#)/i;
 
 function resolveReference(from: string, raw: string, files: Map<string, string>): boolean {
-  const value = raw.split(/[?#]/, 1)[0];
-  if (!value || EXTERNAL.test(value)) return true;
+  const value = raw.trim().split(/[?#]/, 1)[0];
+  if (!value) return true;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^javascript:/i.test(value)) return true;
+  if (EXTERNAL.test(value)) return true;
   if (/^javascript:/i.test(value)) return false;
   const base = value === '/' ? 'index.html' : value.startsWith('/') ? value.slice(1) : path.posix.join(path.posix.dirname(from), value);
   const clean = path.posix.normalize(base);
