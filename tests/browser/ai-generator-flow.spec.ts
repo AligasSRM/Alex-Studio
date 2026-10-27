@@ -5,7 +5,8 @@ function sha256(value: string) {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
-test('AI builder prepares a multi-file draft without writes, then applies it after explicit approval', async ({ page }) => {
+// The iterate endpoint is stubbed here: this proves fail-closed UI behavior, not live Docker execution.
+test('AI builder prepares a multi-file draft without writes, then applies it only after verification passes', async ({ page }) => {
   const name = `ai-builder-browser-${Date.now()}`;
   await page.goto('/');
   await page.locator('#new-project').fill(name);
