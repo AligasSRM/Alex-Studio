@@ -8,7 +8,7 @@
 - Verified CI run: https://github.com/AligasSRM/Alex-Studio/actions/runs/40567364737
 - Verified head: `8ddef4083a17c578fc713cc93d640a5326bd4229`
 - Result: 6 Jest suites / 35 tests passed; Playwright 14/14 passed; typecheck, lint and production build passed.
-- Scope: Phase 0 acceptance tests only. This document does not approve release or close Phase 0.
+- Scope: Phase 0 acceptance tests only. This document closes that acceptance gate; it does not approve a release or certify production readiness.
 
 ## Status vocabulary
 - **Existing** — a test existed at the base commit before this work.
@@ -51,7 +51,7 @@
 - `tests/phase0-hardening.test.ts`: injected atomic-rename failure and final-target symlink-swap safety.
 - `tests/browser/phase0-hardening.spec.ts`: direct rendered diff assertions for changed CSS and HTML; preview CSP header checks and browser-level attempts to load external CSS, images, video, iframe, and form targets.
 
-## Verification record — code commit `d6799772f08e244af6e7e8fe46ddcefbaff2842b`
+## Verification record — code commit `8ddef4083a17c578fc713cc93d640a5326bd4229`
 - `npm install`: passed (npm reported 4 dependency advisories: 1 low, 1 moderate, 1 high, 1 critical; see release limitations below)
 - Playwright Chromium verification: passed (Playwright 1.64.1; preinstalled Chromium executable found)
 - `npm test`: passed — 6 suites, 35 tests
