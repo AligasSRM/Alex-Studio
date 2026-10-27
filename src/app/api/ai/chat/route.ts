@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
 
   let reservationId = "";
   try {
-    const reservation = await reserveAiUsage(projectId, totalChars, 2000, budgetConfig);
+    const reservation = await reserveAiUsage(projectId, totalChars * 2, 2000, budgetConfig);
     reservationId = reservation.reservationId;
   } catch (error) {
     if (error instanceof Error && error.message === "AI_BUDGET_EXCEEDED") {
