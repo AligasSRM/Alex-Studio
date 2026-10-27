@@ -36,35 +36,43 @@ function resolveReference(from: string, raw: string, files: Map<string, string>)
 
 function collectReferences(file: ProjectFile): { raw: string; kind: string }[] {
   const refs: { raw: string; kind: string }[] = [];
-  const scan = (pattern: RegExp, kind: string, group = 1) => {
+  const seen = new Set<string>();
+  const scan = (pattern: RegExp, kind: string) => {
     pattern.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(file.content)) !== null) {
-      const value = match[group]?.trim();
-      if (value) refs.push({ raw: value, kind });
+      // Patterns may have several alternative capture groups (for quote styles).
+      // Inspect every capture rather than assuming the URL is always group 1.
+      for (const captured of match.slice(1)) {
+        const value = captured?.trim();
+        if (!value) continue;
+        const key = kind + "\\0" + value;
+        if (!seen.has(key)) {
+          seen.add(key);
+          refs.push({ raw: value, kind });
+        }
+      }
       if (match[0].length === 0) pattern.lastIndex++;
     }
   };
 
-  if (/\.(?:html?|xhtml)$/i.test(file.path)) {
-    scan(/\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+))/gi, 'HTML src/href', 1);
-    // Attribute values may use either quote style; collect each form explicitly.
-    scan(/\b(?:src|href)\s*=\s*"([^"]*)"/gi, 'HTML src/href', 1);
-    scan(/\b(?:src|href)\s*=\s*'([^']*)'/gi, 'HTML src/href', 1);
-    scan(/\b(?:src|href)\s*=\s*([^\s"'<>]+)/gi, 'HTML src/href', 1);
+  if (/\\.(?:html?|xhtml)$/i.test(file.path)) {
+    scan(/\\b(?:src|href)\\s*=\\s*"([^"]*)"/gi, 'HTML src/href');
+    scan(/\\b(?:src|href)\\s*=\\s*'([^']*)'/gi, 'HTML src/href');
+    scan(/\\b(?:src|href)\\s*=\\s*([^\\s"'<>]+)/gi, 'HTML src/href');
   }
-  if (/\.css$/i.test(file.path)) {
-    scan(/url\(\s*"([^"]*)"\s*\)/gi, 'CSS url()', 1);
-    scan(/url\(\s*'([^']*)'\s*\)/gi, 'CSS url()', 1);
-    scan(/url\(\s*([^)'"\s]+)\s*\)/gi, 'CSS url()', 1);
-    scan(/@import\s+(?:url\(\s*)?"([^"]*)"/gi, 'CSS @import', 1);
-    scan(/@import\s+(?:url\(\s*)?'([^']*)'/gi, 'CSS @import', 1);
+  if (/\\.css$/i.test(file.path)) {
+    scan(/url\\(\\s*"([^"]*)"\\s*\\)/gi, 'CSS url()');
+    scan(/url\\(\\s*'([^']*)'\\s*\\)/gi, 'CSS url()');
+    scan(/url\\(\\s*([^)'""\\s]+)\\s*\\)/gi, 'CSS url()');
+    scan(/@import\\s+(?:url\\(\\s*)?"([^"]*)"/gi, 'CSS @import');
+    scan(/@import\\s+(?:url\\(\\s*)?'([^']*)'/gi, 'CSS @import');
   }
-  if (/\.(?:[cm]?[jt]sx?)$/i.test(file.path)) {
-    scan(/\bimport\s*["']([^"']+)["']/g, 'module import', 1);
-    scan(/\bimport\b[\s\S]{0,500}?\bfrom\s*["']([^"']+)["']/g, 'module import', 1);
-    scan(/\bexport\b[\s\S]{0,500}?\bfrom\s*["']([^"']+)["']/g, 'module import', 1);
-    scan(/\brequire\(\s*["']([^"']+)["']\s*\)/g, 'require()', 1);
+  if (/\\.(?:[cm]?[jt]sx?)$/i.test(file.path)) {
+    scan(/\\bimport\\s+(?:[^'";]*?\\s+from\\s+)?["']([^"']+)["']/g, 'module import');
+    scan(/\\bexport\\s+[^'";]*?\\s+from\\s*["']([^"']+)["']/g, 'module import');
+    scan(/\\brequire\\(\\s*["']([^"']+)["']\\s*\\)/g, 'require()');
+    scan(/\\bimport\\(\\s*["']([^"']+)["']\\s*\\)/g, 'dynamic import');
   }
   return refs;
 }
