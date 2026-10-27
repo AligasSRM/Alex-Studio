@@ -164,11 +164,11 @@ test('P0-ACC-014: preview sandbox blocks top-level navigation initiated by proje
 test('P0-ACC-002: saved project content survives a real production-server restart', async () => {
   test.setTimeout(90_000);
   const port = 3101 + (process.pid % 1000);
-  const origin = `http://127.0.0.1:${port}`;
+  const origin = `http://localhost:${port}`;
   const startServer = async () => {
     const child = spawn(process.execPath, [
       path.join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next'),
-      'start', '--hostname', '127.0.0.1', '--port', String(port),
+      'start', '--hostname', 'localhost', '--port', String(port),
     ], { cwd: process.cwd(), env: { ...process.env, NODE_ENV: 'production' }, stdio: ['ignore', 'pipe', 'pipe'] });
     let startupOutput = '';
     child.stdout?.on('data', chunk => { startupOutput += chunk.toString(); });
