@@ -3,6 +3,7 @@ import path from 'node:path';
 import { POST as createProjectRoute } from '../app/api/projects/route';
 import { GET as getFilesRoute, POST as writeFileRoute } from '../app/api/files/route';
 import { GET as previewRoute } from '../app/api/preview/route';
+import { getProject, listProjects } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 
 const createdIds: string[] = [];
@@ -34,6 +35,21 @@ describe('local project API', () => {
     expect(fs.existsSync(path.join(projectRoot(id), 'index.html'))).toBe(true);
     expect(fs.existsSync(path.join(projectRoot(id), 'styles.css'))).toBe(true);
     expect(fs.existsSync(path.join(projectRoot(id), 'script.js'))).toBe(true);
+  });
+
+  it('rejects symlinked project metadata when reading project details', async () => {
+    const created = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'Metadata Symlink Test' }));
+    if (created.status !== 201) throw new Error('Project creation failed: ' + await created.clone().text());
+    const { project } = await created.json();
+    createdIds.push(project.id);
+    const root = projectRoot(project.id);
+    const metadata = path.join(root, '.alex-project.json');
+    const linkedMetadata = path.join(root, 'linked-metadata.json');
+    fs.writeFileSync(linkedMetadata, JSON.stringify({ id: project.id, name: 'Forged project name', createdAt: new Date().toISOString() }));
+    fs.unlinkSync(metadata);
+    fs.symlinkSync(linkedMetadata, metadata);
+    expect(getProject(project.id)).toBeNull();
+    expect(listProjects().some((item) => item.id === project.id)).toBe(false);
   });
 
   it('refuses file writes without explicit approval and saves after approval', async () => {
