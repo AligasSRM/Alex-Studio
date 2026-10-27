@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import test from "node:test";
 import { validatePath, readFile, writeFile, createBackup, restoreBackup, fileExists } from "./src/lib/fileOps.ts";
 
@@ -48,7 +48,7 @@ test("writeFile and readFile round-trip content and create backups", () => {
     const restored = restoreBackup(fixturePath, path.basename(backupPath));
     safetyBackupPath = restored.safetyBackupPath;
     assert.equal(readFile(fixturePath), "first");
-    assert.equal(restored.sha256, "a7937b64b8caa58f03721bb6bacf5c78cb235f4a5c2a8c6b0c0f6b5a7d5c5f6d".slice(0, 64));
+    assert.equal(restored.sha256, createHash("sha256").update("first").digest("hex"));
     assert.equal(fs.readFileSync(safetyBackupPath, "utf8"), "second");
   } finally {
     if (backupPath) fs.rmSync(backupPath, { force: true });
