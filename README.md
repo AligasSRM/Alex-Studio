@@ -8,21 +8,21 @@ Alex Studio is a **local-first project workspace** for creating small web projec
 
 Requirements: Node.js 24 and npm.
 
-\`\`\`bash
+```bash
 npm ci
 npm run dev
-\`\`\`
+```
 
-The development server is configured to bind to \`127.0.0.1\` only. Open the local address printed by Next.js on the same device. Do not expose this app to a LAN or the internet: authentication and multi-user authorization are not implemented.
+The development server is configured to bind to `127.0.0.1` only. Open the local address printed by Next.js on the same device. Do not expose this app to a LAN or the internet: authentication and multi-user authorization are not implemented.
 
 ## Commands
 
-- \`npm run dev\` — start the local development server.
-- \`npm run typecheck\` — TypeScript check without emitting files.
-- \`npm run lint\` — ESLint.
-- \`npm test\` — filesystem, project-operation, and checksum tests.
-- \`npm run build\` — production build.
-- \`npm start\` — start the production server on loopback.
+- `npm run dev` — start the local development server.
+- `npm run typecheck` — TypeScript check without emitting files.
+- `npm run lint` — ESLint.
+- `npm test` — filesystem, project-operation, and checksum tests.
+- `npm run build` — production build.
+- `npm start` — start the production server on loopback.
 
 ## Current workflow
 
@@ -37,14 +37,14 @@ Draft content is held in the browser's session storage until review is completed
 
 ## AI configuration
 
-Copy \`.env.local.example\` to \`.env.local\` and configure \`AI_API_KEY\`, \`AI_API_URL\`, and \`AI_MODEL\` to use a real provider. Without a key, chat returns a configuration error. Mock responses are allowed only when \`AI_ALLOW_MOCK=true\` in development and are never used in production.
+Copy `.env.local.example` to `.env.local` and configure `AI_API_KEY`, `AI_API_URL`, and `AI_MODEL` to use a real provider. Without a key, chat returns a configuration error. Mock responses are allowed only when `AI_ALLOW_MOCK=true` in development and are never used in production.
 
 The token count shown by the current UI is an estimate. Persistent provider-reported usage, monthly spend aggregation, and hard monthly budget enforcement are **not implemented yet**.
 
 ## Security boundaries
 
 - Keep the server bound to loopback.
-- File paths must be relative to a validated project; \`.alex\`, \`.git\`, and \`node_modules\` are not exposed through project file APIs.
+- File paths must be relative to a validated project; `.alex`, `.git`, and `node_modules` are not exposed through project file APIs.
 - The apply endpoint supports an expected SHA-256 value to detect a stale review.
 - Project names are escaped before insertion into the starter HTML.
 - Symlink checks, backups, and atomic writes reduce risk but do not eliminate all filesystem race conditions.
