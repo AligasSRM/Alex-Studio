@@ -64,7 +64,7 @@ describe('local project API', () => {
     const created = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'Preview Test Project' }));
     const { project } = await created.json();
     createdIds.push(project.id);
-    const response = await previewRoute(new Request('http://localhost:3000/api/preview?projectId=' + encodeURIComponent(project.id)));
+    const response = await previewRoute(new Request('http://localhost:3000/api/preview?projectId=' + encodeURIComponent(project.id), { headers: { host: 'localhost:3000' } }));
     expect(response.status).toBe(200);
     expect(response.headers.get('content-security-policy')).toContain("default-src 'none'");
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
@@ -72,6 +72,13 @@ describe('local project API', () => {
     expect(html).toContain('Preview Test Project');
     expect(html).toContain('Try interaction');
     expect(html).toContain('Your project is running.');
+  });
+
+  it('rejects preview requests from non-local hosts', async () => {
+    const response = await previewRoute(new Request('http://example.com/api/preview?projectId=unknown', {
+      headers: { host: 'example.com' },
+    }));
+    expect(response.status).toBe(403);
   });
 
   it('rejects project creation from a non-local origin', async () => {
