@@ -15,7 +15,7 @@ const SENSITIVE_EXTENSION = /\.(?:pem|key|p12|pfx|keystore|jks|secret)$/i;
 
 function isProtectedProjectPath(relativePath: string): boolean {
   return relativePath.split("/").some((part) =>
-    part.startsWith(".") || SENSITIVE_SEGMENT.test(part) || SENSITIVE_EXTENSION.test(part)
+    SENSITIVE_SEGMENT.test(part) || SENSITIVE_EXTENSION.test(part)
   );
 }
 
