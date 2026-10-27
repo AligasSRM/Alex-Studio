@@ -52,4 +52,26 @@ test('P0-ACC-013: preview response restricts external resource classes and form 
   expect(csp).toContain("frame-ancestors 'self'");
   expect(csp).not.toContain('https:');
   expect(csp).not.toContain('http:');
+
+  const externalRequests: string[] = [];
+  page.on('request', request => {
+    if (/^https?:\\/\\/example\\.com\\//i.test(request.url())) externalRequests.push(request.url());
+  });
+  const editor = page.getByRole('textbox', { name: 'File editor' });
+  const hostileResources = `<!doctype html><html><head>
+    <link rel="stylesheet" href="https://example.com/blocked.css">
+  </head><body>
+    <img src="https://example.com/blocked.png">
+    <video src="https://example.com/blocked.mp4"></video>
+    <iframe src="https://example.com/blocked-frame"></iframe>
+    <form action="https://example.com/submit"><button type="submit">Submit blocked form</button></form>
+  </body></html>`;
+  await editor.fill(hostileResources);
+  await page.getByRole('button', { name: 'Review & save' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Approve & save' }).click();
+  await expect(page.getByRole('status')).toContainText('Saved');
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(page.frameLocator('iframe[title="HTML preview"]').locator('body')).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(externalRequests).toEqual([]);
 });
