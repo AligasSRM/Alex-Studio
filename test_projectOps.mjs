@@ -85,3 +85,27 @@ test("project file APIs reject secret files while preserving safe dotfiles", () 
     deleteProject(project.id);
   }
 });
+test("project metadata symlink cannot redirect internal state outside the project", () => {
+  const project = createProject("metadata-symlink-boundary-test");
+  const root = path.join(process.cwd(), "workspace", project.id);
+  const metadataDir = path.join(root, ".alex");
+  const movedMetadataDir = path.join(root, ".alex-original");
+  const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), "alex-metadata-outside-"));
+  try {
+    fs.writeFileSync(path.join(outsideDir, "project.json"), JSON.stringify({
+      id: project.id,
+      name: "redirected",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      type: "html-static",
+    }));
+    fs.renameSync(metadataDir, movedMetadataDir);
+    fs.symlinkSync(outsideDir, metadataDir, "dir");
+
+    assert.equal(getProject(project.id), null);
+    assert.throws(() => validateProjectFilePath(`${project.id}/index.html`), /metadata directory/i);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(outsideDir, { recursive: true, force: true });
+  }
+});
