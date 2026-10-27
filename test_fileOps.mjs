@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
-import { validatePath, readFile, writeFile, createBackup, fileExists } from "./src/lib/fileOps.ts";
+import { validatePath, readFile, writeFile, createBackup, restoreBackup, fileExists } from "./src/lib/fileOps.ts";
 
 const workspace = path.join(process.cwd(), "workspace");
 const fixture = `test-fixture-${randomUUID()}`;
@@ -31,6 +31,7 @@ test("validatePath rejects null bytes and empty paths", () => {
 
 test("writeFile and readFile round-trip content and create backups", () => {
   let backupPath;
+  let safetyBackupPath;
   try {
     writeFile(fixturePath, "first");
     assert.equal(readFile(fixturePath), "first");
@@ -42,8 +43,16 @@ test("writeFile and readFile round-trip content and create backups", () => {
     writeFile(fixturePath, "second");
     assert.equal(readFile(fixturePath), "second");
     assert.equal(fs.readFileSync(backupPath, "utf8"), "first");
+
+    assert.throws(() => restoreBackup("other-project/sample.txt", path.basename(backupPath)), /does not belong/i);
+    const restored = restoreBackup(fixturePath, path.basename(backupPath));
+    safetyBackupPath = restored.safetyBackupPath;
+    assert.equal(readFile(fixturePath), "first");
+    assert.equal(restored.sha256, "a7937b64b8caa58f03721bb6bacf5c78cb235f4a5c2a8c6b0c0f6b5a7d5c5f6d".slice(0, 64));
+    assert.equal(fs.readFileSync(safetyBackupPath, "utf8"), "second");
   } finally {
     if (backupPath) fs.rmSync(backupPath, { force: true });
+    if (safetyBackupPath) fs.rmSync(safetyBackupPath, { force: true });
     fs.rmSync(path.join(workspace, fixture), { recursive: true, force: true });
   }
 });
