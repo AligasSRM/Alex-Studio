@@ -127,7 +127,7 @@ export async function POST(request: Request) {
     for (const file of parseDraft(body.projectId, body.files, originals, true)) working.set(file.path, file.content);
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755);
     const writeFiles = () => {
-      for (const [filePath, content] of working) {
+      for (const [filePath, content] of Array.from(working.entries())) {
         const target = path.resolve(root, ...filePath.split('/')); const relative = path.relative(root, target);
         if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Sandbox path escape denied');
         fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o755 });
@@ -141,7 +141,7 @@ export async function POST(request: Request) {
     const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
     for (let round = 1; !diagnostic.ok && round <= MAX_ROUNDS; round++) {
       const context: { path: string; content: string }[] = []; let bytes = 0;
-      for (const [filePath, content] of working) {
+      for (const [filePath, content] of Array.from(working.entries())) {
         const excerpt = content.slice(0, 8000); bytes += Buffer.byteLength(excerpt, 'utf8');
         if (bytes > 48 * 1024) break; context.push({ path: filePath, content: excerpt });
       }
@@ -155,7 +155,7 @@ export async function POST(request: Request) {
       if (!diagnostic.available) break;
     }
     const changed: FileDraft[] = [];
-    for (const [filePath, content] of working) if (originals.get(filePath) !== content) {
+    for (const [filePath, content] of Array.from(working.entries())) if (originals.get(filePath) !== content) {
       const old = originals.get(filePath); changed.push({ path: filePath, content, baseHash: old === undefined ? null : hash(old) });
     }
     if (!changed.length || changed.length > MAX_FILES) return NextResponse.json({ error: 'Final draft must contain 1–10 changed files', diagnostic, repairs }, { status: 422 });
