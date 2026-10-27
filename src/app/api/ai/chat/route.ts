@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  let budgetConfig;
+  let budgetConfig: ReturnType<typeof getBudgetConfig>;
   try {
     budgetConfig = getBudgetConfig();
   } catch {
