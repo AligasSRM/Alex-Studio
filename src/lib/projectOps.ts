@@ -72,6 +72,45 @@ export function getProjectMetaPath(projectId: string): string {
   return path.join(getProjectDir(projectId), ".alex", "project.json");
 }
 
+export function validateProjectFilePath(value: string): string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 500 || value.includes("\\0") || value.includes("\\\\")) {
+    throw new Error("Invalid project file path");
+  }
+  const parts = value.split("/");
+  const projectId = parts[0];
+  const fileParts = parts.slice(1);
+  if (!projectId || fileParts.length === 0 || fileParts.some((part) =>
+    !part || part === "." || part === ".." || part === ".alex" || part === ".git" || part === "node_modules"
+  )) {
+    throw new Error("Invalid project file path");
+  }
+  assertProjectId(projectId);
+  const projectDir = getProjectDir(projectId);
+  if (!projectExists(projectId)) throw new Error("Project not found");
+
+  const resolved = path.resolve(projectDir, ...fileParts);
+  if (!isWithinRoot(resolved, projectDir)) {
+    throw new Error("Project file path is outside project");
+  }
+
+  const realProject = fs.realpathSync(projectDir);
+  let existing = resolved;
+  while (!fs.existsSync(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) break;
+    existing = parent;
+  }
+  if (fs.existsSync(existing)) {
+    const realExisting = fs.realpathSync(existing);
+    if (!isWithinRoot(realExisting, realProject)) {
+      throw new Error("Project file path resolves outside project");
+    }
+  }
+
+  return path.relative(WORKSPACE_ROOT, resolved).split(path.sep).join("/");
+}
+
+
 export function projectExists(projectId: string): boolean {
   try {
     const metaPath = getProjectMetaPath(projectId);
