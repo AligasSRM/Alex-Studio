@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
-    "@next/swc-android-arm64": "16.4.3",
     "diff": "^9.0.0",
     "next": "16.4.3",
     "react": "19.3.0",
@@ -27,5 +26,8 @@
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "overrides": {
+    "dompurify": "3.4.17"
   }
 }
