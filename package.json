@@ -8,7 +8,7 @@
     "start": "next start --hostname 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test_fileOps.mjs test_checksum.mjs test_projectOps.mjs"
+    "test": "node --experimental-strip-types --test test_fileOps.mjs test_checksum.mjs test_projectOps.mjs test_aiUsage.mjs"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
