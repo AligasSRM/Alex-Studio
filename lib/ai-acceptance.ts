@@ -90,7 +90,11 @@ export function analyzeGeneratedProject(filesInput: ProjectFile[], requestedRequ
         continue;
       }
       if (EXTERNAL.test(ref.raw) || ref.raw.startsWith('#') || /^(?:data:|mailto:|tel:|blob:)/i.test(ref.raw)) continue;
-      if (ref.raw.startsWith('@/')) {\n        if (!resolveReference('index.html', './' + ref.raw.slice(2), files)) missing.push(filePath + ' -> ' + ref.raw + ' (project alias)');\n        continue;\n      }\n      if (ref.raw.startsWith('.') || ref.raw.startsWith('/')) {
+      if (ref.raw.startsWith('@/')) {
+        if (!resolveReference('index.html', './' + ref.raw.slice(2), files)) missing.push(filePath + ' -> ' + ref.raw + ' (project alias)');
+        continue;
+      }
+      if (ref.raw.startsWith('.') || ref.raw.startsWith('/')) {
         if (!resolveReference(filePath, ref.raw, files)) missing.push(filePath + ' -> ' + ref.raw + ' (' + ref.kind + ')');
         continue;
       }
