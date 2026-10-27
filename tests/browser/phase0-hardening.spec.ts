@@ -54,8 +54,9 @@ test('P0-ACC-013: preview response restricts external resource classes and form 
   expect(csp).not.toContain('http:');
 
   const externalRequests: string[] = [];
-  page.on('request', request => {
-    if (/^https?:\\/\\/example\\.com\\//i.test(request.url())) externalRequests.push(request.url());
+  await page.route('https://example.com/**', async route => {
+    externalRequests.push(route.request().url());
+    await route.abort();
   });
   const editor = page.getByRole('textbox', { name: 'File editor' });
   const hostileResources = `<!doctype html><html><head>
