@@ -23,8 +23,10 @@ export async function chatWithAI(messages: ChatMessage[]): Promise<string> {
   const model = process.env.AI_MODEL || "gpt-4o-mini";
 
   if (!apiKey) {
-    // Return a mock response for development
-    return mockAIResponse(messages);
+    if (process.env.NODE_ENV !== "production" && process.env.AI_ALLOW_MOCK === "true") {
+      return mockAIResponse(messages);
+    }
+    throw new Error("AI_NOT_CONFIGURED");
   }
 
   const response = await fetch(apiUrl, {
