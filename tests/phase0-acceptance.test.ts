@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { POST as createProjectRoute } from '../app/api/projects/route';
 import { POST as writeFileRoute } from '../app/api/files/route';
 import { listProjects } from '../lib/project-store';
@@ -96,4 +97,45 @@ describe('Phase 0 acceptance — project lifecycle and explicit approval', () =>
     expect(response.status).toBe(400);
     expect(fs.readFileSync(outside)).toEqual(sentinel);
   });
+
+  it('does not create an outside file if a checked parent directory is swapped for a symlink before rename', async () => {
+    const project = await createTestProject(`P0 symlink race ${Date.now()}`);
+    const root = projectRoot(project.id);
+    const nested = path.join(root, 'nested');
+    const parked = path.join(root, 'nested-original');
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'p0-race-outside-'));
+    const sentinelFile = path.join(outside, 'sentinel.txt');
+    const sentinel = Buffer.from('race sentinel must remain unchanged');
+    fs.mkdirSync(nested);
+    fs.writeFileSync(sentinelFile, sentinel);
+    const originalRename = fs.renameSync.bind(fs);
+    let swapped = false;
+    const renameSpy = jest.spyOn(fs, 'renameSync');
+    renameSpy.mockImplementation((oldPath, newPath) => {
+      const from = String(oldPath);
+      const to = String(newPath);
+      if (!swapped && from.includes('.alex-tmp-') && to.endsWith(path.join('nested', 'race.txt'))) {
+        originalRename(nested, parked);
+        fs.symlinkSync(outside, nested, 'dir');
+        swapped = true;
+      }
+      return originalRename(oldPath, newPath);
+    });
+
+    try {
+      const response = await writeFileRoute(localPost('http://localhost:3000/api/files', {
+        projectId: project.id, path: 'nested/race.txt', content: 'must not escape project', approved: true,
+      }));
+      expect(swapped).toBe(true);
+      expect(response.status).toBe(400);
+      expect(fs.readFileSync(sentinelFile)).toEqual(sentinel);
+      expect(fs.existsSync(path.join(outside, 'race.txt'))).toBe(false);
+    } finally {
+      renameSpy.mockRestore();
+      if (fs.existsSync(nested) && fs.lstatSync(nested).isSymbolicLink()) fs.unlinkSync(nested);
+      if (fs.existsSync(parked)) originalRename(parked, nested);
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
 });
