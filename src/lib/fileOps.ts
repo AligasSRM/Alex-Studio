@@ -110,7 +110,7 @@ export function createBackup(relativePath: string): string {
 
 export function restoreBackup(relativePath: string, backupId: string): { safetyBackupPath: string | null; sha256: string } {
   validatePath(relativePath);
-  if (typeof backupId !== "string" || !/^[a-f0-9]{16}-\\d+-[0-9a-f-]{36}\\.bak$/.test(backupId)) {
+  if (typeof backupId !== "string" || !/^[a-f0-9]{16}-\d+-[0-9a-f-]{36}\.bak$/.test(backupId)) {
     throw new Error("Invalid backup identifier");
   }
 
