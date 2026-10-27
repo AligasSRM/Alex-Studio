@@ -7,6 +7,19 @@ const MAX_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 20_000;
 const MAX_TOTAL_CHARS = 60_000;
 const PROJECT_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const requestWindows = new Map<string, number[]>();
+
+function isRateLimited(projectId: string): boolean {
+  const now = Date.now();
+  const recent = (requestWindows.get(projectId) || []).filter((timestamp) => now - timestamp < 60_000);
+  if (recent.length >= 10) {
+    requestWindows.set(projectId, recent);
+    return true;
+  }
+  recent.push(now);
+  requestWindows.set(projectId, recent);
+  return false;
+}
 
 export async function POST(request: NextRequest) {
   const declaredLength = Number(request.headers.get("content-length") || 0);
@@ -60,6 +73,9 @@ export async function POST(request: NextRequest) {
   }
   if (!validatedMessages.some((message) => message.role === "user")) {
     return NextResponse.json({ error: "At least one user message is required" }, { status: 400 });
+  }
+  if (isRateLimited(projectId)) {
+    return NextResponse.json({ error: "Rate limit reached: at most 10 AI requests per project per minute." }, { status: 429 });
   }
 
   const mockMode = !process.env.AI_API_KEY && process.env.NODE_ENV !== "production" && process.env.AI_ALLOW_MOCK === "true";
