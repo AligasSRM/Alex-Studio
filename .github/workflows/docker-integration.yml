@@ -11,7 +11,8 @@ on:
     inputs:
       runner_image:
         description: "Trusted Microsoft Playwright image pinned by SHA-256 digest (tag@sha256:...)"
-        required: true
+        required: false
+        default: "mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2"
         type: string
 
 permissions:
