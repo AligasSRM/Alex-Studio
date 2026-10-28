@@ -15,13 +15,26 @@ try {
   throw error;
 }
 
-const packagePath = path.join(path.dirname(entryPath), 'package.json');
-const installedPackage = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+function findPackageRoot(startPath, expectedName) {
+  let current = path.dirname(startPath);
+  while (true) {
+    const candidate = path.join(current, 'package.json');
+    if (fs.existsSync(candidate)) {
+      const metadata = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+      if (metadata.name === expectedName) return { root: current, metadata };
+    }
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  throw new Error('Could not locate package.json for ' + expectedName + ' from ' + startPath);
+}
 
-if (installedPackage.version !== '4.3.1') {
+const foundPackage = findPackageRoot(entryPath, 'deepmerge');
+if (foundPackage.metadata.version !== '4.3.1') {
   throw new Error(
     'Expected deepmerge 4.3.1 for the reviewed security patch; found ' +
-    installedPackage.version +
+    foundPackage.metadata.version +
     '. Review the upstream fix before changing this guard.'
   );
 }
