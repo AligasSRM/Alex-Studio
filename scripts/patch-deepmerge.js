@@ -10,7 +10,7 @@ const installedPackage = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
 
 if (installedPackage.version !== '4.3.1') {
   throw new Error(
-    `Expected deepmerge 4.3.1 for the reviewed security patch; found ${installedPackage.version}. Review the upstream fix before changing this guard.`
+    \`Expected deepmerge 4.3.1 for the reviewed security patch; found \${installedPackage.version}. Review the upstream fix before changing this guard.\`
   );
 }
 
@@ -27,13 +27,13 @@ if (source.includes('function propertyIsForbidden(key)')) {
 }
 
 const helperAnchor = 'function mergeObject(target, source, options) {';
-const targetAnchor = 'getKeys(target).forEach(function(key) {\\n\\t\\t\\tdestination[key] =';
-const sourceAnchor = 'getKeys(source).forEach(function(key) {\\n\\t\\tif (propertyIsUnsafe(target, key)) {';
+const targetPattern = /getKeys\\(target\\)\\.forEach\\(function\\(key\\) \\{\\n\\t\\t\\tdestination\\[key\\] =/g;
+const sourcePattern = /getKeys\\(source\\)\\.forEach\\(function\\(key\\) \\{\\n\\t\\tif \\(propertyIsUnsafe\\(target, key\\)\\) \\{/g;
 
 if (
   source.split(helperAnchor).length !== 2 ||
-  source.split(targetAnchor).length !== 2 ||
-  source.split(sourceAnchor).length !== 2
+  (source.match(targetPattern) || []).length !== 1 ||
+  (source.match(sourcePattern) || []).length !== 1
 ) {
   throw new Error('deepmerge source does not match the reviewed 4.3.1 patch anchors; refusing to modify it.');
 }
@@ -43,11 +43,11 @@ let patched = source.replace(
   "function propertyIsForbidden(key) {\\n\\treturn key === '__proto__'\\n}\\n\\n" + helperAnchor
 );
 patched = patched.replace(
-  targetAnchor,
+  targetPattern,
   'getKeys(target).forEach(function(key) {\\n\\t\\t\\tif (propertyIsForbidden(key)) {\\n\\t\\t\\t\\treturn\\n\\t\\t\\t}\\n\\t\\t\\tdestination[key] ='
 );
 patched = patched.replace(
-  sourceAnchor,
+  sourcePattern,
   'getKeys(source).forEach(function(key) {\\n\\t\\tif (propertyIsForbidden(key) || propertyIsUnsafe(target, key)) {'
 );
 
