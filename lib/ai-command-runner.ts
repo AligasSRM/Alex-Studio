@@ -170,10 +170,15 @@ try {
   fs.cpSync('/npm-cache', '/tmp/npm-cache', { recursive: true, errorOnExist: false });
   const runtime = process.version;
   const npmVersion = cp.spawnSync('npm', ['--version'], { encoding: 'utf8', env, timeout: 5000 });
+  const manifest = JSON.parse(fs.readFileSync(path.join(work, 'package.json'), 'utf8'));
+  const dependencySections = ['dependencies', 'devDependencies', 'optionalDependencies'];
+  const needsInstall = dependencySections.some(key => manifest[key] && Object.keys(manifest[key]).length > 0);
   const installStart = now();
-  const install = cp.spawnSync('npm', ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', '/tmp/npm-cache'], {
-    cwd: work, encoding: 'utf8', env, timeout: 45000, maxBuffer: 200000
-  });
+  const install = needsInstall
+    ? cp.spawnSync('npm', ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', '/tmp/npm-cache'], {
+        cwd: work, encoding: 'utf8', env, timeout: 45000, maxBuffer: 200000
+      })
+    : { error: null, status: 0, stdout: 'No dependencies declared; skipped npm ci.\\n', stderr: '' };
   const installOutput = String(install.stdout || '') + String(install.stderr || '');
   if (install.error || install.status !== 0) {
     const offlineMiss = /ENOTCACHED|cache mode is ['"]only-if-cached|offline.*(cache|package)|no matching version found/i.test(installOutput + String(install.error || ''));
