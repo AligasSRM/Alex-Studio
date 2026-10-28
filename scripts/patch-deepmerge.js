@@ -4,7 +4,17 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const entryPath = require.resolve('deepmerge');
+let entryPath;
+try {
+  entryPath = require.resolve('deepmerge');
+} catch (error) {
+  if (error && error.code === 'MODULE_NOT_FOUND') {
+    process.stdout.write('deepmerge is not installed (likely a production-only install); skipping dev-only patch.\n');
+    process.exit(0);
+  }
+  throw error;
+}
+
 const packagePath = path.join(path.dirname(entryPath), 'package.json');
 const installedPackage = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
 
