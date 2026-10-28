@@ -102,7 +102,7 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
   it('runs required scripts in a network-isolated container and removes it afterwards', async () => {
     const before = new Set(runnerContainers());
     const root = createProject(
-      'node -e "require(\\'node:dns\\').promises.lookup(\\'example.com\\').then(() => process.exit(9), () => process.exit(0))"',
+      `node -e "require('node:dns').promises.lookup('example.com').then(() => process.exit(9), () => process.exit(0))"`,
     );
     const result = await runProjectCommands(root);
     expect(result.status).toBe('PASS');
