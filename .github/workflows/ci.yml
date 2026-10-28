@@ -33,10 +33,35 @@ jobs:
         with:
           node-version: 20
 
-      # Reproducible install from the committed lockfile.
+      # Validate dependency sources and lockfile integrity metadata before running install scripts.
+      - name: Verify dependency lockfile provenance
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          if (lock.lockfileVersion !== 3) throw new Error(`Unexpected lockfileVersion: ${lock.lockfileVersion}`);
+          const packages = Object.entries(lock.packages ?? {}).filter(([path]) => path !== '');
+          const errors = [];
+          for (const [path, pkg] of packages) {
+            if (pkg.link) continue;
+            if (!pkg.resolved) { errors.push(`${path}: missing resolved URL`); continue; }
+            if (!pkg.resolved.startsWith('https://registry.npmjs.org/')) errors.push(`${path}: unapproved source ${pkg.resolved}`);
+            if (!/^sha512-[A-Za-z0-9+/]+=*$/.test(pkg.integrity ?? '')) errors.push(`${path}: missing or non-SHA-512 integrity`);
+          }
+          if (errors.length) {
+            console.error('Dependency lockfile provenance validation failed:', ...errors);
+            process.exit(1);
+          }
+          console.log(`Validated ${packages.length} locked packages against the npm registry allowlist and SHA-512 integrity metadata.`);
+          NODE
+
+      # Reproducible install from the committed lockfile using the official npm registry.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
         timeout-minutes: 8
+
+      - name: Verify npm cache integrity
+        run: npm cache verify
 
       # Generate a current dependency vulnerability report from the resolved install.
       - name: Audit dependency vulnerabilities
