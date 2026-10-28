@@ -60,6 +60,37 @@ jobs:
         run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
         timeout-minutes: 8
 
+      # npm audit still flags deepmerge 4.3.1 upstream; this repository applies a reviewed postinstall mitigation.
+      # Fail closed if the expected patch is absent or the dependency changes without review.
+      - name: Verify deepmerge security mitigation
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const entry = require.resolve('deepmerge');
+          let dir = path.dirname(entry);
+          let metadata;
+          while (true) {
+            const candidate = path.join(dir, 'package.json');
+            if (fs.existsSync(candidate)) {
+              const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
+              if (parsed.name === 'deepmerge') { metadata = parsed; break; }
+            }
+            const parent = path.dirname(dir);
+            if (parent === dir) break;
+            dir = parent;
+          }
+          if (!metadata || metadata.version !== '4.3.1') {
+            throw new Error('deepmerge version changed; review the security mitigation before proceeding.');
+          }
+          const source = fs.readFileSync(entry, 'utf8');
+          if (!source.includes('function propertyIsForbidden(key)') ||
+              !source.includes('if (propertyIsForbidden(key) || propertyIsUnsafe(target, key)) {')) {
+            throw new Error('Reviewed deepmerge __proto__ mitigation is missing; refusing to continue.');
+          }
+          console.log('Verified deepmerge 4.3.1 and the reviewed __proto__ mitigation.');
+          NODE
+
       - name: Verify npm cache integrity
         run: npm cache verify
 
