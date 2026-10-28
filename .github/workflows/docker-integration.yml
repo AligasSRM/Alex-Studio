@@ -7,6 +7,14 @@ on:
       - 'tests/ai-command-runner.docker.test.ts'
       - 'package.json'
       - 'package-lock.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/docker-integration.yml'
+      - 'lib/ai-command-runner.ts'
+      - 'tests/ai-command-runner.docker.test.ts'
+      - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch:
     inputs:
       runner_image:
