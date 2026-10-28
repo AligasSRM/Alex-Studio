@@ -40,7 +40,6 @@ type ManifestPlan = {
 const SCRIPT_NAMES = ['build', 'test', 'lint', 'typecheck'] as const;
 const REQUIRED_SCRIPTS = new Set<string>(['build', 'test']);
 const MAX_CAPTURE = 6000;
-const MAX_CACHE_BYTES = 512 * 1024 * 1024;
 
 export function inspectGeneratedProject(root: string): ManifestPlan {
   const packagePath = path.join(root, 'package.json');
