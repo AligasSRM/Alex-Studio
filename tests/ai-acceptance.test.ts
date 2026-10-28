@@ -12,7 +12,7 @@ describe('AI project acceptance preflight', () => {
     expect(report.status).toBe('fail');
   });
 
-  it('flags undeclared imports and invalid package JSON', () => {
+  it('flags undeclared imports while keeping discovered commands unverified', () => {
     const report = analyzeGeneratedProject([
       { path: 'package.json', content: '{"scripts":{"build":"next build"}}' },
       { path: 'src/app.js', content: "import widget from 'not-declared-package';" },
@@ -21,6 +21,28 @@ describe('AI project acceptance preflight', () => {
     expect(report.checks.find((check) => check.id === 'CMD-RUN')?.status).toBe('unverified');
     expect(report.commands).toEqual([{ command: 'npm run build', status: 'unverified',
       reason: expect.stringContaining('Not executed') }]);
+  });
+
+  it('rejects malformed package.json instead of treating it as valid', () => {
+    const report = analyzeGeneratedProject([
+      { path: 'package.json', content: '{"dependencies":' },
+      { path: 'src/app.js', content: "import widget from 'not-declared-package';" },
+    ], []);
+    expect(report.checks.find((check) => check.id === 'PKG-JSON')?.status).toBe('fail');
+    expect(report.checks.find((check) => check.id === 'DEP-DECL')?.status).toBe('fail');
+    expect(report.status).toBe('fail');
+  });
+
+  it('accepts declared packages and existing local resources', () => {
+    const report = analyzeGeneratedProject([
+      { path: 'package.json', content: '{"dependencies":{"react":"^19.0.0"}}' },
+      { path: 'index.html', content: '<link rel="stylesheet" href="./styles.css"><img src="./logo.png">' },
+      { path: 'styles.css', content: 'body { color: black; }' },
+      { path: 'logo.png', content: 'image placeholder' },
+      { path: 'src/app.js', content: "import React from 'react';" },
+    ], ['The app uses its declared dependencies.']);
+    expect(report.checks.find((check) => check.id === 'REF-LOCAL')?.status).toBe('pass');
+    expect(report.checks.find((check) => check.id === 'DEP-DECL')?.status).toBe('pass');
   });
 
   it('never claims requirements or commands passed without execution evidence', () => {
