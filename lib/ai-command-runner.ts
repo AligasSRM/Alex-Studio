@@ -142,7 +142,7 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
   }
 
   const image = process.env.AI_RUNNER_DOCKER_IMAGE;
-  if (!image || !/^mcr\\.microsoft\\.com\\/playwright:[^@\\s]+@sha256:[a-f0-9]{64}$/.test(image)) {
+  if (!image || !/^mcr\.microsoft\.com\/playwright:[^@\s]+@sha256:[a-f0-9]{64}$/.test(image)) {
     const message = 'AI_RUNNER_DOCKER_IMAGE must be a trusted Playwright image pinned by sha256 digest.';
     return { ok: false, available: false, status: 'UNAVAILABLE', summary: 'Pinned runner image is not configured', output: message, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', message, plan.lockfileSha256)) };
   }
