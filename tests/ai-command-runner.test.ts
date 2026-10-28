@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { inspectGeneratedProject, isPinnedRunnerImage, runProjectCommands } from '../lib/ai-command-runner';
+import { inspectGeneratedProject, isPinnedRunnerImage, runProjectCommands, validateProjectTreeLimits } from '../lib/ai-command-runner';
 
 const roots: string[] = [];
 function workspace() {
@@ -22,6 +22,22 @@ describe('isolated npm runner preflight', () => {
     expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble')).toBe(false);
     expect(isPinnedRunnerImage('docker.io/example/runner:latest@sha256:' + 'a'.repeat(64))).toBe(false);
     expect(isPinnedRunnerImage(undefined)).toBe(false);
+  });
+
+  it('rejects project trees larger than the staging byte limit before copying', () => {
+    const root = workspace();
+    const oversized = path.join(root, 'oversized.bin');
+    fs.closeSync(fs.openSync(oversized, 'w'));
+    fs.truncateSync(oversized, 100 * 1024 * 1024 + 1);
+    expect(() => validateProjectTreeLimits(root)).toThrow('100 MiB staging limit');
+  });
+
+  it('rejects symbolic links in generated project trees', () => {
+    const root = workspace();
+    const target = path.join(root, 'target.txt');
+    write(root, 'target.txt', 'safe');
+    fs.symlinkSync(target, path.join(root, 'linked.txt'));
+    expect(() => validateProjectTreeLimits(root)).toThrow('must not contain symbolic links');
   });
 
   it('treats a static project without package.json as browser-only', async () => {
