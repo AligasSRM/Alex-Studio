@@ -287,6 +287,20 @@ try {
     });
     });
   } finally {
-    fs.rmSync(stagedSource.cleanupPath, { recursive: true, force: true });
+    // Read-only staged directories need write permission restored on the host
+    // before their entries can be unlinked during cleanup.
+    const restoreDirectoryPermissions = (currentPath: string): void => {
+      fs.chmodSync(currentPath, 0o755);
+      for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
+        if (entry.isDirectory() && !entry.isSymbolicLink()) {
+          restoreDirectoryPermissions(path.join(currentPath, entry.name));
+        }
+      }
+    };
+    try {
+      restoreDirectoryPermissions(stagedSource.cleanupPath);
+    } finally {
+      fs.rmSync(stagedSource.cleanupPath, { recursive: true, force: true });
+    }
   }
 }
