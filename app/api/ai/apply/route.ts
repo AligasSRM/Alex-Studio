@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { assertLocalMutation, resolveProjectPath, assertTextContent } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
 import { readProjectFile, writeProjectFile } from '@/lib/files';
+import { verifyVerificationProof } from '@/lib/ai-verification-proof';
 
 type Change = { path: string; content: string; baseHash: string | null };
 function hash(content: string) {
@@ -16,11 +17,12 @@ export async function POST(request: Request) {
   if (!assertLocalMutation(request)) return NextResponse.json({ error: 'Local same-origin requests only' }, { status: 403 });
   const length = Number(request.headers.get('content-length') || 0);
   if (length > 3 * 1024 * 1024) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
-  const body = await request.json().catch(() => null) as { projectId?: unknown; approved?: unknown; files?: unknown } | null;
+  const body = await request.json().catch(() => null) as { projectId?: unknown; approved?: unknown; files?: unknown; verificationProof?: unknown } | null;
   if (!body || typeof body.projectId !== 'string' || !Array.isArray(body.files)) {
     return NextResponse.json({ error: 'projectId and files are required' }, { status: 400 });
   }
   if (body.approved !== true) return NextResponse.json({ error: 'Explicit approval required before applying generated files' }, { status: 409 });
+  if (!verifyVerificationProof(body.projectId, body.files, body.verificationProof)) return NextResponse.json({ error: 'A successful, current server verification is required before applying this AI draft. Verify the exact draft again.' }, { status: 409 });
   if (!getProject(body.projectId)) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   if (body.files.length < 1 || body.files.length > 10) return NextResponse.json({ error: 'Apply between 1 and 10 files per batch' }, { status: 400 });
 

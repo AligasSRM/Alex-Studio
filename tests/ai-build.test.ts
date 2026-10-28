@@ -6,6 +6,7 @@ import { POST as createProjectPost } from '../app/api/projects/route';
 import { projectRoot } from '../lib/path-security';
 import { readProjectFile } from '../lib/files';
 import { resetRateLimitsForTests } from '../lib/rate-limit';
+import { issueVerificationProof } from '../lib/ai-verification-proof';
 
 const createdIds: string[] = [];
 const originalKey = process.env.OPENAI_API_KEY;
@@ -71,7 +72,7 @@ describe('AI project build workflow', () => {
     })));
     expect(denied.status).toBe(409);
     const protectedPath = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
-      projectId: id, approved: true, files: [{ path: '.env', content: 'SECRET=x', baseHash: null }],
+      projectId: id, approved: true, files: [{ path: '.env', content: 'SECRET=x', baseHash: null }], verificationProof: issueVerificationProof(id, [{ path: '.env', content: 'SECRET=x', baseHash: null }]),
     })));
     expect(protectedPath.status).toBe(400);
   });
@@ -80,16 +81,17 @@ describe('AI project build workflow', () => {
     const id = await makeProject();
     const current = readProjectFile(id, 'index.html');
     const stale = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
-      projectId: id, approved: true, files: [{ path: 'index.html', content: '<h1>stale</h1>', baseHash: hash('not-current') }],
+      projectId: id, approved: true, files: [{ path: 'index.html', content: '<h1>stale</h1>', baseHash: hash('not-current') }], verificationProof: issueVerificationProof(id, [{ path: 'index.html', content: '<h1>stale</h1>', baseHash: hash('not-current') }]),
     })));
     expect(stale.status).toBe(409);
     expect(readProjectFile(id, 'index.html')).toBe(current);
 
+    const files = [
+      { path: 'index.html', content: '<!doctype html><title>Updated</title>', baseHash: hash(current) },
+      { path: 'app.js', content: 'document.body.dataset.ready = "true";', baseHash: null },
+    ];
     const response = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
-      projectId: id, approved: true, files: [
-        { path: 'index.html', content: '<!doctype html><title>Updated</title>', baseHash: hash(current) },
-        { path: 'app.js', content: 'document.body.dataset.ready = "true";', baseHash: null },
-      ],
+      projectId: id, approved: true, files, verificationProof: issueVerificationProof(id, files),
     })));
     expect(response.status).toBe(200);
     const data = await response.json() as { count: number; applied: string[] };
