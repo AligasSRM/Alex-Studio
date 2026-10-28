@@ -207,7 +207,7 @@ try {
     child.stdout.on('data', chunk => { stdout = collect(stdout, chunk); });
     child.stderr.on('data', chunk => { stderr = collect(stderr, chunk); });
     const timer = setTimeout(() => {
-      spawn('docker', ['kill', containerName], { stdio: 'ignore', env: { PATH: process.env.PATH || '/usr/bin:/bin' } });
+      spawn('docker', ['kill', containerName], { stdio: 'ignore', env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
       child.kill('SIGKILL');
       const commands = plan.scripts.map(item => ({ ...baseEvidence(item.name, item.required, 'FAIL', 'Runner wall-clock timeout; container termination requested.', plan.lockfileSha256), terminationReason: 'runner wall-clock timeout' }));
       finish({ ok: false, available: true, status: 'FAIL', summary: 'Isolated npm runner timed out', output: (stdout + stderr).slice(-12000), commands });
