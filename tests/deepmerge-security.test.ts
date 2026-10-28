@@ -3,7 +3,7 @@ const deepmerge = require('deepmerge') as typeof import('deepmerge');
 describe('deepmerge prototype-poisoning regression', () => {
   test('rejects __proto__ from a null-prototype target', () => {
     const source = JSON.parse('{"__proto__":{"isAdmin":true}}');
-    const result = deepmerge(Object.create(null), source);
+    const result = deepmerge(Object.create(null), source) as Record<string, any>;
 
     expect(result.isAdmin).toBeUndefined();
     expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
@@ -11,7 +11,7 @@ describe('deepmerge prototype-poisoning regression', () => {
 
   test('rejects nested __proto__ when the target contains a null placeholder', () => {
     const source = JSON.parse('{"session":{"__proto__":{"isAdmin":true}}}');
-    const result = deepmerge({ session: null }, source);
+    const result = deepmerge({ session: null }, source) as Record<string, any>;
 
     expect(result.session.isAdmin).toBeUndefined();
     expect(Object.getPrototypeOf(result.session)).toBe(Object.prototype);
@@ -19,7 +19,7 @@ describe('deepmerge prototype-poisoning regression', () => {
 
   test('does not copy an own __proto__ key from the target', () => {
     const target = JSON.parse('{"__proto__":{"isAdmin":true}}');
-    const result = deepmerge(target, {});
+    const result = deepmerge(target, {}) as Record<string, any>;
 
     expect(result.isAdmin).toBeUndefined();
     expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
@@ -27,7 +27,7 @@ describe('deepmerge prototype-poisoning regression', () => {
 
   test('rejects __proto__ while cloning objects inside arrays', () => {
     const source = JSON.parse('{"items":[{"__proto__":{"isAdmin":true}}]}');
-    const result = deepmerge({}, source);
+    const result = deepmerge({}, source) as Record<string, any>;
 
     expect(result.items[0].isAdmin).toBeUndefined();
     expect(Object.getPrototypeOf(result.items[0])).toBe(Object.prototype);
