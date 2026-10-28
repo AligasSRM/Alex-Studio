@@ -65,6 +65,42 @@ describe('AI project build workflow', () => {
     expect(readProjectFile(id, 'index.html')).toBe(original);
   });
 
+  it('reports quota exhaustion safely without exposing provider error details', async () => {
+    const id = await makeProject();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      error: { type: 'insufficient_quota', code: 'insufficient_quota', message: 'private provider diagnostic' },
+    }), { status: 429, headers: { 'content-type': 'application/json' } }));
+
+    const response = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: id, prompt: 'Create a simple page', approved: true,
+    })));
+
+    expect(response.status).toBe(503);
+    const data = await response.json() as { error: string };
+    expect(data.error).toMatch(/quota or billing limit/i);
+    expect(JSON.stringify(data)).not.toContain('private provider diagnostic');
+    expect(JSON.stringify(data)).not.toContain('test-server-secret');
+  });
+
+  it('keeps transient provider rate limits retryable without exposing the provider body', async () => {
+    const id = await makeProject();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      error: { type: 'rate_limit_exceeded', code: 'rate_limit_exceeded', message: 'private provider diagnostic' },
+    }), { status: 429, headers: { 'content-type': 'application/json', 'retry-after': '12' } }));
+
+    const response = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: id, prompt: 'Create a simple page', approved: true,
+    })));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('12');
+    const data = await response.json() as { error: string };
+    expect(data.error).toBe('AI provider is busy; try again later');
+    expect(JSON.stringify(data)).not.toContain('private provider diagnostic');
+  });
+
   it('requires explicit approval and rejects protected paths when applying a draft', async () => {
     const id = await makeProject();
     const denied = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
