@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { assertLocalMutation, resolveProjectPath, assertTextContent } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
 import { readProjectFile, writeProjectFile } from '@/lib/files';
+import { verifyVerificationProof } from '@/lib/ai-verification-proof';
 
 type Change = { path: string; content: string; baseHash: string | null };
 function hash(content: string) {
