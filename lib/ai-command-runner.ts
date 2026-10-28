@@ -41,6 +41,28 @@ type ManifestPlan = {
 const SCRIPT_NAMES = ['build', 'test', 'lint', 'typecheck'] as const;
 const REQUIRED_SCRIPTS = new Set<string>(['build', 'test']);
 const MAX_CAPTURE = 6000;
+const MAX_PROJECT_FILES = 20_000;
+const MAX_PROJECT_BYTES = 100 * 1024 * 1024;
+
+/** Reject oversized or special-file workspaces before copying them to host temp storage. */
+export function validateProjectTreeLimits(root: string): void {
+  let files = 0;
+  let bytes = 0;
+  const visit = (currentPath: string): void => {
+    const stat = fs.lstatSync(currentPath);
+    if (stat.isSymbolicLink()) throw new Error('Generated project must not contain symbolic links.');
+    if (stat.isDirectory()) {
+      for (const entry of fs.readdirSync(currentPath)) visit(path.join(currentPath, entry));
+      return;
+    }
+    if (!stat.isFile()) throw new Error('Generated project contains an unsupported filesystem entry.');
+    files += 1;
+    bytes += stat.size;
+    if (files > MAX_PROJECT_FILES) throw new Error('Generated project exceeds the 20000-file staging limit.');
+    if (bytes > MAX_PROJECT_BYTES) throw new Error('Generated project exceeds the 100 MiB staging limit.');
+  };
+  visit(root);
+}
 
 export function isPinnedRunnerImage(image: string | undefined): image is string {
   return !!image && /^mcr\.microsoft\.com\/playwright:[^@\s]+@sha256:[a-f0-9]{64}$/.test(image);
@@ -111,10 +133,13 @@ export function inspectGeneratedProject(root: string): ManifestPlan {
  * directory, then grant read/traverse permissions without following symlinks.
  */
 function stageReadableProjectCopy(root: string): { sourcePath: string; cleanupPath: string } {
+  validateProjectTreeLimits(root);
   const cleanupPath = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-runner-stage-'));
   const sourcePath = path.join(cleanupPath, 'source');
   try {
     fs.cpSync(root, sourcePath, { recursive: true, errorOnExist: false });
+    // Re-check the copied snapshot to catch changes during staging.
+    validateProjectTreeLimits(sourcePath);
     const makeReadable = (currentPath: string): void => {
       for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
         const entryPath = path.join(currentPath, entry.name);
