@@ -117,9 +117,32 @@ export async function POST(request: Request) {
       headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
     });
-    if (!response.ok) return NextResponse.json({ error: response.status === 429 ? 'AI provider is busy; try again later' : 'AI provider request failed' }, {
-      status: response.status === 429 ? 503 : 502,
-    });
+    if (!response.ok) {
+      let providerError: { error?: { type?: unknown; code?: unknown } } = {};
+      try {
+        providerError = await response.json() as { error?: { type?: unknown; code?: unknown } };
+      } catch {
+        // Keep provider error bodies private and treat malformed error payloads generically.
+      }
+      const errorCode = [providerError.error?.code, providerError.error?.type]
+        .find((value): value is string => typeof value === 'string');
+      const quotaExceeded = errorCode === 'insufficient_quota' || errorCode === 'billing_hard_limit_reached';
+      const retryAfter = response.headers.get('retry-after');
+      const headers: Record<string, string> = {};
+      if (response.status === 429 && retryAfter && /^\\d{1,5}$/.test(retryAfter)) {
+        headers['Retry-After'] = retryAfter;
+      }
+      return NextResponse.json({
+        error: quotaExceeded
+          ? 'AI provider quota or billing limit reached; check OpenAI project usage and billing'
+          : response.status === 429
+            ? 'AI provider is busy; try again later'
+            : 'AI provider request failed',
+      }, {
+        status: response.status === 429 ? 503 : 502,
+        headers,
+      });
+    }
     const result = await response.json() as { output_text?: unknown; usage?: { input_tokens?: unknown; output_tokens?: unknown } };
     if (typeof result.output_text !== 'string') return NextResponse.json({ error: 'AI provider returned an invalid response' }, { status: 502 });
     const inputTokens = Number.isInteger(result.usage?.input_tokens) ? result.usage?.input_tokens as number : null;
