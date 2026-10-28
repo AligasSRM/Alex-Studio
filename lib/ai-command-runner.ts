@@ -41,27 +41,29 @@ type ManifestPlan = {
 const SCRIPT_NAMES = ['build', 'test', 'lint', 'typecheck'] as const;
 const REQUIRED_SCRIPTS = new Set<string>(['build', 'test']);
 const MAX_CAPTURE = 6000;
-const MAX_PROJECT_FILES = 20_000;
+const MAX_PROJECT_ENTRIES = 20_000;
+const MAX_PROJECT_DEPTH = 64;
 const MAX_PROJECT_BYTES = 100 * 1024 * 1024;
 
 /** Reject oversized or special-file workspaces before copying them to host temp storage. */
 export function validateProjectTreeLimits(root: string): void {
-  let files = 0;
+  let entries = 0;
   let bytes = 0;
-  const visit = (currentPath: string): void => {
+  const visit = (currentPath: string, depth: number): void => {
+    entries += 1;
+    if (entries > MAX_PROJECT_ENTRIES) throw new Error('Generated project exceeds the 20000-entry staging limit.');
+    if (depth > MAX_PROJECT_DEPTH) throw new Error('Generated project exceeds the 64-level staging depth limit.');
     const stat = fs.lstatSync(currentPath);
     if (stat.isSymbolicLink()) throw new Error('Generated project must not contain symbolic links.');
     if (stat.isDirectory()) {
-      for (const entry of fs.readdirSync(currentPath)) visit(path.join(currentPath, entry));
+      for (const entry of fs.readdirSync(currentPath)) visit(path.join(currentPath, entry), depth + 1);
       return;
     }
     if (!stat.isFile()) throw new Error('Generated project contains an unsupported filesystem entry.');
-    files += 1;
     bytes += stat.size;
-    if (files > MAX_PROJECT_FILES) throw new Error('Generated project exceeds the 20000-file staging limit.');
     if (bytes > MAX_PROJECT_BYTES) throw new Error('Generated project exceeds the 100 MiB staging limit.');
   };
-  visit(root);
+  visit(root, 0);
 }
 
 export function isPinnedRunnerImage(image: string | undefined): image is string {
