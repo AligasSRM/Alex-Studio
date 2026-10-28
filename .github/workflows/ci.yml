@@ -43,7 +43,7 @@ jobs:
       - name: Audit dependency vulnerabilities
         run: |
           npm audit --json > /tmp/npm-audit-report.json || audit_status=$?
-          node <<'NODE'
+          AUDIT_STATUS="${audit_status:-0}" node <<'NODE'
           const fs = require('node:fs');
           const report = JSON.parse(fs.readFileSync('/tmp/npm-audit-report.json', 'utf8'));
           const counts = report.metadata?.vulnerabilities ?? {};
@@ -64,7 +64,7 @@ jobs:
             lines.push(`| ${name} | ${item.severity} | ${item.isDirect ? 'yes' : 'no'} | ${item.fixAvailable ? JSON.stringify(item.fixAvailable) : 'no'} | ${details} |`);
           }
           if (!Object.keys(report.vulnerabilities ?? {}).length) lines.push('| — | No vulnerabilities reported | — | — | — |');
-          lines.push('', `Audit exit status: ${typeof audit_status === 'undefined' ? 0 : audit_status}`);
+          lines.push('', `Audit exit status: ${process.env.AUDIT_STATUS}`);
           fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
           console.log(lines.join('\n'));
           NODE
