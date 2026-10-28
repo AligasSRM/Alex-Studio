@@ -12,6 +12,7 @@ import { listProjectFiles, readProjectFile } from '@/lib/files';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
+import { issueVerificationProof } from '@/lib/ai-verification-proof';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -170,7 +171,8 @@ export async function POST(request: Request) {
     }
     if (!changed.length || changed.length > MAX_FILES) return NextResponse.json({ error: 'Final draft must contain 1–10 changed files', diagnostic, repairs }, { status: 422 });
     const acceptance = analyzeGeneratedProject(Array.from(working.entries()).map(([filePath, content]) => ({ path: filePath, content })), body.requirements);
-    return NextResponse.json({ ok: diagnostic.ok, summary: diagnostic.ok ? 'Isolated browser smoke test passed; inspect the acceptance report for checks that remain unverified.' : 'Repair loop ended with failures; inspect diagnostics before applying.', diagnostic, repairs, acceptance,
+    const verificationProof = diagnostic.ok ? issueVerificationProof(body.projectId, changed) : null;
+    return NextResponse.json({ ok: diagnostic.ok, verificationProof, summary: diagnostic.ok ? 'Isolated browser smoke test passed; inspect the acceptance report for checks that remain unverified.' : 'Repair loop ended with failures; inspect diagnostics before applying.', diagnostic, repairs, acceptance,
       build: { summary: 'Draft checked by the sandbox smoke test; not applied to the real project.', plan: repairs.map(x => 'Repair round ' + x.round + ': ' + x.summary), requirements: Array.isArray(body.requirements) ? body.requirements.filter((item): item is string => typeof item === 'string').slice(0, 20) : [], files: changed }, appliedToProject: false }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'AI verify/repair failed' }, { status: 400 });
