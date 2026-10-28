@@ -1,0 +1,61 @@
+name: Docker runner integration
+on:
+  workflow_dispatch:
+    inputs:
+      runner_image:
+        description: "Trusted Microsoft Playwright image pinned by SHA-256 digest (tag@sha256:...)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alex-studio-docker-integration-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  docker-integration:
+    name: Real Docker runner integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Validate pinned runner image
+        env:
+          RUNNER_IMAGE: ${{ inputs.runner_image }}
+        run: |
+          if ! printf '%s' "$RUNNER_IMAGE" | grep -Eq '^mcr\.microsoft\.com/playwright:[^@[:space:]]+@sha256:[a-f0-9]{64}$'; then
+            echo "::error::runner_image must be a Microsoft Playwright image pinned by a full SHA-256 digest."
+            exit 1
+          fi
+          printf 'Using pinned runner image: %s\n' "$RUNNER_IMAGE"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+
+      - name: Install dependencies and warm npm cache
+        run: npm ci
+        timeout-minutes: 8
+
+      - name: Verify Docker daemon
+        run: docker info
+
+      - name: Run real Docker integration tests
+        env:
+          RUN_DOCKER_INTEGRATION: "1"
+          AI_RUNNER_DOCKER_IMAGE: ${{ inputs.runner_image }}
+          AI_RUNNER_NPM_CACHE: ${{ runner.temp }}/npm-cache
+        run: |
+          mkdir -p "$AI_RUNNER_NPM_CACHE"
+          # Copy the trusted cache created by npm ci; integration fixtures have no external dependencies.
+          npm_cache="$(npm config get cache)"
+          if [ -d "$npm_cache" ]; then cp -a "$npm_cache/." "$AI_RUNNER_NPM_CACHE/"; fi
+          npx jest tests/ai-command-runner.docker.test.ts --runInBand
+        timeout-minutes: 8
