@@ -49,6 +49,7 @@ describe('AI project build workflow', () => {
       output_text: JSON.stringify({
         summary: 'Improve the home page',
         plan: ['Update the page heading'],
+        requirements: ['The page title must be Draft.'],
         files: [{ path: 'index.html', content: '<!doctype html><title>Draft</title>' }],
       }),
       usage: { input_tokens: 12, output_tokens: 24 },

@@ -21,10 +21,12 @@ function hash(content: string) {
 }
 function parseBuild(output: string, projectId: string, originals: Map<string, string>) {
   const text = output.trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/, '');
-  const value = JSON.parse(text) as { summary?: unknown; plan?: unknown; files?: unknown };
+  const value = JSON.parse(text) as { summary?: unknown; plan?: unknown; requirements?: unknown; files?: unknown };
   if (typeof value.summary !== 'string' || !value.summary.trim() ||
       !Array.isArray(value.plan) || value.plan.length < 1 || value.plan.length > 12 ||
       value.plan.some((step) => typeof step !== 'string' || !step.trim() || step.length > 500) ||
+      !Array.isArray(value.requirements) || value.requirements.length < 1 || value.requirements.length > 20 ||
+      value.requirements.some((item) => typeof item !== 'string' || !item.trim() || item.length > 500) ||
       !Array.isArray(value.files) || value.files.length < 1 || value.files.length > MAX_FILES) {
     throw new Error('AI returned an invalid build plan');
   }
@@ -47,7 +49,7 @@ function parseBuild(output: string, projectId: string, originals: Map<string, st
     const previous = originals.get(normalized);
     return { path: normalized, content: file.content, baseHash: previous === undefined ? null : hash(previous) };
   });
-  return { summary: value.summary.slice(0, 2000), plan: value.plan as string[], files };
+  return { summary: value.summary.slice(0, 2000), plan: value.plan as string[], requirements: value.requirements as string[], files };
 }
 
 export async function POST(request: Request) {
@@ -95,8 +97,8 @@ export async function POST(request: Request) {
   const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
   const system = [
     'You are the implementation agent inside Alex Studio, a local-first project builder.',
-    'Return only valid JSON with exactly this shape: {"summary":"...","plan":["..."],"files":[{"path":"relative/path","content":"complete UTF-8 file content"}]}.',
-    'Create a small, coherent working implementation that satisfies the user request. Return complete file contents, not patches or markdown fences.',
+    'Return only valid JSON with exactly this shape: {"summary":"...","plan":["..."],"requirements":["observable acceptance requirement 1","..."],"files":[{"path":"relative/path","content":"complete UTF-8 file content"}]}.',
+    'Create a small, coherent implementation that satisfies the user request. First convert the user specification into 1–20 distinct, observable acceptance requirements, preserving all explicit constraints. Return complete file contents, not patches or markdown fences. Requirements are a checklist, not proof of completion.',
     'Use existing project files as context and preserve existing behavior unless the request requires changing it. Do not output secrets.',
     'Only use canonical relative paths. Never use absolute paths, dot-prefixed path segments, traversal, .env files, .git, .alex, or node_modules.',
     'Limit the proposal to 10 files and keep each file below 256 KiB. Do not claim tests were run; this endpoint only prepares a reviewable draft.',
@@ -105,7 +107,7 @@ export async function POST(request: Request) {
   const user = JSON.stringify({
     request: input.prompt,
     currentProjectFiles: contextFiles,
-    responseRequirements: { planSteps: '1–12', files: '1–10', fullFileContents: true },
+    responseRequirements: { planSteps: '1–12', requirements: '1–20 observable acceptance requirements', files: '1–10', fullFileContents: true },
   });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
