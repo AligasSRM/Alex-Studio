@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { inspectGeneratedProject, runProjectCommands } from '../lib/ai-command-runner';
+import { inspectGeneratedProject, isPinnedRunnerImage, runProjectCommands } from '../lib/ai-command-runner';
 
 const roots: string[] = [];
 function workspace() {
@@ -17,6 +17,13 @@ afterEach(() => {
 });
 
 describe('isolated npm runner preflight', () => {
+  it('requires the trusted Playwright image to be pinned by a SHA-256 digest', () => {
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64))).toBe(true);
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble')).toBe(false);
+    expect(isPinnedRunnerImage('docker.io/example/runner:latest@sha256:' + 'a'.repeat(64))).toBe(false);
+    expect(isPinnedRunnerImage(undefined)).toBe(false);
+  });
+
   it('treats a static project without package.json as browser-only', async () => {
     const root = workspace();
     const plan = inspectGeneratedProject(root);
