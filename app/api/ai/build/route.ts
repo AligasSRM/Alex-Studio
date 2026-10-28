@@ -129,7 +129,7 @@ export async function POST(request: Request) {
       const quotaExceeded = errorCode === 'insufficient_quota' || errorCode === 'billing_hard_limit_reached';
       const retryAfter = response.headers.get('retry-after');
       const headers: Record<string, string> = {};
-      if (response.status === 429 && retryAfter && /^\\d{1,5}$/.test(retryAfter)) {
+      if (response.status === 429 && retryAfter && /^[0-9]{1,5}$/.test(retryAfter)) {
         headers['Retry-After'] = retryAfter;
       }
       return NextResponse.json({
