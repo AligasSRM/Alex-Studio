@@ -184,7 +184,7 @@ function resolveLocalReference(
     ),
   ]);
 
-  return [...candidates].some((candidate) => files.has(candidate))
+  return Array.from(candidates).some((candidate) => files.has(candidate))
     ? { exists: true }
     : { exists: false, reason: 'target file not found' };
 }
@@ -292,7 +292,8 @@ export function analyzeGeneratedProject(
   const missingReferences: string[] = [];
   const undeclaredImports: string[] = [];
 
-  for (const [filePath, content] of files) {
+  // Array.from avoids ES5 downlevelIteration pitfalls with Map iterators.
+  for (const [filePath, content] of Array.from(files.entries())) {
     for (const reference of collectReferences({ path: filePath, content })) {
       const specifier = reference.value.trim();
 
