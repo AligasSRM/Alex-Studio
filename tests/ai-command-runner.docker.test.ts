@@ -105,7 +105,9 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
       `node -e "require('node:dns').promises.lookup('example.com').then(() => process.exit(9), () => process.exit(0))"`,
     );
     const result = await runProjectCommands(root);
-    expect(result.status).toBe('PASS');
+    if (result.status !== 'PASS') {
+      throw new Error('Docker runner did not pass: ' + JSON.stringify({ status: result.status, summary: result.summary, output: result.output, commands: result.commands }, null, 2));
+    }
     expect(result.commands.map(command => command.name)).toEqual(['build', 'test']);
     expect(result.commands.every(command => command.status === 'PASS')).toBe(true);
     await expectNoNewRunnerContainers(before);
@@ -115,6 +117,9 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
     const before = new Set(runnerContainers());
     const root = createProject('node -e "setTimeout(() => process.exit(0), 40000)"');
     const result = await runProjectCommands(root);
+    if (result.status === 'UNAVAILABLE') {
+      throw new Error('Docker runner was unavailable before timeout test could run: ' + JSON.stringify({ summary: result.summary, output: result.output, commands: result.commands }, null, 2));
+    }
     expect(result.status).toBe('FAIL');
     expect(result.commands.find(command => command.name === 'test')?.terminationReason).toContain('timed out');
     await expectNoNewRunnerContainers(before);
