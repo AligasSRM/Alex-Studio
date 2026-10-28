@@ -37,7 +37,7 @@ describe('isolated npm runner preflight', () => {
     expect(result.output).toContain('package-lock.json is required');
   });
 
-  it('requires build and test scripts and records missing scripts as NOT RUN', () => {
+  it('requires build and test scripts and records missing scripts as NOT RUN', async () => {
     const root = workspace();
     write(root, 'package.json', JSON.stringify({ name: 'demo', version: '1.0.0', scripts: { lint: 'eslint .' } }));
     write(root, 'package-lock.json', JSON.stringify({
@@ -47,6 +47,10 @@ describe('isolated npm runner preflight', () => {
     const plan = inspectGeneratedProject(root);
     expect(plan.preflightError).toBeNull();
     expect(plan.scripts.map(script => script.name)).toEqual(['build', 'test', 'lint']);
+    const result = await runProjectCommands(root);
+    expect(result.status).toBe('FAIL');
+    expect(result.commands.filter(command => command.required).every(command => command.status === 'NOT RUN')).toBe(true);
+    expect(result.output).toContain('Required scripts missing');
   });
 
   it('rejects unsupported package managers and malformed lockfile versions', () => {
