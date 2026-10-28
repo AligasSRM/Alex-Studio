@@ -186,7 +186,7 @@ try {
   if (installFailure) {
     for (const item of commands) evidence.push({ name: item.name, command: 'npm run ' + item.name, cwd: work, required: item.required, status: installFailure.status, startedAt: installFailure.startedAt, finishedAt: installFailure.finishedAt, exitCode: installFailure.exitCode, terminationReason: installFailure.reason, output: installFailure.output, truncated: false, runtime, packageManager: 'npm ' + String(npmVersion.stdout || '').trim(), lockfileSha256 });
   }
-  process.stdout.write(JSON.stringify({ available: true, status: overall, ok: overall === 'PASS', startedAt: started, finishedAt: now(), runtime, packageManager: 'npm ' + String(npmVersion.stdout || '').trim(), lockfileSha256, commands: evidence }));
+  process.stdout.write(JSON.stringify({ available: overall !== 'UNAVAILABLE', status: overall, ok: overall === 'PASS', startedAt: started, finishedAt: now(), runtime, packageManager: 'npm ' + String(npmVersion.stdout || '').trim(), lockfileSha256, commands: evidence }));
 } catch (error) {
   process.stdout.write(JSON.stringify({ available: false, status: 'UNAVAILABLE', ok: false, error: String(error && error.message || error), commands: evidence }));
   process.exitCode = 0;
