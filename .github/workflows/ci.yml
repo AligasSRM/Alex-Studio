@@ -38,6 +38,37 @@ jobs:
         run: npm install
         timeout-minutes: 8
 
+      # Generate a current dependency vulnerability report from the resolved install.
+      # Keep the report non-blocking for this diagnostic run; review findings before fixing.
+      - name: Audit dependency vulnerabilities
+        run: |
+          npm audit --json > /tmp/npm-audit-report.json || audit_status=$?
+          AUDIT_STATUS="${audit_status:-0}" node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('/tmp/npm-audit-report.json', 'utf8'));
+          const counts = report.metadata?.vulnerabilities ?? {};
+          const lines = [
+            '## npm audit report',
+            '',
+            '| Severity | Count |',
+            '|---|---:|',
+            ...['critical', 'high', 'moderate', 'low', 'info'].map(s => `| ${s} | ${counts[s] ?? 0} |`),
+            '',
+            '### Affected packages',
+            '',
+            '| Package | Severity | Direct | Fix available | Details |',
+            '|---|---|---|---|---|',
+          ];
+          for (const [name, item] of Object.entries(report.vulnerabilities ?? {})) {
+            const details = (item.via ?? []).map(v => typeof v === 'string' ? v : `${v.title ?? 'Advisory'} (${v.url ?? 'no URL'})`).join('; ').replaceAll('|', '\\|');
+            lines.push(`| ${name} | ${item.severity} | ${item.isDirect ? 'yes' : 'no'} | ${item.fixAvailable ? JSON.stringify(item.fixAvailable) : 'no'} | ${details} |`);
+          }
+          if (!Object.keys(report.vulnerabilities ?? {}).length) lines.push('| — | No vulnerabilities reported | — | — | — |');
+          lines.push('', `Audit exit status: ${process.env.AUDIT_STATUS}`);
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
+          console.log(lines.join('\n'));
+          NODE
+
       - name: Install Playwright Chromium Headless Shell
         run: npx playwright install --with-deps --only-shell chromium
         timeout-minutes: 8
