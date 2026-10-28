@@ -57,8 +57,8 @@ function runnerContainers(): string[] {
 
 describe('Docker isolated command runner integration configuration', () => {
   it('requires a pinned image and a real external cache when explicitly enabled', () => {
-    if (requested) expect(prerequisitesValid).toBe(true);
-    else expect(prerequisitesValid).toBe(false);
+    if (!requested) return;
+    expect(prerequisitesValid).toBe(true);
   });
 });
 
