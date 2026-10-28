@@ -20,15 +20,15 @@ const sourceGuard = "if (propertyIsForbidden(key) || propertyIsUnsafe(target, ke
 
 if (source.includes('function propertyIsForbidden(key)')) {
   if (source.includes(targetGuard) && source.includes(sourceGuard)) {
-    process.stdout.write('deepmerge security patch already applied.\\n');
+    process.stdout.write('deepmerge security patch already applied.\n');
     process.exit(0);
   }
   throw new Error('deepmerge has a partial or unexpected security patch; refusing to continue.');
 }
 
 const helperAnchor = 'function mergeObject(target, source, options) {';
-const targetPattern = /getKeys\\(target\\)\\.forEach\\(function\\(key\\) \\{\\n\\t\\t\\tdestination\\[key\\] =/g;
-const sourcePattern = /getKeys\\(source\\)\\.forEach\\(function\\(key\\) \\{\\n\\t\\tif \\(propertyIsUnsafe\\(target, key\\)\\) \\{/g;
+const targetPattern = /getKeys\(target\)\.forEach\(function\(key\) \{\n\t\t\tdestination\[key\] =/g;
+const sourcePattern = /getKeys\(source\)\.forEach\(function\(key\) \{\n\t\tif \(propertyIsUnsafe\(target, key\)\) \{/g;
 
 if (
   source.split(helperAnchor).length !== 2 ||
@@ -40,16 +40,16 @@ if (
 
 let patched = source.replace(
   helperAnchor,
-  "function propertyIsForbidden(key) {\\n\\treturn key === '__proto__'\\n}\\n\\n" + helperAnchor
+  "function propertyIsForbidden(key) {\n\treturn key === '__proto__'\n}\n\n" + helperAnchor
 );
 patched = patched.replace(
   targetPattern,
-  'getKeys(target).forEach(function(key) {\\n\\t\\t\\tif (propertyIsForbidden(key)) {\\n\\t\\t\\t\\treturn\\n\\t\\t\\t}\\n\\t\\t\\tdestination[key] ='
+  'getKeys(target).forEach(function(key) {\n\t\t\tif (propertyIsForbidden(key)) {\n\t\t\t\treturn\n\t\t\t}\n\t\t\tdestination[key] ='
 );
 patched = patched.replace(
   sourcePattern,
-  'getKeys(source).forEach(function(key) {\\n\\t\\tif (propertyIsForbidden(key) || propertyIsUnsafe(target, key)) {'
+  'getKeys(source).forEach(function(key) {\n\t\tif (propertyIsForbidden(key) || propertyIsUnsafe(target, key)) {'
 );
 
 fs.writeFileSync(entryPath, patched);
-process.stdout.write('Applied reviewed __proto__ guard to deepmerge 4.3.1.\\n');
+process.stdout.write('Applied reviewed __proto__ guard to deepmerge 4.3.1.\n');
