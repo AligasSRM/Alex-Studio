@@ -13,6 +13,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
 import { issueVerificationProof } from '@/lib/ai-verification-proof';
+import { runProjectCommands, type CommandRun } from '@/lib/ai-command-runner';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -21,7 +22,7 @@ const SENSITIVE_PATH = /(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed2551
 const IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble';
 const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 type FileDraft = { path: string; content: string; baseHash: string | null };
-type Result = { ok: boolean; available: boolean; summary: string; output: string };
+type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun };
 
 const runner = [
   "const { chromium } = require('playwright');",
@@ -38,6 +39,24 @@ const runner = [
   " if (errors.length) process.exitCode = 1; } finally { await browser.close(); }",
   "})().catch(e => { process.stderr.write(String(e.stack || e)); process.exitCode = 1; });",
 ].join('\n');
+
+function combineVerification(browser: Result, commands: CommandRun): Result {
+  const ok = browser.ok && commands.ok;
+  const available = browser.available && commands.available;
+  return {
+    ok, available,
+    summary: !available ? 'Verification unavailable; inspect browser and command-runner diagnostics.'
+      : ok ? 'Isolated browser smoke test and applicable project commands passed.'
+      : 'Browser smoke test or one or more project commands failed.',
+    output: [
+      'BROWSER SMOKE TEST: ' + browser.summary,
+      browser.output,
+      'PROJECT COMMAND RUNNER: ' + commands.status + ' — ' + commands.summary,
+      commands.output,
+    ].join('\n').slice(-20000),
+    commandChecks: commands,
+  };
+}
 
 function safePath(projectId: string, value: unknown) {
   if (typeof value !== 'string') throw new Error('Invalid AI file path');
@@ -145,8 +164,10 @@ export async function POST(request: Request) {
       }
     };
     writeFiles();
-    let diagnostic = await runSandbox(root);
-    if (!diagnostic.available) return NextResponse.json({ error: 'Isolated execution is unavailable; no repair was attempted and project files were not changed.', diagnostic }, { status: 503 });
+    let browserDiagnostic = await runSandbox(root);
+    let commandChecks = await runProjectCommands(root);
+    let diagnostic = combineVerification(browserDiagnostic, commandChecks);
+    if (!diagnostic.available) return NextResponse.json({ error: 'Isolated verification is unavailable; no repair was attempted and project files were not changed.', diagnostic, commandChecks }, { status: 503 });
     const repairs: { round: number; summary: string; diagnostic: Result }[] = [];
     const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
     for (let round = 1; !diagnostic.ok && round <= MAX_ROUNDS; round++) {
@@ -161,7 +182,9 @@ export async function POST(request: Request) {
       catch (e) { repairs.push({ round, summary: e instanceof Error ? e.message : 'AI repair failed', diagnostic }); break; }
       for (const file of next.files) working.set(file.path, file.content);
       fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755); writeFiles();
-      diagnostic = await runSandbox(root);
+      browserDiagnostic = await runSandbox(root);
+      commandChecks = await runProjectCommands(root);
+      diagnostic = combineVerification(browserDiagnostic, commandChecks);
       repairs.push({ round, summary: next.summary, diagnostic });
       if (!diagnostic.available) break;
     }
@@ -172,7 +195,7 @@ export async function POST(request: Request) {
     if (!changed.length || changed.length > MAX_FILES) return NextResponse.json({ error: 'Final draft must contain 1–10 changed files', diagnostic, repairs }, { status: 422 });
     const acceptance = analyzeGeneratedProject(Array.from(working.entries()).map(([filePath, content]) => ({ path: filePath, content })), body.requirements);
     const verificationProof = diagnostic.ok ? issueVerificationProof(body.projectId, changed) : null;
-    return NextResponse.json({ ok: diagnostic.ok, verificationProof, summary: diagnostic.ok ? 'Isolated browser smoke test passed; inspect the acceptance report for checks that remain unverified.' : 'Repair loop ended with failures; inspect diagnostics before applying.', diagnostic, repairs, acceptance,
+    return NextResponse.json({ ok: diagnostic.ok, verificationProof, commandChecks, summary: diagnostic.ok ? 'Isolated browser smoke test passed; inspect the acceptance report for checks that remain unverified.' : 'Repair loop ended with failures; inspect diagnostics before applying.', diagnostic, repairs, acceptance,
       build: { summary: 'Draft checked by the sandbox smoke test; not applied to the real project.', plan: repairs.map(x => 'Repair round ' + x.round + ': ' + x.summary), requirements: Array.isArray(body.requirements) ? body.requirements.filter((item): item is string => typeof item === 'string').slice(0, 20) : [], files: changed }, appliedToProject: false }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'AI verify/repair failed' }, { status: 400 });
