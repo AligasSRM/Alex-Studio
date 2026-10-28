@@ -15,16 +15,16 @@ import { isPinnedRunnerImage, runProjectCommands } from '../lib/ai-command-runne
  *
  * These tests deliberately do not pull images or populate caches themselves.
  */
+const requested = process.env.RUN_DOCKER_INTEGRATION === '1';
 const image = process.env.AI_RUNNER_DOCKER_IMAGE;
 const cachePath = process.env.AI_RUNNER_NPM_CACHE;
-const enabled = process.env.RUN_DOCKER_INTEGRATION === '1'
-  && isPinnedRunnerImage(image)
+const prerequisitesValid = isPinnedRunnerImage(image)
   && !!cachePath
   && path.isAbsolute(cachePath)
   && fs.existsSync(cachePath)
   && fs.statSync(cachePath).isDirectory();
 
-const describeDocker = enabled ? describe : describe.skip;
+const describeDocker = requested ? describe : describe.skip;
 const roots: string[] = [];
 const originalImage = process.env.AI_RUNNER_DOCKER_IMAGE;
 const originalCache = process.env.AI_RUNNER_NPM_CACHE;
@@ -50,30 +50,23 @@ function createProject(testScript: string) {
 }
 
 function runnerContainers(): string[] {
-  try {
-    return execFileSync('docker', [
-      'ps', '-a', '--filter', 'name=alex-studio-runner-', '--format', '{{.Names}}',
-    ], { encoding: 'utf8', timeout: 5000 }).trim().split('\n').filter(Boolean);
-  } catch {
-    return [];
-  }
+  return execFileSync('docker', [
+    'ps', '-a', '--filter', 'name=alex-studio-runner-', '--format', '{{.Names}}',
+  ], { encoding: 'utf8', timeout: 5000 }).trim().split('\n').filter(Boolean);
 }
 
 describe('Docker isolated command runner integration configuration', () => {
-  it('skips real Docker integration unless explicitly configured', () => {
-    if (!enabled) {
-      // The ordinary CI suite remains portable; this test documents why the
-      // real integration suite is skipped instead of silently using a tag.
-      expect(process.env.RUN_DOCKER_INTEGRATION === '1' && isPinnedRunnerImage(image)).toBe(false);
-    } else {
-      expect(isPinnedRunnerImage(image)).toBe(true);
-    }
+  it('requires a pinned image and a real external cache when explicitly enabled', () => {
+    if (requested) expect(prerequisitesValid).toBe(true);
+    else expect(prerequisitesValid).toBe(false);
   });
 });
 
 describeDocker('isolated npm runner with a real Docker daemon', () => {
   beforeAll(() => {
-    if (!isPinnedRunnerImage(originalImage) || !originalCache) throw new Error('Docker integration prerequisites are missing');
+    if (!prerequisitesValid || !isPinnedRunnerImage(originalImage) || !originalCache) {
+      throw new Error('Docker integration prerequisites are missing: configure a pinned Playwright image and an absolute pre-populated npm cache directory.');
+    }
     process.env.AI_RUNNER_DOCKER_IMAGE = originalImage;
     process.env.AI_RUNNER_NPM_CACHE = originalCache;
     execFileSync('docker', ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8', timeout: 10000 });
