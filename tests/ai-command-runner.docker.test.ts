@@ -55,6 +55,25 @@ function runnerContainers(): string[] {
   ], { encoding: 'utf8', timeout: 5000 }).trim().split('\n').filter(Boolean);
 }
 
+/**
+ * Docker's --rm and a force-remove request can finish just after the Docker
+ * client exits. Poll briefly for daemon-side cleanup instead of failing on a
+ * transient observation, while still failing if any new runner container
+ * remains after the bounded wait.
+ */
+async function expectNoNewRunnerContainers(before: Set<string>, timeoutMs = 15000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let remaining: string[] = [];
+
+  do {
+    remaining = runnerContainers().filter(name => !before.has(name));
+    if (remaining.length === 0) return;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  } while (Date.now() < deadline);
+
+  expect(remaining).toEqual([]);
+}
+
 describe('Docker isolated command runner integration configuration', () => {
   it('requires a pinned image and a real external cache when explicitly enabled', () => {
     if (!requested) return;
@@ -83,13 +102,13 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
   it('runs required scripts in a network-isolated container and removes it afterwards', async () => {
     const before = new Set(runnerContainers());
     const root = createProject(
-      'node -e "require(\'node:dns\').promises.lookup(\'example.com\').then(() => process.exit(9), () => process.exit(0))"',
+      'node -e "require(\\'node:dns\\').promises.lookup(\\'example.com\\').then(() => process.exit(9), () => process.exit(0))"',
     );
     const result = await runProjectCommands(root);
     expect(result.status).toBe('PASS');
     expect(result.commands.map(command => command.name)).toEqual(['build', 'test']);
     expect(result.commands.every(command => command.status === 'PASS')).toBe(true);
-    expect(runnerContainers().filter(name => !before.has(name))).toEqual([]);
+    await expectNoNewRunnerContainers(before);
   }, 120000);
 
   it('reports a command timeout and removes the container after termination', async () => {
@@ -98,6 +117,6 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
     const result = await runProjectCommands(root);
     expect(result.status).toBe('FAIL');
     expect(result.commands.find(command => command.name === 'test')?.terminationReason).toContain('timed out');
-    expect(runnerContainers().filter(name => !before.has(name))).toEqual([]);
+    await expectNoNewRunnerContainers(before);
   }, 120000);
 });
