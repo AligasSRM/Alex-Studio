@@ -141,7 +141,11 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
     return { ok: false, available: false, status: 'UNAVAILABLE', summary: 'Trusted offline npm cache unavailable', output: reason, commands };
   }
 
-  const image = 'mcr.microsoft.com/playwright:v1.56.1-noble';
+  const image = process.env.AI_RUNNER_DOCKER_IMAGE;
+  if (!image || !/^mcr\\.microsoft\\.com\\/playwright:[^@\\s]+@sha256:[a-f0-9]{64}$/.test(image)) {
+    const message = 'AI_RUNNER_DOCKER_IMAGE must be a trusted Playwright image pinned by sha256 digest.';
+    return { ok: false, available: false, status: 'UNAVAILABLE', summary: 'Pinned runner image is not configured', output: message, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', message, plan.lockfileSha256)) };
+  }
   const containerName = 'alex-studio-runner-' + randomUUID().slice(0, 12);
   const script = String.raw`const fs = require('node:fs');
 const cp = require('node:child_process');
@@ -207,7 +211,7 @@ try {
     child.stdout.on('data', chunk => { stdout = collect(stdout, chunk); });
     child.stderr.on('data', chunk => { stderr = collect(stderr, chunk); });
     const timer = setTimeout(() => {
-      spawn('docker', ['kill', containerName], { stdio: 'ignore', env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
+      spawn('docker', ['rm', '--force', containerName], { stdio: 'ignore', env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
       child.kill('SIGKILL');
       const commands = plan.scripts.map(item => ({ ...baseEvidence(item.name, item.required, 'FAIL', 'Runner wall-clock timeout; container termination requested.', plan.lockfileSha256), terminationReason: 'runner wall-clock timeout' }));
       finish({ ok: false, available: true, status: 'FAIL', summary: 'Isolated npm runner timed out', output: (stdout + stderr).slice(-12000), commands });
