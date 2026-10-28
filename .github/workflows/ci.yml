@@ -64,7 +64,7 @@ jobs:
           }
           if (!Object.keys(report.vulnerabilities ?? {}).length) lines.push('| — | No vulnerabilities reported | — | — | — |');
           lines.push('', `Audit exit status: ${process.env.AUDIT_STATUS}`);
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
           console.log(lines.join('\n'));
           NODE
 
