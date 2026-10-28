@@ -1,0 +1,52 @@
+name: Live OpenAI provider proof
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/openai-provider-proof.yml'
+      - 'app/api/ai/build/route.ts'
+      - 'tests/ai-build.live.integration.test.ts'
+      - 'lib/ai-usage.ts'
+      - 'lib/project-store.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: alex-studio-live-openai-proof-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  live-provider:
+    name: Real OpenAI request through AI build route
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+
+      - name: Install locked dependencies
+        run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
+        timeout-minutes: 8
+
+      - name: Report missing provider secret without exposing credentials
+        if: ${{ env.OPENAI_API_KEY == '' }}
+        run: echo 'NOT RUN — configure the repository Actions secret OPENAI_API_KEY to enable the real-provider proof.'
+
+      - name: Exercise the real provider through /api/ai/build
+        if: ${{ env.OPENAI_API_KEY != '' }}
+        env:
+          RUN_REAL_OPENAI_INTEGRATION: '1'
+        run: npm test -- tests/ai-build.live.integration.test.ts
+        timeout-minutes: 3
