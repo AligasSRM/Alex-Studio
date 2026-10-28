@@ -87,10 +87,17 @@ function firstCapture(match: RegExpMatchArray): string {
 function collectReferences(file: ProjectFile): Reference[] {
   const references: Reference[] = [];
   const add = (pattern: RegExp, kind: string) => {
-    for (const match of file.content.matchAll(pattern)) {
+    // Keep this ES5-target-safe: for...of over matchAll() is downlevel-transpiled
+    // incorrectly when downlevelIteration is disabled, silently skipping matches.
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(file.content)) !== null) {
       const value = firstCapture(match);
       if (value) references.push({ value, kind });
+      // Defensive guard for a future accidentally empty-matching expression.
+      if (match[0].length === 0) pattern.lastIndex += 1;
     }
+    pattern.lastIndex = 0;
   };
 
   const extension = path.posix.extname(file.path).toLowerCase();
