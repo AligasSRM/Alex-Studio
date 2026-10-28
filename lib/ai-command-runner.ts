@@ -235,7 +235,7 @@ try {
       }
       const commands = parsed.commands || [];
       const status = parsed.status || 'UNAVAILABLE';
-      finish({ ok: code === 0 && parsed.ok === true, available: parsed.available === true, status, summary: parsed.ok ? 'Isolated npm command checks passed' : parsed.error || (status === 'UNAVAILABLE' ? 'Isolated npm command checks unavailable' : 'One or more npm commands failed'), output: (stderr + commands.map(item => item.name + ': ' + item.status + '\n' + item.output).join('\n')).slice(-12000), commands });
+      finish({ ok: code === 0 && parsed.ok === true, available: parsed.available === true, status, summary: parsed.ok ? 'Isolated npm command checks passed' : parsed.error || (status === 'UNAVAILABLE' ? 'Isolated npm command checks unavailable' : 'One or more npm commands failed'), output: ([parsed.error, stderr, commands.map(item => item.name + ': ' + item.status + '\n' + item.output).join('\n')].filter(Boolean).join('\n')).slice(-12000), commands });
     });
   });
 }
