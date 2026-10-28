@@ -39,7 +39,6 @@ jobs:
         timeout-minutes: 8
 
       # Generate a current dependency vulnerability report from the resolved install.
-      # Keep the report non-blocking for this diagnostic run; review findings before fixing.
       - name: Audit dependency vulnerabilities
         run: |
           npm audit --json > /tmp/npm-audit-report.json || audit_status=$?
@@ -65,9 +64,18 @@ jobs:
           }
           if (!Object.keys(report.vulnerabilities ?? {}).length) lines.push('| — | No vulnerabilities reported | — | — | — |');
           lines.push('', `Audit exit status: ${process.env.AUDIT_STATUS}`);
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
-          console.log(lines.join('\n'));
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\\n') + '\\n');
+          console.log(lines.join('\\n'));
           NODE
+
+      - name: Upload dependency audit JSON
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18b # v4.6.2
+        if: always()
+        with:
+          name: npm-audit-report
+          path: /tmp/npm-audit-report.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Install Playwright Chromium Headless Shell
         run: npx playwright install --with-deps --only-shell chromium
