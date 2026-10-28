@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
@@ -103,6 +104,40 @@ export function inspectGeneratedProject(root: string): ManifestPlan {
   };
 }
 
+/**
+ * Docker runs the project as an unprivileged UID. Temporary project roots often
+ * have mode 0700 (for example, fs.mkdtemp), so mounting the caller's directory
+ * directly makes it unreadable inside the container. Copy to a private staging
+ * directory, then grant read/traverse permissions without following symlinks.
+ */
+function stageReadableProjectCopy(root: string): { sourcePath: string; cleanupPath: string } {
+  const cleanupPath = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-runner-stage-'));
+  const sourcePath = path.join(cleanupPath, 'source');
+  try {
+    fs.cpSync(root, sourcePath, { recursive: true, errorOnExist: false });
+    const makeReadable = (currentPath: string): void => {
+      for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
+        const entryPath = path.join(currentPath, entry.name);
+        const stat = fs.lstatSync(entryPath);
+        if (stat.isSymbolicLink()) continue;
+        if (stat.isDirectory()) {
+          makeReadable(entryPath);
+          fs.chmodSync(entryPath, stat.mode & 0o777 | 0o555);
+        } else if (stat.isFile()) {
+          fs.chmodSync(entryPath, stat.mode & 0o777 | 0o444);
+        }
+      }
+    };
+    makeReadable(sourcePath);
+    fs.chmodSync(sourcePath, 0o555);
+    fs.chmodSync(cleanupPath, 0o755);
+    return { sourcePath, cleanupPath };
+  } catch (error) {
+    fs.rmSync(cleanupPath, { recursive: true, force: true });
+    throw error;
+  }
+}
+
 function baseEvidence(name: string, required: boolean, status: CommandStatus, output: string, lockfileSha256: string | null): CommandEvidence {
   return {
     name, command: 'npm run ' + name, cwd: '/tmp/workspace', required, status,
@@ -150,6 +185,13 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
     const message = 'AI_RUNNER_DOCKER_IMAGE must be a trusted Playwright image pinned by sha256 digest.';
     return { ok: false, available: false, status: 'UNAVAILABLE', summary: 'Pinned runner image is not configured', output: message, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', message, plan.lockfileSha256)) };
   }
+  let stagedSource: { sourcePath: string; cleanupPath: string };
+  try {
+    stagedSource = stageReadableProjectCopy(root);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'could not stage project source';
+    return { ok: false, available: false, status: 'UNAVAILABLE', summary: 'Could not stage project source for Docker', output: reason, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', reason, plan.lockfileSha256)) };
+  }
   const containerName = 'alex-studio-runner-' + randomUUID().slice(0, 12);
   const script = String.raw`const fs = require('node:fs');
 const cp = require('node:child_process');
@@ -170,10 +212,15 @@ try {
   fs.cpSync('/npm-cache', '/tmp/npm-cache', { recursive: true, errorOnExist: false });
   const runtime = process.version;
   const npmVersion = cp.spawnSync('npm', ['--version'], { encoding: 'utf8', env, timeout: 5000 });
+  const manifest = JSON.parse(fs.readFileSync(path.join(work, 'package.json'), 'utf8'));
+  const dependencySections = ['dependencies', 'devDependencies', 'optionalDependencies'];
+  const needsInstall = dependencySections.some(key => manifest[key] && Object.keys(manifest[key]).length > 0);
   const installStart = now();
-  const install = cp.spawnSync('npm', ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', '/tmp/npm-cache'], {
-    cwd: work, encoding: 'utf8', env, timeout: 45000, maxBuffer: 200000
-  });
+  const install = needsInstall
+    ? cp.spawnSync('npm', ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', '/tmp/npm-cache'], {
+        cwd: work, encoding: 'utf8', env, timeout: 45000, maxBuffer: 200000
+      })
+    : { error: null, status: 0, stdout: 'No dependencies declared; skipped npm ci.\\n', stderr: '' };
   const installOutput = String(install.stdout || '') + String(install.stderr || '');
   if (install.error || install.status !== 0) {
     const offlineMiss = /ENOTCACHED|cache mode is ['"]only-if-cached|offline.*(cache|package)|no matching version found/i.test(installOutput + String(install.error || ''));
@@ -202,12 +249,13 @@ try {
   const args = ['run', '--rm', '--init', '--name', containerName, '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
     '--memory', '512m', '--cpus', '1', '--pids-limit', '64', '--user', '10001:10001', '--shm-size', '64m',
     '--tmpfs', '/tmp:rw,nosuid,size=512m,uid=10001,gid=10001,mode=700',
-    '--mount', 'type=bind,src=' + root + ',dst=/source,readonly',
+    '--mount', 'type=bind,src=' + stagedSource.sourcePath + ',dst=/source,readonly',
     '--mount', 'type=bind,src=' + cacheSetting + ',dst=/npm-cache,readonly',
     '--env', 'HOME=/tmp', '--env', 'RUNNER_COMMANDS=' + JSON.stringify(plan.scripts),
     '--env', 'RUNNER_LOCKFILE_SHA256=' + plan.lockfileSha256,
     image, 'node', '-e', script];
-  return await new Promise<CommandRun>((resolve) => {
+  try {
+    return await new Promise<CommandRun>((resolve) => {
     const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
     let stdout = ''; let stderr = ''; let settled = false;
     const finish = (value: CommandRun) => { if (!settled) { settled = true; clearTimeout(timer); resolve(value); } };
@@ -229,13 +277,30 @@ try {
       let parsed: { available?: boolean; ok?: boolean; status?: CommandStatus; error?: string; commands?: CommandEvidence[] };
       try { parsed = JSON.parse(raw); } catch {
         const output = (raw + '\n' + stderr).slice(-12000);
-        const unavailable = /cannot connect to the docker daemon|unable to find image|pull access denied|error during connect|no such image/i.test(output);
+        const unavailable = /cannot connect to the docker daemon|pull access denied|error during connect|no such image|manifest unknown|unauthorized:|denied: requested access/i.test(output);
         finish({ ok: false, available: !unavailable, status: unavailable ? 'UNAVAILABLE' : 'FAIL', summary: unavailable ? 'Docker image or daemon unavailable' : 'Runner returned invalid evidence', output, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, unavailable ? 'UNAVAILABLE' : 'FAIL', output, plan.lockfileSha256)) });
         return;
       }
       const commands = parsed.commands || [];
       const status = parsed.status || 'UNAVAILABLE';
-      finish({ ok: code === 0 && parsed.ok === true, available: parsed.available === true, status, summary: parsed.ok ? 'Isolated npm command checks passed' : parsed.error || (status === 'UNAVAILABLE' ? 'Isolated npm command checks unavailable' : 'One or more npm commands failed'), output: (stderr + commands.map(item => item.name + ': ' + item.status + '\n' + item.output).join('\n')).slice(-12000), commands });
+      finish({ ok: code === 0 && parsed.ok === true, available: parsed.available === true, status, summary: parsed.ok ? 'Isolated npm command checks passed' : parsed.error || (status === 'UNAVAILABLE' ? 'Isolated npm command checks unavailable' : 'One or more npm commands failed'), output: ([parsed.error, stderr, commands.map(item => item.name + ': ' + item.status + '\n' + item.output).join('\n')].filter(Boolean).join('\n')).slice(-12000), commands });
     });
-  });
+    });
+  } finally {
+    // Read-only staged directories need write permission restored on the host
+    // before their entries can be unlinked during cleanup.
+    const restoreDirectoryPermissions = (currentPath: string): void => {
+      fs.chmodSync(currentPath, 0o755);
+      for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
+        if (entry.isDirectory() && !entry.isSymbolicLink()) {
+          restoreDirectoryPermissions(path.join(currentPath, entry.name));
+        }
+      }
+    };
+    try {
+      restoreDirectoryPermissions(stagedSource.cleanupPath);
+    } finally {
+      fs.rmSync(stagedSource.cleanupPath, { recursive: true, force: true });
+    }
+  }
 }
