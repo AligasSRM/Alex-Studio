@@ -47,19 +47,34 @@ describe('live OpenAI provider proof (explicitly gated)', () => {
 
     const id = await makeProject();
     const original = readProjectFile(id, 'index.html');
-    const response = await buildPost(localPost(
-      'http://localhost:3000/api/ai/build',
-      JSON.stringify({
-        projectId: id,
-        approved: true,
-        prompt: 'Make a minimal single-page portfolio. Return one small complete index.html file with a title and one heading. Keep it simple.',
-      }),
-    ));
+    const requestBody = JSON.stringify({
+      projectId: id,
+      approved: true,
+      prompt: 'Make a minimal single-page portfolio. Return one small complete index.html file with a title and one heading. Keep it simple.',
+    });
+    let response: Response | undefined;
 
-    if (!response.ok) {
-      const payload = await response.json() as { error?: string };
-      throw new Error(`Live AI build route returned HTTP ${response.status}: ${payload.error ?? 'unknown error'}`);
+    // Provider-side 429s are surfaced by the route as a retryable 503. Retry only
+    // that known transient response, with a bounded delay; do not hide other errors.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      response = await buildPost(localPost('http://localhost:3000/api/ai/build', requestBody));
+      if (response.ok) break;
+
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const retryableBusy = response.status === 503 && payload.error === 'AI provider is busy; try again later';
+      if (!retryableBusy || attempt === 2) {
+        throw new Error(`Live AI build route returned HTTP ${response.status}: ${payload.error ?? 'unknown error'}`);
+      }
+
+      const retryAfterHeader = response.headers.get('retry-after');
+      const retryAfterSeconds = retryAfterHeader && /^[0-9]{1,5}$/.test(retryAfterHeader)
+        ? Number(retryAfterHeader)
+        : 2 ** (attempt + 1);
+      const delayMs = Math.min(20_000, Math.max(1_000, retryAfterSeconds * 1_000));
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
+
+    if (!response?.ok) throw new Error('Live AI build route did not return a successful response after retries');
 
     const data = await response.json() as {
       build?: { summary?: string; plan?: string[]; requirements?: string[]; files?: { path: string; content: string; baseHash: string | null }[] };
