@@ -83,7 +83,7 @@ function parseDraft(projectId: string, input: unknown, current: Map<string, stri
     return { path: filePath, content: item.content, baseHash: expected };
   });
 }
-function runSandbox(root: string): Promise<Result> {
+export function runSandbox(root: string): Promise<Result> {
   return new Promise((resolve) => {
     if (!isPinnedRunnerImage(IMAGE)) {
       resolve({ ok: false, available: false, summary: 'Approved Docker runner image is not configured', output: 'Browser verification refused an image outside the explicit allowlist.' });
