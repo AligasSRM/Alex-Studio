@@ -134,7 +134,7 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
     await expectNoNewRunnerContainers(before);
   }, 120000);
 
-  it('does not pass host-only environment secrets into generated commands', async () =>
+  it('does not pass host-only environment secrets into generated commands', async () => {
     const key = 'ALEX_STUDIO_HOST_ONLY_SENTINEL';
     const previous = process.env[key];
     process.env[key] = 'must-not-enter-container';
