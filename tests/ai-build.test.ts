@@ -286,7 +286,7 @@ describe('AI project build workflow', () => {
     expect(readProjectFile(id, 'index.html')).toBe(original);
     expect(fs.existsSync(path.join(projectRoot(id), 'app.js'))).toBe(false);
     const events = fs.readFileSync(path.join(projectRoot(id), '.alex', 'ai-apply-audit.jsonl'), 'utf8')
-      .trim().split('\n').map((line) => JSON.parse(line) as { outcome: string; rollbackStatus?: string; batchId: string });
+      .trim().split(String.fromCharCode(10)).map((line) => JSON.parse(line) as { outcome: string; rollbackStatus?: string; batchId: string });
     expect(events.map((event) => event.outcome)).toEqual(['started', 'failed']);
     expect(events[1].rollbackStatus).toBe('succeeded');
     expect(events.every((event) => event.batchId === data.batchId)).toBe(true);
