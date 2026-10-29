@@ -1,12 +1,13 @@
 export const runtime = 'nodejs';
 
 import fs from 'node:fs';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { assertLocalMutation, resolveProjectPath, assertTextContent } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
 import { readProjectFile, writeProjectFile } from '@/lib/files';
 import { verifyVerificationProof } from '@/lib/ai-verification-proof';
+import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
 import { readJsonBody } from '@/lib/request-body';
 
 const MAX_APPLY_BODY_BYTES = 3 * 1024 * 1024;
@@ -73,21 +74,56 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not validate current project files' }, { status: 409 });
   }
 
+  const batchId = randomUUID();
+  const paths = changes.map((change) => change.path);
+  const beforeHashes = snapshots.map((snapshot) => snapshot.content === null ? null : hash(snapshot.content));
+  const afterHashes = changes.map((change) => hash(change.content));
+  const auditEvent = {
+    batchId,
+    timestamp: new Date().toISOString(),
+    paths,
+    beforeHashes,
+    afterHashes,
+  };
+  try {
+    recordAIApplyAudit(body.projectId, { ...auditEvent, outcome: 'started' });
+  } catch {
+    return NextResponse.json({ error: 'Could not record the apply audit; no files were changed' }, { status: 500 });
+  }
+
   const applied: string[] = [];
   try {
     for (const change of changes) {
       writeProjectFile(body.projectId, change.path, change.content);
       applied.push(change.path);
     }
-    return NextResponse.json({ ok: true, applied, count: applied.length }, { headers: { 'Cache-Control': 'no-store' } });
+    recordAIApplyAudit(body.projectId, { ...auditEvent, timestamp: new Date().toISOString(), outcome: 'applied', rollbackStatus: 'not-needed' });
+    return NextResponse.json({ ok: true, batchId, applied, count: applied.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
+    let rollbackFailed = false;
     for (const snapshot of snapshots.filter((item) => applied.includes(item.path)).reverse()) {
       try {
         const target = resolveProjectPath(body.projectId, snapshot.path);
         if (snapshot.content === null) fs.rmSync(target, { force: true });
         else writeProjectFile(body.projectId, snapshot.path, snapshot.content);
-      } catch { /* Preserve the original failure; any rollback issue must be surfaced below. */ }
+      } catch {
+        rollbackFailed = true;
+      }
     }
-    return NextResponse.json({ error: error instanceof Error ? 'Batch apply failed; rollback was attempted: ' + error.message : 'Batch apply failed; rollback was attempted' }, { status: 500 });
+    try {
+      recordAIApplyAudit(body.projectId, {
+        ...auditEvent,
+        timestamp: new Date().toISOString(),
+        outcome: 'failed',
+        rollbackStatus: rollbackFailed ? 'failed' : 'succeeded',
+      });
+    } catch {
+      // The initial "started" event remains as evidence if the final audit append also fails.
+    }
+    return NextResponse.json({
+      error: error instanceof Error ? 'Batch apply failed; rollback ' + (rollbackFailed ? 'failed' : 'was completed or attempted') : 'Batch apply failed',
+      batchId,
+      rollbackStatus: rollbackFailed ? 'failed' : 'succeeded',
+    }, { status: 500 });
   }
 }
