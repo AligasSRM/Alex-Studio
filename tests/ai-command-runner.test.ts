@@ -132,4 +132,3 @@ describe('isolated npm runner preflight', () => {
     }
   });
 });
-});
