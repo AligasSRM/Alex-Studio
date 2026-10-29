@@ -318,28 +318,44 @@ try {
   try {
     return await new Promise<CommandRun>((resolve) => {
     const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
-    let stdout = ''; let stderr = ''; let settled = false;
-    const finish = (value: CommandRun) => { if (!settled) { settled = true; clearTimeout(timer); resolve(value); } };
+    let stdout = ''; let stderr = ''; let settled = false; let timedOut = false;
+    let timeoutFallback: ReturnType<typeof setTimeout> | undefined;
+    const finish = (value: CommandRun) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        if (timeoutFallback) clearTimeout(timeoutFallback);
+        resolve(value);
+      }
+    };
     const collect = (current: string, chunk: Buffer) => (current + chunk.toString('utf8')).slice(-20000);
     child.stdout.on('data', chunk => { stdout = collect(stdout, chunk); });
     child.stderr.on('data', chunk => { stderr = collect(stderr, chunk); });
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL');
+    const timeoutResult = () => {
+      // If SIGKILL has not produced a child close event, the Docker CLI may still
+      // be racing with daemon-side container creation. Attempt cleanup, but never
+      // claim it is verified while the creator process has not been observed closed.
       const cleanup = removeAndVerifyContainer(containerName);
-      const status: CommandStatus = cleanup.verified ? 'FAIL' : 'UNAVAILABLE';
-      const reason = cleanup.verified
-        ? 'Runner wall-clock timeout; container termination and removal verified.'
-        : 'Runner wall-clock timeout; container cleanup could not be verified.';
+      const reason = 'Runner timed out but Docker CLI close was not observed; container cleanup is unverified.';
       const commands = plan.scripts.map(item => ({
-        ...baseEvidence(item.name, item.required, status, reason, plan.lockfileSha256),
+        ...baseEvidence(item.name, item.required, 'UNAVAILABLE', reason, plan.lockfileSha256),
         terminationReason: reason,
       }));
       finish({
-        ok: false, available: cleanup.verified, status,
-        summary: cleanup.verified ? 'Isolated npm runner timed out' : 'Runner timed out and cleanup is unverified',
-        output: ((stdout + stderr).slice(-8000) + '\n' + cleanup.output).slice(-12000),
-        commands, cleanupVerified: cleanup.verified, cleanupOutput: cleanup.output,
+        ok: false, available: false, status: 'UNAVAILABLE',
+        summary: 'Runner timed out and cleanup is unverified',
+        output: ((stdout + stderr).slice(-8000) + '\n' + reason + '\n' + cleanup.output).slice(-12000),
+        commands, cleanupVerified: false, cleanupOutput: cleanup.output,
       });
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      // Wait for the Docker CLI to close before inspecting or removing the container.
+      // This avoids a create-vs-cleanup race in which the daemon creates a container
+      // after an early cleanup check already reported that the name was absent.
+      child.kill('SIGKILL');
+      // Defensive fallback if the child process never emits close after SIGKILL.
+      timeoutFallback = setTimeout(timeoutResult, 5000);
     }, 90000);
     child.on('error', error => {
       const cleanup = removeAndVerifyContainer(containerName);
@@ -355,7 +371,31 @@ try {
       });
     });
     child.on('close', code => {
+      if (settled) {
+        // A close event arriving after the fail-closed fallback is still a cleanup
+        // opportunity: repeat removal/absence verification after the creator CLI is gone.
+        if (timedOut) removeAndVerifyContainer(containerName);
+        return;
+      }
+      if (timeoutFallback) clearTimeout(timeoutFallback);
       const cleanup = removeAndVerifyContainer(containerName);
+      if (timedOut) {
+        const status: CommandStatus = cleanup.verified ? 'FAIL' : 'UNAVAILABLE';
+        const reason = cleanup.verified
+          ? 'Runner wall-clock timeout; container termination and removal verified.'
+          : 'Runner wall-clock timeout; container cleanup could not be verified.';
+        const commands = plan.scripts.map(item => ({
+          ...baseEvidence(item.name, item.required, status, reason, plan.lockfileSha256),
+          terminationReason: reason,
+        }));
+        finish({
+          ok: false, available: cleanup.verified, status,
+          summary: cleanup.verified ? 'Isolated npm runner timed out' : 'Runner timed out and cleanup is unverified',
+          output: ((stdout + stderr).slice(-8000) + '\n' + cleanup.output).slice(-12000),
+          commands, cleanupVerified: cleanup.verified, cleanupOutput: cleanup.output,
+        });
+        return;
+      }
       if (!cleanup.verified) {
         const reason = 'Container cleanup could not be verified; runner result is not trusted.';
         finish({
