@@ -10,6 +10,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
+import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
 
 const MAX_BODY_BYTES = 24 * 1024;
 const MAX_PROMPT_CHARS = 12_000;
@@ -42,9 +43,8 @@ function parseBuild(output: string, projectId: string, originals: Map<string, st
     }
     const normalized = file.path.replace(/\\/g, '/');
     resolveProjectPath(projectId, normalized);
-    if (normalized !== file.path || seen.has(normalized)) throw new Error('AI returned duplicate or non-canonical paths');
-    if (/(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*)/i.test(normalized) ||
-        /(^|\/)(node_modules|\.git|\.alex)(\/|$)/i.test(normalized)) {
+    if (normalized !== file.path || normalized !== normalized.trim() || seen.has(normalized)) throw new Error('AI returned duplicate or non-canonical paths');
+    if (isProtectedAIGeneratedPath(normalized)) {
       throw new Error('AI attempted to modify a protected path');
     }
     seen.add(normalized);
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
   const system = [
     'You are the implementation agent inside Alex Studio, a local-first project builder.',
     'Return only valid JSON with exactly this shape: {"summary":"...","plan":["..."],"requirements":["observable acceptance requirement 1","..."],"files":[{"path":"relative/path","content":"complete UTF-8 file content"}]}.',
-    'Create a small, coherent implementation that satisfies the user request. First convert the user specification into 1–20 distinct, observable acceptance requirements, preserving all explicit constraints. Return complete file contents, not patches or markdown fences. Requirements are a checklist, not proof of completion.',
+    'Create a small, coherent implementation that satisfies the user request. First convert the user specification into 1–20 distinct, observable acceptance requirements, preserving all explicit constraints. For requirements that can be checked from the rendered page, use exact deterministic syntax: title is "Exact title"; page contains text "Exact visible text"; page does not contain text "Forbidden visible text". Keep subjective, network-dependent, submission-side-effect, and otherwise unsupported requirements as plain-language requirements so they remain UNVERIFIED. Return complete file contents, not patches or markdown fences. Requirements are a checklist, not proof of completion.',
     'Use existing project files as context and preserve existing behavior unless the request requires changing it. Do not output secrets.',
     'Only use canonical relative paths. Never use absolute paths, dot-prefixed path segments, traversal, .env files, .git, .alex, or node_modules.',
     'Limit the proposal to 10 files and keep each file below 256 KiB. Do not claim tests were run; this endpoint only prepares a reviewable draft.',
@@ -132,12 +132,12 @@ export async function POST(request: Request) {
         ? await fetch('https://api.groq.com/openai/v1/responses', {
             method: 'POST', signal: controller.signal,
             headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
+            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000, text: { format: { type: 'json_object' } } }),
           })
         : await fetch('https://api.openai.com/v1/responses', {
             method: 'POST', signal: controller.signal,
             headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
+            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000, text: { format: { type: 'json_object' } } }),
           });
     if (!response.ok) {
       let providerError: { error?: { type?: unknown; code?: unknown } } = {};

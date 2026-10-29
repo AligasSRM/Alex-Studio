@@ -154,6 +154,8 @@ describe('AI project build workflow', () => {
       method: 'POST',
       headers: { Authorization: 'Bearer test-groq-secret', 'Content-Type': 'application/json' },
     }));
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(requestInit.body)).text).toEqual({ format: { type: 'json_object' } });
     const data = await response.json() as { build: { files: { path: string }[] }; usage: { estimatedCostUsd: number | null } };
     expect(data.build.files[0].path).toBe('index.html');
     expect(data.usage.estimatedCostUsd).toBeNull();
@@ -324,4 +326,69 @@ describe('AI project build workflow', () => {
     expect(events[1].rollbackStatus).toBe('failed');
     expect(events.every((event) => event.batchId === data.batchId)).toBe(true);
   });
+  it('rejects AI-generated package lockfiles during build, repair, and apply', async () => {
+    const id = await makeProject();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    const originalIndex = readProjectFile(id, 'index.html');
+    const generatedLock = { path: 'package-lock.json', content: JSON.stringify({ lockfileVersion: 3 }), baseHash: null };
+
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      output_text: JSON.stringify({
+        summary: 'Attempt to replace the lockfile',
+        plan: ['Replace package lock'],
+        requirements: ['Use the replacement lockfile'],
+        files: [{ path: generatedLock.path, content: generatedLock.content }],
+      }),
+      usage: { input_tokens: 10, output_tokens: 20 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const buildResponse = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: id, prompt: 'Replace the package lockfile', approved: true,
+    })));
+    expect(buildResponse.status).toBe(502);
+    expect((await buildResponse.json()).error).toMatch(/protected path/i);
+    expect(readProjectFile(id, 'index.html')).toBe(originalIndex);
+    expect(fs.existsSync(path.join(projectRoot(id), 'package-lock.json'))).toBe(false);
+
+    const proof = issueVerificationProof(id, [generatedLock]);
+    const applyResponse = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
+      projectId: id, approved: true, files: [generatedLock], verificationProof: proof,
+    })));
+    expect(applyResponse.status).toBe(400);
+    expect((await applyResponse.json()).error).toMatch(/protected path/i);
+    expect(fs.existsSync(path.join(projectRoot(id), 'package-lock.json'))).toBe(false);
+  });
+
+  it('rejects whitespace-padded paths at both build and apply boundaries', async () => {
+    const id = await makeProject();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    const original = readProjectFile(id, 'index.html');
+    const paddedFile = { path: ' index.html ', content: '<!doctype html><title>Padded path</title>', baseHash: hash(original) };
+
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      output_text: JSON.stringify({
+        summary: 'Attempt to use a non-canonical path',
+        plan: ['Update the page'],
+        requirements: ['The page title is Padded path.'],
+        files: [{ path: paddedFile.path, content: paddedFile.content }],
+      }),
+      usage: { input_tokens: 10, output_tokens: 20 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const buildResponse = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: id, prompt: 'Update the page title', approved: true,
+    })));
+    expect(buildResponse.status).toBe(502);
+    expect((await buildResponse.json()).error).toMatch(/non-canonical/i);
+    expect(readProjectFile(id, 'index.html')).toBe(original);
+
+    const applyResponse = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
+      projectId: id, approved: true, files: [paddedFile],
+      verificationProof: issueVerificationProof(id, [paddedFile]),
+    })));
+    expect(applyResponse.status).toBe(400);
+    expect((await applyResponse.json()).error).toMatch(/non-canonical/i);
+    expect(readProjectFile(id, 'index.html')).toBe(original);
+  });
+
 });
