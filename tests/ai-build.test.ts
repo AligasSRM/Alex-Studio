@@ -159,6 +159,29 @@ describe('AI project build workflow', () => {
     expect(JSON.stringify(data)).not.toContain('private provider diagnostic');
   });
 
+  it('rejects oversized AI apply bodies even without Content-Length', async () => {
+    const response = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
+      projectId: 'not-needed-before-body-validation',
+      approved: true,
+      files: [],
+      verificationProof: 'unused',
+      padding: 'x'.repeat(3 * 1024 * 1024),
+    })));
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: 'Request body too large' });
+  });
+
+  it('rejects malformed AI apply JSON with a bounded parser', async () => {
+    const request = new Request('http://localhost:3000/api/ai/apply', {
+      method: 'POST',
+      headers: { host: 'localhost:3000', origin: 'http://localhost:3000', 'content-type': 'application/json' },
+      body: '{',
+    });
+    const response = await applyPost(request);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Malformed JSON' });
+  });
+
   it('requires explicit approval and rejects protected paths when applying a draft', async () => {
     const id = await makeProject();
     const denied = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
