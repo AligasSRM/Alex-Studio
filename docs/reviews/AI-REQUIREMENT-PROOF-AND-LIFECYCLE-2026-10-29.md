@@ -19,6 +19,10 @@ A deterministic assertion receives `PASS` only when the actual browser snapshot 
 
 The build prompt asks the provider to express requirements in the supported syntax when they can be verified from rendered title/body text. Requirements involving visual quality, real form submission, external services, accessibility semantics, responsive breakpoints, or other unsupported behavior require dedicated tests or manual review and must remain unverified until such evidence exists.
 
+## Provider JSON reliability finding
+
+The existing live-provider run on `main` (GitHub Actions run [40931386272](https://github.com/AligasSRM/Alex-Studio/actions/runs/40931386272)) reached the real Groq endpoint but failed while parsing malformed model output. The build and repair requests now explicitly request JSON mode through the Responses API `text.format` setting; the Groq build unit test asserts this request contract. This follows the provider documentation for JSON mode, but the live full-lifecycle workflow must still prove it works with the configured model and credentials.
+
 ## Full lifecycle integration test
 
 `tests/ai-lifecycle.live.integration.test.ts` is explicitly gated by `RUN_FULL_AI_LIFECYCLE=1`. It uses the real configured AI provider and actual Docker browser runner to:
