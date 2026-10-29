@@ -10,6 +10,7 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
+import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
 
 const MAX_BODY_BYTES = 24 * 1024;
 const MAX_PROMPT_CHARS = 12_000;
@@ -43,8 +44,7 @@ function parseBuild(output: string, projectId: string, originals: Map<string, st
     const normalized = file.path.replace(/\\/g, '/');
     resolveProjectPath(projectId, normalized);
     if (normalized !== file.path || seen.has(normalized)) throw new Error('AI returned duplicate or non-canonical paths');
-    if (/(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*)/i.test(normalized) ||
-        /(^|\/)(node_modules|\.git|\.alex)(\/|$)/i.test(normalized)) {
+    if (isProtectedAIGeneratedPath(normalized)) {
       throw new Error('AI attempted to modify a protected path');
     }
     seen.add(normalized);
