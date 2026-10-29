@@ -82,7 +82,7 @@ export function AIApplyHistory({ projectId, refreshKey, onRolledBack }: {
     {loading ? <p>Loading history…</p> : !batches.length ? <p className="muted">No AI apply batches recorded for this project.</p> :
       <ul className="ai-batch-list">{batches.map(batch => <li key={batch.batchId}>
         <div><strong>{batch.status.replace('-', ' ')}</strong><small>{new Date(batch.createdAt).toLocaleString()}</small><small>{batch.paths.join(', ')}</small>{batch.rollbackError && <small className="alert error">{batch.rollbackError}</small>}</div>
-        {batch.status === 'applied' && <button type="button" className="secondary" disabled={!!busyBatch} onClick={() => void rollback(batch)}>{busyBatch === batch.batchId ? 'Rolling back…' : 'Roll back batch'}</button>}
+        {(batch.status === 'applied' || batch.status === 'rollback-failed' || batch.status === 'rolling-back') && <button type="button" className="secondary" disabled={!!busyBatch} onClick={() => void rollback(batch)}>{busyBatch === batch.batchId ? 'Rolling back…' : batch.status === 'applied' ? 'Roll back batch' : 'Retry rollback'}</button>}
       </li>)}</ul>}
   </section>;
 }
