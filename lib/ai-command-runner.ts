@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 export type CommandStatus = 'PASS' | 'FAIL' | 'NOT RUN' | 'UNAVAILABLE';
 export type CommandEvidence = {
@@ -28,6 +28,8 @@ export type CommandRun = {
   summary: string;
   output: string;
   commands: CommandEvidence[];
+  cleanupVerified?: boolean;
+  cleanupOutput?: string;
 };
 
 type ManifestPlan = {
@@ -165,6 +167,33 @@ function stageReadableProjectCopy(root: string): { sourcePath: string; cleanupPa
   }
 }
 
+/**
+ * Force-remove the named runner container, then ask Docker whether it remains.
+ * A removal request alone is not proof that cleanup succeeded.
+ */
+export function removeAndVerifyContainer(containerName: string): { verified: boolean; output: string } {
+  const env = { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' };
+  const removed = spawnSync('docker', ['rm', '--force', containerName], {
+    encoding: 'utf8', timeout: 5000, env,
+  });
+  const inspected = spawnSync('docker', ['ps', '-a', '--filter', 'name=' + containerName, '--format', '{{.Names}}'], {
+    encoding: 'utf8', timeout: 5000, env,
+  });
+  const removeOutput = [removed.stdout, removed.stderr, removed.error?.message].filter(Boolean).join('\n').trim();
+  const inspectOutput = [inspected.stdout, inspected.stderr, inspected.error?.message].filter(Boolean).join('\n').trim();
+  const names = String(inspected.stdout || '').split(/\r?\n/).map(name => name.trim()).filter(Boolean);
+  const verified = inspected.status === 0 && !names.includes(containerName);
+  return {
+    verified,
+    output: [
+      'docker rm exit: ' + (removed.status === null ? 'unavailable' : removed.status),
+      'container absence verified: ' + verified,
+      removeOutput,
+      inspectOutput,
+    ].filter(Boolean).join('\n').slice(-4000),
+  };
+}
+
 function baseEvidence(name: string, required: boolean, status: CommandStatus, output: string, lockfileSha256: string | null): CommandEvidence {
   return {
     name, command: 'npm run ' + name, cwd: '/tmp/workspace', required, status,
@@ -290,27 +319,69 @@ try {
     child.stdout.on('data', chunk => { stdout = collect(stdout, chunk); });
     child.stderr.on('data', chunk => { stderr = collect(stderr, chunk); });
     const timer = setTimeout(() => {
-      spawn('docker', ['rm', '--force', containerName], { stdio: 'ignore', env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
       child.kill('SIGKILL');
-      const commands = plan.scripts.map(item => ({ ...baseEvidence(item.name, item.required, 'FAIL', 'Runner wall-clock timeout; container termination requested.', plan.lockfileSha256), terminationReason: 'runner wall-clock timeout' }));
-      finish({ ok: false, available: true, status: 'FAIL', summary: 'Isolated npm runner timed out', output: (stdout + stderr).slice(-12000), commands });
+      const cleanup = removeAndVerifyContainer(containerName);
+      const status: CommandStatus = cleanup.verified ? 'FAIL' : 'UNAVAILABLE';
+      const reason = cleanup.verified
+        ? 'Runner wall-clock timeout; container termination and removal verified.'
+        : 'Runner wall-clock timeout; container cleanup could not be verified.';
+      const commands = plan.scripts.map(item => ({
+        ...baseEvidence(item.name, item.required, status, reason, plan.lockfileSha256),
+        terminationReason: reason,
+      }));
+      finish({
+        ok: false, available: cleanup.verified, status,
+        summary: cleanup.verified ? 'Isolated npm runner timed out' : 'Runner timed out and cleanup is unverified',
+        output: ((stdout + stderr).slice(-8000) + '\n' + cleanup.output).slice(-12000),
+        commands, cleanupVerified: cleanup.verified, cleanupOutput: cleanup.output,
+      });
     }, 90000);
     child.on('error', error => {
-      const unavailable = /ENOENT|not found/i.test(error.message);
-      finish({ ok: false, available: false, status: 'UNAVAILABLE', summary: unavailable ? 'Docker unavailable' : 'Could not start isolated npm runner', output: error.message, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', error.message, plan.lockfileSha256)) });
+      const cleanup = removeAndVerifyContainer(containerName);
+      const reason = cleanup.verified
+        ? error.message
+        : error.message + '\\nContainer cleanup could not be verified.';
+      finish({
+        ok: false, available: false, status: 'UNAVAILABLE',
+        summary: cleanup.verified ? 'Could not start isolated npm runner' : 'Docker unavailable and container cleanup unverified',
+        output: (reason + '\\n' + cleanup.output).slice(-12000),
+        commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', reason, plan.lockfileSha256)),
+        cleanupVerified: cleanup.verified, cleanupOutput: cleanup.output,
+      });
     });
     child.on('close', code => {
+      const cleanup = removeAndVerifyContainer(containerName);
+      if (!cleanup.verified) {
+        const reason = 'Container cleanup could not be verified; runner result is not trusted.';
+        finish({
+          ok: false, available: false, status: 'UNAVAILABLE', summary: reason,
+          output: ((stdout + '\n' + stderr).slice(-8000) + '\n' + cleanup.output).slice(-12000),
+          commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', reason, plan.lockfileSha256)),
+          cleanupVerified: false, cleanupOutput: cleanup.output,
+        });
+        return;
+      }
       const raw = stdout.trim();
       let parsed: { available?: boolean; ok?: boolean; status?: CommandStatus; error?: string; commands?: CommandEvidence[] };
       try { parsed = JSON.parse(raw); } catch {
-        const output = (raw + '\n' + stderr).slice(-12000);
+        const output = (raw + '\n' + stderr + '\nContainer cleanup verified.\n' + cleanup.output).slice(-12000);
         const unavailable = /cannot connect to the docker daemon|pull access denied|error during connect|no such image|manifest unknown|unauthorized:|denied: requested access/i.test(output);
-        finish({ ok: false, available: !unavailable, status: unavailable ? 'UNAVAILABLE' : 'FAIL', summary: unavailable ? 'Docker image or daemon unavailable' : 'Runner returned invalid evidence', output, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, unavailable ? 'UNAVAILABLE' : 'FAIL', output, plan.lockfileSha256)) });
+        finish({
+          ok: false, available: !unavailable, status: unavailable ? 'UNAVAILABLE' : 'FAIL',
+          summary: unavailable ? 'Docker image or daemon unavailable' : 'Runner returned invalid evidence',
+          output, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, unavailable ? 'UNAVAILABLE' : 'FAIL', output, plan.lockfileSha256)),
+          cleanupVerified: true, cleanupOutput: cleanup.output,
+        });
         return;
       }
       const commands = parsed.commands || [];
       const status = parsed.status || 'UNAVAILABLE';
-      finish({ ok: code === 0 && parsed.ok === true, available: parsed.available === true, status, summary: parsed.ok ? 'Isolated npm command checks passed' : parsed.error || (status === 'UNAVAILABLE' ? 'Isolated npm command checks unavailable' : 'One or more npm commands failed'), output: ([parsed.error, stderr, commands.map(item => item.name + ': ' + item.status + '\n' + item.output).join('\n')].filter(Boolean).join('\n')).slice(-12000), commands });
+      finish({
+        ok: code === 0 && parsed.ok === true, available: parsed.available === true, status,
+        summary: parsed.ok ? 'Isolated npm command checks passed' : parsed.error || (status === 'UNAVAILABLE' ? 'Isolated npm command checks unavailable' : 'One or more npm commands failed'),
+        output: ([parsed.error, stderr, commands.map(item => item.name + ': ' + item.status + '\n' + item.output).join('\n'), 'Container cleanup verified.', cleanup.output].filter(Boolean).join('\n')).slice(-12000),
+        commands, cleanupVerified: true, cleanupOutput: cleanup.output,
+      });
     });
     });
   } finally {
