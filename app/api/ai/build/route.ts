@@ -70,10 +70,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'projectId and prompt (1–12000 characters) are required' }, { status: 400 });
   }
   if (!getProject(input.projectId)) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-  const provider = process.env.AI_PROVIDER === 'ollama' ? 'ollama' : 'openai';
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (provider === 'openai' && !apiKey) {
-    return NextResponse.json({ error: 'No AI provider configured. Set AI_PROVIDER=ollama for a free local model, or configure OPENAI_API_KEY.' }, { status: 503 });
+  const provider = process.env.AI_PROVIDER === 'ollama' ? 'ollama' : process.env.AI_PROVIDER === 'groq' ? 'groq' : 'openai';
+  const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
+  if (provider !== 'ollama' && !apiKey) {
+    return NextResponse.json({ error: provider === 'groq'
+      ? 'Groq is selected but GROQ_API_KEY is not configured.'
+      : 'No AI provider configured. Set AI_PROVIDER=ollama for a free local model, or configure OPENAI_API_KEY.' }, { status: 503 });
   }
 
   const originals = new Map<string, string>();
@@ -94,7 +96,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not safely read project context' }, { status: 400 });
   }
 
-  const model = provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
+  const model = provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b')
+    : provider === 'groq' ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b')
+    : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
   const system = [
     'You are the implementation agent inside Alex Studio, a local-first project builder.',
     'Return only valid JSON with exactly this shape: {"summary":"...","plan":["..."],"requirements":["observable acceptance requirement 1","..."],"files":[{"path":"relative/path","content":"complete UTF-8 file content"}]}.',
@@ -123,11 +127,17 @@ export async function POST(request: Request) {
             options: { num_predict: 12000 },
           }),
         })
-      : await fetch('https://api.openai.com/v1/responses', {
-          method: 'POST', signal: controller.signal,
-          headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
-        });
+      : provider === 'groq'
+        ? await fetch('https://api.groq.com/openai/v1/responses', {
+            method: 'POST', signal: controller.signal,
+            headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
+          })
+        : await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST', signal: controller.signal,
+            headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
+          });
     if (!response.ok) {
       let providerError: { error?: { type?: unknown; code?: unknown } } = {};
       try {
@@ -145,7 +155,7 @@ export async function POST(request: Request) {
       }
       return NextResponse.json({
         error: quotaExceeded
-          ? 'AI provider quota or billing limit reached; check OpenAI project usage and billing'
+          ? provider === 'groq' ? 'Groq quota or rate limit reached; check your Groq plan limits' : 'AI provider quota or billing limit reached; check OpenAI project usage and billing'
           : response.status === 429
             ? 'AI provider is busy; try again later'
             : 'AI provider request failed',
@@ -173,7 +183,7 @@ export async function POST(request: Request) {
     if (typeof result.output_text !== 'string') return NextResponse.json({ error: 'AI provider returned an invalid response' }, { status: 502 });
     const inputTokens = Number.isInteger(result.usage?.input_tokens) ? result.usage?.input_tokens as number : null;
     const outputTokens = Number.isInteger(result.usage?.output_tokens) ? result.usage?.output_tokens as number : null;
-    const estimatedCostUsd = provider === 'ollama' ? 0 : estimateAICostUsd(inputTokens, outputTokens);
+    const estimatedCostUsd = provider === 'ollama' ? 0 : provider === 'groq' ? null : estimateAICostUsd(inputTokens, outputTokens);
     let accounting: { monthlyCostUsd: number | null; budgetWarning: boolean };
     try {
       accounting = recordAIUsage(input.projectId, { timestamp: new Date().toISOString(), model, inputTokens, outputTokens, estimatedCostUsd });

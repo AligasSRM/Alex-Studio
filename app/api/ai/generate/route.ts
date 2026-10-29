@@ -56,16 +56,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const provider = process.env.AI_PROVIDER === 'groq' ? 'groq' : 'openai';
+  const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: 'AI provider is not configured on this server' }, { status: 503 });
+    return NextResponse.json({ error: provider === 'groq' ? 'Groq is selected but GROQ_API_KEY is not configured.' : 'AI provider is not configured on this server' }, { status: 503 });
   }
 
-  const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+  const model = provider === 'groq' ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20_000);
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await fetch(provider === 'groq' ? 'https://api.groq.com/openai/v1/responses' : 'https://api.openai.com/v1/responses', {
       method: 'POST',
       signal: controller.signal,
       headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
@@ -85,7 +86,7 @@ export async function POST(request: Request) {
     }
     const inputTokens = Number.isInteger(result.usage?.input_tokens) ? result.usage?.input_tokens as number : null;
     const outputTokens = Number.isInteger(result.usage?.output_tokens) ? result.usage?.output_tokens as number : null;
-    const estimatedCostUsd = estimateAICostUsd(inputTokens, outputTokens);
+    const estimatedCostUsd = provider === 'groq' ? null : estimateAICostUsd(inputTokens, outputTokens);
     let accounting: { monthlyCostUsd: number | null; budgetWarning: boolean };
     try {
       accounting = recordAIUsage(input.projectId, {

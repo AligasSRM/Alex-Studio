@@ -13,6 +13,8 @@ const originalKey = process.env.OPENAI_API_KEY;
 const originalModel = process.env.OPENAI_MODEL;
 const originalProvider = process.env.AI_PROVIDER;
 const originalOllamaModel = process.env.OLLAMA_MODEL;
+const originalGroqKey = process.env.GROQ_API_KEY;
+const originalGroqModel = process.env.GROQ_MODEL;
 function localPost(url: string, body: string) {
   return new Request(url, {
     method: 'POST',
@@ -37,6 +39,8 @@ afterEach(() => {
   if (originalModel === undefined) delete process.env.OPENAI_MODEL; else process.env.OPENAI_MODEL = originalModel;
   if (originalProvider === undefined) delete process.env.AI_PROVIDER; else process.env.AI_PROVIDER = originalProvider;
   if (originalOllamaModel === undefined) delete process.env.OLLAMA_MODEL; else process.env.OLLAMA_MODEL = originalOllamaModel;
+  if (originalGroqKey === undefined) delete process.env.GROQ_API_KEY; else process.env.GROQ_API_KEY = originalGroqKey;
+  if (originalGroqModel === undefined) delete process.env.GROQ_MODEL; else process.env.GROQ_MODEL = originalGroqModel;
 });
 
 describe('AI project build workflow', () => {
@@ -121,6 +125,37 @@ describe('AI project build workflow', () => {
     expect(data.build.files[0].baseHash).toBe(hash(original));
     expect(data.usage.estimatedCostUsd).toBe(0);
     expect(readProjectFile(id, 'index.html')).toBe(original);
+  });
+
+  it('uses Groq Responses API without requiring an OpenAI key and does not invent a cost estimate', async () => {
+    const id = await makeProject();
+    delete process.env.OPENAI_API_KEY;
+    process.env.AI_PROVIDER = 'groq';
+    process.env.GROQ_API_KEY = 'test-groq-secret';
+    process.env.GROQ_MODEL = 'openai/gpt-oss-20b';
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      output_text: JSON.stringify({
+        summary: 'Prepare a Groq draft',
+        plan: ['Update the page title'],
+        requirements: ['The page title must be Groq Draft.'],
+        files: [{ path: 'index.html', content: '<!doctype html><title>Groq Draft</title>' }],
+      }),
+      usage: { input_tokens: 21, output_tokens: 34 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: id, prompt: 'Update the page title', approved: true,
+    })));
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith('https://api.groq.com/openai/v1/responses', expect.objectContaining({
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-groq-secret', 'Content-Type': 'application/json' },
+    }));
+    const data = await response.json() as { build: { files: { path: string }[] }; usage: { estimatedCostUsd: number | null } };
+    expect(data.build.files[0].path).toBe('index.html');
+    expect(data.usage.estimatedCostUsd).toBeNull();
+    expect(JSON.stringify(data)).not.toContain('test-groq-secret');
   });
 
   it('reports quota exhaustion safely without exposing provider error details', async () => {

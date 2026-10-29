@@ -105,8 +105,8 @@ function runSandbox(root: string): Promise<Result> {
     });
   });
 }
-async function getRepair(apiKey: string, model: string, projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>) {
-  const response = await fetch('https://api.openai.com/v1/responses', {
+async function getRepair(apiKey: string, model: string, provider: 'openai' | 'groq', projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>) {
+  const response = await fetch(provider === 'groq' ? 'https://api.groq.com/openai/v1/responses' : 'https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model, max_output_tokens: 12000,
       instructions: 'Repair the supplied static HTML/CSS/JS project using the isolated browser diagnostics. Return only JSON: {"summary":"...","files":[{"path":"relative/path","content":"complete file content"}]}. Maximum 10 files, each under 256 KiB. Use canonical relative paths only. Never change hidden paths, secrets, node_modules, .git, .alex or lockfiles. Do not include host shell commands. Do not claim tests passed unless diagnostics prove it.',
@@ -120,7 +120,7 @@ async function getRepair(apiKey: string, model: string, projectId: string, promp
   const filesOut = parseDraft(projectId, parsed.files, current, false);
   const inputTokens = Number.isInteger(data.usage?.input_tokens) ? data.usage?.input_tokens as number : null;
   const outputTokens = Number.isInteger(data.usage?.output_tokens) ? data.usage?.output_tokens as number : null;
-  recordAIUsage(projectId, { timestamp: new Date().toISOString(), model, inputTokens, outputTokens, estimatedCostUsd: estimateAICostUsd(inputTokens, outputTokens) });
+  recordAIUsage(projectId, { timestamp: new Date().toISOString(), model, inputTokens, outputTokens, estimatedCostUsd: provider === 'groq' ? null : estimateAICostUsd(inputTokens, outputTokens) });
   return { summary: parsed.summary.slice(0, 1000), files: filesOut };
 }
 
@@ -140,8 +140,9 @@ export async function POST(request: Request) {
   }
   if (body.approved !== true) return NextResponse.json({ error: 'Explicit approval required before paid AI repair calls' }, { status: 409 });
   if (!getProject(body.projectId)) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'AI provider is not configured on this server' }, { status: 503 });
+  const provider = process.env.AI_PROVIDER === 'groq' ? 'groq' : 'openai';
+  const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: provider === 'groq' ? 'Groq is selected but GROQ_API_KEY is not configured.' : 'AI provider is not configured on this server' }, { status: 503 });
   let root = '';
   try {
     const originals = new Map<string, string>(); const working = new Map<string, string>(); let total = 0;
@@ -167,7 +168,7 @@ export async function POST(request: Request) {
     let diagnostic = combineVerification(browserDiagnostic, commandChecks);
     if (!diagnostic.available) return NextResponse.json({ error: 'Isolated verification is unavailable; no repair was attempted and project files were not changed.', diagnostic, commandChecks }, { status: 503 });
     const repairs: { round: number; summary: string; diagnostic: Result }[] = [];
-    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const model = provider === 'groq' ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
     for (let round = 1; !diagnostic.ok && round <= MAX_ROUNDS; round++) {
       const context: { path: string; content: string }[] = []; let bytes = 0;
       for (const [filePath, content] of Array.from(working.entries())) {
@@ -176,7 +177,7 @@ export async function POST(request: Request) {
         if (bytes > 48 * 1024) break; context.push({ path: filePath, content: excerpt });
       }
       let next;
-      try { next = await getRepair(apiKey, model, body.projectId, body.prompt, context, diagnostic, working); }
+      try { next = await getRepair(apiKey, model, provider, body.projectId, body.prompt, context, diagnostic, working); }
       catch (e) { repairs.push({ round, summary: e instanceof Error ? e.message : 'AI repair failed', diagnostic }); break; }
       for (const file of next.files) working.set(file.path, file.content);
       fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755); writeFiles();
