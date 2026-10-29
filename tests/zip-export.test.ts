@@ -1,7 +1,25 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { inflateRawSync } from 'node:zlib';
 import { createProjectZip } from '../lib/zip-export';
+
+function readZipEntries(zip: Buffer) {
+  const entries = new Map<string, string>();
+  let offset = 0;
+  while (offset + 4 <= zip.length && zip.readUInt32LE(offset) === 0x04034b50) {
+    const compressedSize = zip.readUInt32LE(offset + 18);
+    const nameLength = zip.readUInt16LE(offset + 26);
+    const extraLength = zip.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const name = zip.toString('utf8', nameStart, nameStart + nameLength);
+    const dataStart = nameStart + nameLength + extraLength;
+    const compressed = zip.subarray(dataStart, dataStart + compressedSize);
+    entries.set(name, inflateRawSync(compressed).toString('utf8'));
+    offset = dataStart + compressedSize;
+  }
+  return entries;
+}
 
 describe('project ZIP export', () => {
   let root: string;
@@ -43,10 +61,13 @@ describe('project ZIP export', () => {
     fs.writeFileSync(path.join(root, 'id_rsa'), 'private-key');
     fs.writeFileSync(path.join(root, 'config', 'secrets.txt'), 'secret-value');
     fs.writeFileSync(path.join(root, 'secrets', 'config.json'), 'nested-secret');
-    const zip = createProjectZip(root);
-    expect(zip.includes(Buffer.from('index.html'))).toBe(true);
-    for (const excluded of ['credentials.json', 'credential-secret', 'id_rsa', 'private-key', 'secrets.txt', 'secret-value', 'config.json', 'nested-secret']) {
-      expect(zip.includes(Buffer.from(excluded))).toBe(false);
+    const entries = readZipEntries(createProjectZip(root));
+    expect(entries.get('index.html')).toBe('safe');
+    for (const excludedPath of ['credentials.json', 'id_rsa', 'config/secrets.txt', 'secrets/config.json']) {
+      expect(entries.has(excludedPath)).toBe(false);
+    }
+    for (const excludedContent of ['credential-secret', 'private-key', 'secret-value', 'nested-secret']) {
+      expect([...entries.values()].some((content) => content.includes(excludedContent))).toBe(false);
     }
   });
 
