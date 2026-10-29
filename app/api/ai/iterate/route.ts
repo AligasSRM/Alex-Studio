@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { assertLocalMutation, resolveProjectPath } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
@@ -13,14 +13,15 @@ import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
 import { issueVerificationProof } from '@/lib/ai-verification-proof';
-import { runProjectCommands, type CommandRun } from '@/lib/ai-command-runner';
+import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, runProjectCommands, type CommandRun } from '@/lib/ai-command-runner';
+import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
 const MAX_BODY_BYTES = 3 * 1024 * 1024;
 const SENSITIVE_PATH = /(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*|node_modules|\.git|\.alex)(\/|$)/i;
-const IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble';
+const IMAGE = APPROVED_RUNNER_IMAGE;
 const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 type FileDraft = { path: string; content: string; baseHash: string | null };
 type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun };
@@ -82,14 +83,19 @@ function parseDraft(projectId: string, input: unknown, current: Map<string, stri
     return { path: filePath, content: item.content, baseHash: expected };
   });
 }
-function runSandbox(root: string): Promise<Result> {
+export function runSandbox(root: string): Promise<Result> {
   return new Promise((resolve) => {
+    if (!isPinnedRunnerImage(IMAGE)) {
+      resolve({ ok: false, available: false, summary: 'Approved Docker runner image is not configured', output: 'Browser verification refused an image outside the explicit allowlist.' });
+      return;
+    }
     const modules = path.join(process.cwd(), 'node_modules');
     if (!fs.existsSync(path.join(modules, 'playwright'))) {
       resolve({ ok: false, available: false, summary: 'Playwright is not installed', output: 'Install dependencies before sandbox verification.' }); return;
     }
-    const args = ['run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
-      '--memory', '256m', '--cpus', '1', '--pids-limit', '64', '--user', '10001:10001', '--shm-size', '64m',
+    const containerName = 'alex-studio-browser-' + randomUUID().slice(0, 12);
+    const args = ['run', '--rm', '--init', '--name', containerName, '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+      '--memory', '768m', '--cpus', '1', '--pids-limit', '96', '--user', '10001:10001', '--shm-size', '128m',
       '--tmpfs', '/tmp:rw,nosuid,size=64m', '--mount', 'type=bind,src=' + root + ',dst=/workspace,readonly',
       '--mount', 'type=bind,src=' + modules + ',dst=/app/node_modules,readonly', '--env', 'NODE_PATH=/app/node_modules', '--env', 'HOME=/tmp', '--env', 'PLAYWRIGHT_BROWSERS_PATH=/ms-playwright',
       IMAGE, 'node', '-e', runner];
@@ -97,32 +103,59 @@ function runSandbox(root: string): Promise<Result> {
     let output = ''; let settled = false;
     const finish = (result: Result) => { if (!settled) { settled = true; clearTimeout(timer); resolve(result); } };
     const collect = (chunk: Buffer) => { output = (output + chunk.toString('utf8')).slice(-12000); };
+    const cleanupResult = () => removeAndVerifyContainer(containerName);
     child.stdout.on('data', collect); child.stderr.on('data', collect);
-    const timer = setTimeout(() => { child.kill('SIGKILL'); finish({ ok: false, available: true, summary: 'Sandbox timed out', output }); }, 20000);
-    child.on('error', e => finish({ ok: false, available: false, summary: 'Docker unavailable', output: e.message }));
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+      const cleanup = cleanupResult();
+      finish({ ok: false, available: cleanup.verified, summary: cleanup.verified ? 'Sandbox timed out; container removal verified' : 'Sandbox timed out; container cleanup unverified', output: (output + '\n' + cleanup.output).slice(-16000) });
+    }, 20000);
+    child.on('error', e => {
+      const cleanup = cleanupResult();
+      finish({ ok: false, available: false, summary: cleanup.verified ? 'Docker unavailable' : 'Docker unavailable and container cleanup unverified', output: (e.message + '\n' + cleanup.output).slice(-16000) });
+    });
     child.on('close', code => {
+      const cleanup = cleanupResult();
       const unavailable = /cannot connect to the docker daemon|unable to find image|pull access denied|error during connect/i.test(output);
-      finish({ ok: code === 0, available: !unavailable, summary: code === 0 ? 'Isolated browser test passed' : unavailable ? 'Docker sandbox unavailable' : 'Isolated browser test failed', output });
+      if (!cleanup.verified) {
+        finish({ ok: false, available: false, summary: 'Browser runner cleanup could not be verified', output: (output + '\n' + cleanup.output).slice(-16000) });
+        return;
+      }
+      finish({ ok: code === 0, available: !unavailable, summary: code === 0 ? 'Isolated browser test passed; container cleanup verified' : unavailable ? 'Docker sandbox unavailable' : 'Isolated browser test failed; container cleanup verified', output: (output + '\n' + cleanup.output).slice(-16000) });
     });
   });
 }
-async function getRepair(apiKey: string, model: string, provider: 'openai' | 'groq', projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>) {
-  const response = await fetch(provider === 'groq' ? 'https://api.groq.com/openai/v1/responses' : 'https://api.openai.com/v1/responses', {
-    method: 'POST', headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, max_output_tokens: 12000,
-      instructions: 'Repair the supplied static HTML/CSS/JS project using the isolated browser diagnostics. Return only JSON: {"summary":"...","files":[{"path":"relative/path","content":"complete file content"}]}. Maximum 10 files, each under 256 KiB. Use canonical relative paths only. Never change hidden paths, secrets, node_modules, .git, .alex or lockfiles. Do not include host shell commands. Do not claim tests passed unless diagnostics prove it.',
-      input: JSON.stringify({ request: prompt, diagnostics: result, files }) }),
-  });
+async function getRepair(apiKey: string | undefined, model: string, provider: 'openai' | 'groq' | 'ollama', projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>) {
+  const instructions = 'Repair the supplied static HTML/CSS/JS project using the isolated browser diagnostics. Return only JSON: {"summary":"...","files":[{"path":"relative/path","content":"complete file content"}]}. Maximum 10 files, each under 256 KiB. Use canonical relative paths only. Never change hidden paths, secrets, node_modules, .git, .alex or lockfiles. Do not include host shell commands. Do not claim tests passed unless diagnostics prove it.';
+  const input = JSON.stringify({ request: prompt, diagnostics: result, files });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), provider === 'ollama' ? 120_000 : 30_000);
+  let response: Response;
+  try {
+    response = await fetch(provider === 'ollama' ? 'http://127.0.0.1:11434/api/chat' : provider === 'groq' ? 'https://api.groq.com/openai/v1/responses' : 'https://api.openai.com/v1/responses', {
+      method: 'POST', signal: controller.signal,
+      headers: provider === 'ollama' ? { 'Content-Type': 'application/json' } : { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(provider === 'ollama'
+        ? { model, stream: false, format: 'json', messages: [{ role: 'system', content: instructions }, { role: 'user', content: input }], options: { num_predict: 12000 } }
+        : { model, max_output_tokens: 12000, instructions, input }),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new Error('AI repair request timed out');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) throw new Error('AI repair request failed (' + response.status + ')');
-  const data = await response.json() as { output_text?: unknown; output?: unknown; usage?: { input_tokens?: unknown; output_tokens?: unknown } };
+  const data = await response.json() as { output_text?: unknown; output?: unknown; message?: { content?: unknown }; usage?: { input_tokens?: unknown; output_tokens?: unknown }; prompt_eval_count?: unknown; eval_count?: unknown };
   const outputText = extractAIResponseText(data);
   if (typeof outputText !== 'string') throw new Error('Invalid AI repair response');
   const parsed = JSON.parse(outputText.trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/, '')) as { summary?: unknown; files?: unknown };
   if (typeof parsed.summary !== 'string') throw new Error('AI repair omitted summary');
   const filesOut = parseDraft(projectId, parsed.files, current, false);
-  const inputTokens = Number.isInteger(data.usage?.input_tokens) ? data.usage?.input_tokens as number : null;
-  const outputTokens = Number.isInteger(data.usage?.output_tokens) ? data.usage?.output_tokens as number : null;
-  recordAIUsage(projectId, { timestamp: new Date().toISOString(), model, inputTokens, outputTokens, estimatedCostUsd: provider === 'groq' ? null : estimateAICostUsd(inputTokens, outputTokens) });
+  const inputTokens = Number.isInteger(provider === 'ollama' ? data.prompt_eval_count : data.usage?.input_tokens) ? (provider === 'ollama' ? data.prompt_eval_count : data.usage?.input_tokens) as number : null;
+  const outputTokens = Number.isInteger(provider === 'ollama' ? data.eval_count : data.usage?.output_tokens) ? (provider === 'ollama' ? data.eval_count : data.usage?.output_tokens) as number : null;
+  const estimatedCostUsd = provider === 'ollama' ? 0 : provider === 'groq' ? null : estimateAICostUsd(inputTokens, outputTokens);
+  recordAIUsage(projectId, { timestamp: new Date().toISOString(), model, inputTokens, outputTokens, estimatedCostUsd });
   return { summary: parsed.summary.slice(0, 1000), files: filesOut };
 }
 
@@ -130,21 +163,21 @@ export async function POST(request: Request) {
   if (!assertLocalMutation(request)) return NextResponse.json({ error: 'Local same-origin requests only' }, { status: 403 });
   const rate = checkRateLimit('ai-iterate:' + new URL(request.url).host, 3, 60000);
   if (!rate.allowed) return NextResponse.json({ error: 'AI verify/repair rate limit exceeded' }, { status: 429 });
-  const contentLength = Number(request.headers.get('content-length') || 0);
-  if (contentLength > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
-  const rawBody = await request.text().catch(() => '');
-  if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
+  const parsedBody = await readJsonBody(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return NextResponse.json({ error: parsedBody.error }, { status: parsedBody.status });
   type IterateRequestBody = { projectId?: unknown; prompt?: unknown; files?: unknown; requirements?: unknown; approved?: unknown };
-  let body: IterateRequestBody;
-  try { body = JSON.parse(rawBody) as IterateRequestBody; } catch { return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 }); }
+  if (!parsedBody.value || typeof parsedBody.value !== 'object' || Array.isArray(parsedBody.value)) {
+    return NextResponse.json({ error: 'Malformed JSON body' }, { status: 400 });
+  }
+  const body = parsedBody.value as IterateRequestBody;
   if (!body || typeof body.projectId !== 'string' || typeof body.prompt !== 'string' || !body.prompt.trim() || body.prompt.length > 12000 || !Array.isArray(body.files)) {
     return NextResponse.json({ error: 'projectId, prompt, and draft files are required' }, { status: 400 });
   }
   if (body.approved !== true) return NextResponse.json({ error: 'Explicit approval required before paid AI repair calls' }, { status: 409 });
   if (!getProject(body.projectId)) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
-  const provider = process.env.AI_PROVIDER === 'groq' ? 'groq' : 'openai';
-  const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: provider === 'groq' ? 'Groq is selected but GROQ_API_KEY is not configured.' : 'AI provider is not configured on this server' }, { status: 503 });
+  const provider = process.env.AI_PROVIDER === 'ollama' ? 'ollama' : process.env.AI_PROVIDER === 'groq' ? 'groq' : 'openai';
+  const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : provider === 'openai' ? process.env.OPENAI_API_KEY : undefined;
+  if (provider !== 'ollama' && !apiKey) return NextResponse.json({ error: provider === 'groq' ? 'Groq is selected but GROQ_API_KEY is not configured.' : 'AI provider is not configured on this server' }, { status: 503 });
   let root = '';
   try {
     const originals = new Map<string, string>(); const working = new Map<string, string>(); let total = 0;
@@ -170,7 +203,7 @@ export async function POST(request: Request) {
     let diagnostic = combineVerification(browserDiagnostic, commandChecks);
     if (!diagnostic.available) return NextResponse.json({ error: 'Isolated verification is unavailable; no repair was attempted and project files were not changed.', diagnostic, commandChecks }, { status: 503 });
     const repairs: { round: number; summary: string; diagnostic: Result }[] = [];
-    const model = provider === 'groq' ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
+    const model = provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b') : provider === 'groq' ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
     for (let round = 1; !diagnostic.ok && round <= MAX_ROUNDS; round++) {
       const context: { path: string; content: string }[] = []; let bytes = 0;
       for (const [filePath, content] of Array.from(working.entries())) {

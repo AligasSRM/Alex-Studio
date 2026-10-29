@@ -68,10 +68,15 @@ export function validateProjectTreeLimits(root: string): void {
   visit(root, 0);
 }
 
-export function isPinnedRunnerImage(image: string | undefined): image is string {
-  return !!image && /^mcr\.microsoft\.com\/playwright:[^@\s]+@sha256:[a-f0-9]{64}$/.test(image);
-}
+export const APPROVED_RUNNER_IMAGE =
+  'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea';
 
+const APPROVED_RUNNER_IMAGES = new Set<string>([APPROVED_RUNNER_IMAGE]);
+
+/** Accept only an explicitly reviewed image digest, not any syntactically valid digest. */
+export function isPinnedRunnerImage(image: string | undefined): image is string {
+  return !!image && APPROVED_RUNNER_IMAGES.has(image);
+}
 export function inspectGeneratedProject(root: string): ManifestPlan {
   const packagePath = path.join(root, 'package.json');
   if (!fs.existsSync(packagePath)) {
@@ -238,7 +243,7 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
 
   const image = process.env.AI_RUNNER_DOCKER_IMAGE;
   if (!isPinnedRunnerImage(image)) {
-    const message = 'AI_RUNNER_DOCKER_IMAGE must be a trusted Playwright image pinned by sha256 digest.';
+    const message = 'AI_RUNNER_DOCKER_IMAGE must exactly match an approved Playwright image pinned by SHA-256 digest.';
     return { ok: false, available: false, status: 'UNAVAILABLE', summary: 'Pinned runner image is not configured', output: message, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', message, plan.lockfileSha256)) };
   }
   let stagedSource: { sourcePath: string; cleanupPath: string };

@@ -50,8 +50,10 @@ describe('isolated runner container cleanup verification', () => {
 
 describe('isolated npm runner preflight', () => {
   it('requires the trusted Playwright image to be pinned by a SHA-256 digest', () => {
-    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64))).toBe(true);
-    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble')).toBe(false);
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea')).toBe(true);
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.64.1-noble@sha256:' + 'a'.repeat(64))).toBe(false);
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.57.0-noble@sha256:' + 'a'.repeat(64))).toBe(false);
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.64.1-noble')).toBe(false);
     expect(isPinnedRunnerImage('docker.io/example/runner:latest@sha256:' + 'a'.repeat(64))).toBe(false);
     expect(isPinnedRunnerImage(undefined)).toBe(false);
   });
@@ -129,7 +131,7 @@ describe('isolated npm runner preflight', () => {
     const previousCache = process.env.AI_RUNNER_NPM_CACHE;
     const previousImage = process.env.AI_RUNNER_DOCKER_IMAGE;
     delete process.env.AI_RUNNER_NPM_CACHE;
-    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64);
+    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea';
     try {
       const result = await runProjectCommands(root);
       expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE', summary: 'Offline npm cache is not configured' });
@@ -182,7 +184,7 @@ describe('isolated npm runner preflight', () => {
     const previousImage = process.env.AI_RUNNER_DOCKER_IMAGE;
     const previousPath = process.env.PATH;
     process.env.AI_RUNNER_NPM_CACHE = cache;
-    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64);
+    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea';
     process.env.PATH = fakeBin;
     try {
       const result = await runProjectCommands(root);
