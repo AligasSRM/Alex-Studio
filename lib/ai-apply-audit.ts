@@ -5,7 +5,7 @@ import { projectRoot } from './path-security';
 export type AIApplyAuditEvent = {
   batchId: string;
   timestamp: string;
-  outcome: 'started' | 'applied' | 'failed';
+  outcome: 'started' | 'applied' | 'failed' | 'rolled-back';
   paths: string[];
   beforeHashes: (string | null)[];
   afterHashes: string[];
