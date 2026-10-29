@@ -337,8 +337,17 @@ try {
       });
     }, 90000);
     child.on('error', error => {
-      const unavailable = /ENOENT|not found/i.test(error.message);
-      finish({ ok: false, available: false, status: 'UNAVAILABLE', summary: unavailable ? 'Docker unavailable' : 'Could not start isolated npm runner', output: error.message, commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', error.message, plan.lockfileSha256)) });
+      const cleanup = removeAndVerifyContainer(containerName);
+      const reason = cleanup.verified
+        ? error.message
+        : error.message + '\\nContainer cleanup could not be verified.';
+      finish({
+        ok: false, available: false, status: 'UNAVAILABLE',
+        summary: cleanup.verified ? 'Could not start isolated npm runner' : 'Docker unavailable and container cleanup unverified',
+        output: (reason + '\\n' + cleanup.output).slice(-12000),
+        commands: plan.scripts.map(item => baseEvidence(item.name, item.required, 'UNAVAILABLE', reason, plan.lockfileSha256)),
+        cleanupVerified: cleanup.verified, cleanupOutput: cleanup.output,
+      });
     });
     child.on('close', code => {
       const cleanup = removeAndVerifyContainer(containerName);
@@ -373,7 +382,8 @@ try {
         output: ([parsed.error, stderr, commands.map(item => item.name + ': ' + item.status + '\n' + item.output).join('\n'), 'Container cleanup verified.', cleanup.output].filter(Boolean).join('\n')).slice(-12000),
         commands, cleanupVerified: true, cleanupOutput: cleanup.output,
       });
-    });    });
+    });
+    });
   } finally {
     // Read-only staged directories need write permission restored on the host
     // before their entries can be unlinked during cleanup.
