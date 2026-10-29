@@ -145,7 +145,7 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
 
   it('keeps original host project bytes unchanged when generated commands write to their workspace', async () => {
     const before = new Set(runnerContainers());
-    const root = createProject('node -e "require(\\'node:fs\\').writeFileSync(\\'host-sentinel.txt\\', \\'changed\\')"');
+    const root = createProject("node -e \"require('node:fs').writeFileSync('host-sentinel.txt', 'changed')\"");
     const sentinel = path.join(root, 'host-sentinel.txt');
     fs.writeFileSync(sentinel, 'original-host-bytes', 'utf8');
     const original = fs.readFileSync(sentinel);
