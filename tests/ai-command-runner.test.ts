@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { inspectGeneratedProject, isPinnedRunnerImage, runProjectCommands, validateProjectTreeLimits } from '../lib/ai-command-runner';
+import { inspectGeneratedProject, isPinnedRunnerImage, removeAndVerifyContainer, runProjectCommands, validateProjectTreeLimits } from '../lib/ai-command-runner';
 
 const roots: string[] = [];
 function workspace() {
@@ -14,6 +14,38 @@ function write(root: string, name: string, content: string) {
 }
 afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+});
+
+describe('isolated runner container cleanup verification', () => {
+  it('confirms cleanup only after Docker reports the named container absent', () => {
+    const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-fake-docker-cleanup-'));
+    roots.push(fakeBin);
+    const fakeDocker = path.join(fakeBin, 'docker');
+    fs.writeFileSync(fakeDocker, '#!/bin/sh\\nif [ "$1" = "rm" ]; then exit 1; fi\\nif [ "$1" = "ps" ]; then exit 0; fi\\nexit 2\\n', { mode: 0o755 });
+    const previousPath = process.env.PATH;
+    process.env.PATH = fakeBin;
+    try {
+      expect(removeAndVerifyContainer('alex-studio-runner-cleanup-test')).toMatchObject({ verified: true });
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  });
+
+  it('does not claim cleanup when the named container remains after removal', () => {
+    const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-fake-docker-stuck-'));
+    roots.push(fakeBin);
+    const fakeDocker = path.join(fakeBin, 'docker');
+    fs.writeFileSync(fakeDocker, '#!/bin/sh\\nif [ "$1" = "rm" ]; then exit 1; fi\\nif [ "$1" = "ps" ]; then printf "%s\\n" "alex-studio-runner-stuck-test"; exit 0; fi\\nexit 2\\n', { mode: 0o755 });
+    const previousPath = process.env.PATH;
+    process.env.PATH = fakeBin;
+    try {
+      expect(removeAndVerifyContainer('alex-studio-runner-stuck-test')).toMatchObject({ verified: false });
+    } finally {
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  });
 });
 
 describe('isolated npm runner preflight', () => {
