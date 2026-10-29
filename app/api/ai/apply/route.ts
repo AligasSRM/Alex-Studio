@@ -11,6 +11,7 @@ import { rollbackAppliedSnapshots } from '@/lib/ai-apply-rollback';
 import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
 import { saveAIApplyBatch } from '@/lib/ai-apply-batches';
 import { readJsonBody } from '@/lib/request-body';
+import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
 
 const MAX_APPLY_BODY_BYTES = 3 * 1024 * 1024;
 
@@ -49,7 +50,7 @@ export async function POST(request: Request) {
       const normalized = file.path.replace(/\\/g, '/');
       resolveProjectPath(body.projectId, normalized);
       if (normalized !== file.path || seen.has(normalized)) throw new Error('Duplicate or non-canonical file path');
-      if (/(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*|node_modules|\.git|\.alex)(\/|$)/i.test(normalized)) {
+      if (isProtectedAIGeneratedPath(normalized)) {
         throw new Error('Protected path denied');
       }
       seen.add(normalized);
