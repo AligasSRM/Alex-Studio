@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { estimateAICostUsd, recordAIUsage, type AIUsageEntry } from '../lib/ai-usage';
 import { projectRoot } from '../lib/path-security';
 
@@ -7,6 +8,7 @@ const originalInputRate = process.env.AI_INPUT_USD_PER_1M_TOKENS;
 const originalOutputRate = process.env.AI_OUTPUT_USD_PER_1M_TOKENS;
 const originalWarning = process.env.AI_MONTHLY_WARNING_USD;
 const ids: string[] = [];
+const externalDirs: string[] = [];
 
 function makeProject() {
   const id = 'usage-test-' + process.pid + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
@@ -28,6 +30,7 @@ function entry(overrides: Partial<AIUsageEntry> = {}): AIUsageEntry {
 
 afterEach(() => {
   for (const id of ids.splice(0)) fs.rmSync(projectRoot(id), { recursive: true, force: true });
+  for (const directory of externalDirs.splice(0)) fs.rmSync(directory, { recursive: true, force: true });
   if (originalInputRate === undefined) delete process.env.AI_INPUT_USD_PER_1M_TOKENS;
   else process.env.AI_INPUT_USD_PER_1M_TOKENS = originalInputRate;
   if (originalOutputRate === undefined) delete process.env.AI_OUTPUT_USD_PER_1M_TOKENS;
@@ -75,4 +78,24 @@ describe('AI usage and cost accounting', () => {
     fs.symlinkSync(outside, path.join(directory, 'ai-usage.json'));
     expect(() => recordAIUsage(id, entry())).toThrow('Usage ledger must be a regular file');
   });
+  it('rejects a symlinked .alex metadata directory before writing outside the project', () => {
+    const id = makeProject();
+    const metadata = path.join(projectRoot(id), '.alex');
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-usage-outside-'));
+    externalDirs.push(outside);
+    fs.symlinkSync(outside, metadata, 'dir');
+
+    expect(() => recordAIUsage(id, entry())).toThrow('Usage metadata directory must be a real directory');
+    expect(fs.existsSync(path.join(outside, 'ai-usage.json'))).toBe(false);
+  });
+
+  it('rejects an oversized usage ledger instead of reading or growing it without a bound', () => {
+    const id = makeProject();
+    const metadata = path.join(projectRoot(id), '.alex');
+    fs.mkdirSync(metadata, { recursive: true });
+    fs.writeFileSync(path.join(metadata, 'ai-usage.json'), ' '.repeat(4 * 1024 * 1024 + 1));
+
+    expect(() => recordAIUsage(id, entry())).toThrow('Usage ledger exceeds the safe storage limit');
+  });
+
 });
