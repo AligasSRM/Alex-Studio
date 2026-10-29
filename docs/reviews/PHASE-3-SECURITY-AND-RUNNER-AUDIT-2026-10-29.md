@@ -40,3 +40,12 @@
 - [x] Preserve the trusted-computing-base limitation; do not claim full host/kernel isolation.
 
 **Final decision — CLOSED:** The daemon-unavailable regression distinguishes infrastructure failure (`UNAVAILABLE`) from a generated command's non-zero exit (`FAIL`). PR #69 is merged, and both required workflows passed on its exact head commit `fe867319e4afa0cca70f2f37a847f2200c1d7987`: [CI run 40878971790](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878971790) and [Docker Integration run 40878972379](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878972379). Phase 3 acceptance gates are satisfied within the documented scope. Docker daemon, host kernel, pinned image, and trusted cache remain trusted components; this is not a claim of complete host/kernel isolation.
+
+
+## Post-Phase 3 hardening follow-up — approved runner image allowlist
+
+**Finding (read-only audit, 2026-10-29):** the original image validator accepted any Microsoft Playwright tag with any syntactically valid SHA-256 digest. A digest pins an artifact but does not, by itself, establish that the artifact has been reviewed and approved. The manual Docker workflow input had the same overly broad validation.
+
+**Change proposed in PR:** restrict the runner and manual workflow input to the single currently reviewed image `mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2`. Unit tests must reject a different digest and a different tag even when both are syntactically valid. This is a hardening follow-up; it does not reopen the already closed Phase 3 acceptance gate or imply that the image is independently certified beyond the recorded review.
+
+**Acceptance evidence required:** unit CI and real-Docker integration must pass on the exact PR head. The merge decision remains separate and requires explicit project-owner approval.
