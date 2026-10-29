@@ -68,9 +68,10 @@ export function validateProjectTreeLimits(root: string): void {
   visit(root, 0);
 }
 
-const APPROVED_RUNNER_IMAGES = new Set<string>([
-  'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2',
-]);
+export const APPROVED_RUNNER_IMAGE =
+  'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2';
+
+const APPROVED_RUNNER_IMAGES = new Set<string>([APPROVED_RUNNER_IMAGE]);
 
 /** Accept only an explicitly reviewed image digest, not any syntactically valid digest. */
 export function isPinnedRunnerImage(image: string | undefined): image is string {
