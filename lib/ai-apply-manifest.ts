@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { projectRoot } from './path-security';
 
 export type BatchManifest = {
@@ -42,7 +43,7 @@ function fileFor(projectId: string, batchId: string) {
 
 export function writeBatchManifest(projectId: string, manifest: BatchManifest) {
   const file = fileFor(projectId, manifest.batchId);
-  const temp = file + '.tmp-' + process.pid;
+  const temp = file + '.tmp-' + randomUUID();
   fs.writeFileSync(temp, JSON.stringify(manifest), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
   try { fs.renameSync(temp, file); } catch (error) { fs.rmSync(temp, { force: true }); throw error; }
   fs.chmodSync(file, 0o600);
