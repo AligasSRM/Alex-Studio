@@ -124,4 +124,37 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
     expect(result.commands.find(command => command.name === 'test')?.terminationReason).toContain('timed out');
     await expectNoNewRunnerContainers(before);
   }, 120000);
+  it('does not pass host-only environment secrets into generated commands', async () => {
+    const key = 'ALEX_STUDIO_HOST_ONLY_SENTINEL';
+    const previous = process.env[key];
+    process.env[key] = 'must-not-enter-container';
+    try {
+      const before = new Set(runnerContainers());
+      const root = createProject('node -e "process.exit(process.env.ALEX_STUDIO_HOST_ONLY_SENTINEL ? 17 : 0)"');
+      const result = await runProjectCommands(root);
+      if (result.status !== 'PASS') {
+        throw new Error('Environment isolation proof failed: ' + JSON.stringify({ status: result.status, summary: result.summary, output: result.output, commands: result.commands }, null, 2));
+      }
+      expect(result.commands.find(command => command.name === 'test')?.status).toBe('PASS');
+      await expectNoNewRunnerContainers(before);
+    } finally {
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    }
+  }, 120000);
+
+  it('keeps original host project bytes unchanged when generated commands write to their workspace', async () => {
+    const before = new Set(runnerContainers());
+    const root = createProject("node -e \"require('node:fs').writeFileSync('host-sentinel.txt', 'changed')\"");
+    const sentinel = path.join(root, 'host-sentinel.txt');
+    fs.writeFileSync(sentinel, 'original-host-bytes', 'utf8');
+    const original = fs.readFileSync(sentinel);
+    const result = await runProjectCommands(root);
+    if (result.status !== 'PASS') {
+      throw new Error('Host-write isolation proof failed: ' + JSON.stringify({ status: result.status, summary: result.summary, output: result.output, commands: result.commands }, null, 2));
+    }
+    expect(fs.readFileSync(sentinel).equals(original)).toBe(true);
+    await expectNoNewRunnerContainers(before);
+  }, 120000);
+
 });
