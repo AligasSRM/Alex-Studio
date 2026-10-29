@@ -10,7 +10,8 @@
     "test": "jest --runInBand",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit",
-    "postinstall": "node scripts/patch-deepmerge.js"
+    "postinstall": "node scripts/patch-deepmerge.js",
+    "desktop": "node scripts/start-desktop.js"
   },
   "dependencies": {
     "@monaco-editor/react": "4.7.0",
