@@ -39,3 +39,11 @@ Boundary: changes are proposed through a separate branch/PR; `main` is not edite
 PR #89 (ESLint/Next configuration alignment) and PR #90 (Docker timeout cleanup race) are merged. The current `main` commit was confirmed to match PR #90's merge commit `e9cffb4e46605706152ec041a9fb6d3fc04b99e4`. PR #90's CI and Docker runner integration passed on the tested PR head. Independent post-merge CI and Docker evidence on `main` has not yet been established here, so full release acceptance remains open.
 
 The authentication item is closed as out of scope by owner decision; it is not a code defect to fix. The full AI lifecycle, exact-`main` runtime evidence, performance thresholds, and final security review remain open.
+
+## Follow-up finding — bounded timeout cleanup in both runner paths
+
+**Finding (2026-10-29):** the npm command runner and browser smoke-test runner kill the Docker CLI at timeout. Cleanup must not be treated as verified until the process that can create the named container has emitted `close`. A missing `close` event must not leave the request waiting indefinitely or produce a false cleanup success.
+
+**Proposed remediation in PR #92:** both runners wait for `close` before normal cleanup verification, use a bounded fallback that returns `UNAVAILABLE` with cleanup explicitly unverified, and retry cleanup if a late `close` event arrives. Regression tests cover the timeout ordering and late-close retry.
+
+**Acceptance gate:** this is not closed until unit CI, type check, lint, production build, browser acceptance, and real-Docker integration pass on the exact final PR head SHA. The fallback path is fail-closed; it does not certify that Docker daemon/host failure can never leave resources behind. No merge has been performed.
