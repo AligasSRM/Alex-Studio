@@ -14,6 +14,47 @@ function write(root: string, name: string, content: string) {
 }
 afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
+  it('reports missing offline cache configuration as UNAVAILABLE', async () => {
+    const root = workspace();
+    write(root, 'package.json', JSON.stringify({ name: 'demo', version: '1.0.0', scripts: { build: 'node build.js', test: 'node test.js' } }));
+    write(root, 'package-lock.json', JSON.stringify({ name: 'demo', version: '1.0.0', lockfileVersion: 3, packages: { '': { name: 'demo', version: '1.0.0' } } }));
+    const previousCache = process.env.AI_RUNNER_NPM_CACHE;
+    const previousImage = process.env.AI_RUNNER_DOCKER_IMAGE;
+    delete process.env.AI_RUNNER_NPM_CACHE;
+    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64);
+    try {
+      const result = await runProjectCommands(root);
+      expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE', summary: 'Offline npm cache is not configured' });
+      expect(result.commands.every(command => command.status === 'UNAVAILABLE')).toBe(true);
+    } finally {
+      if (previousCache === undefined) delete process.env.AI_RUNNER_NPM_CACHE;
+      else process.env.AI_RUNNER_NPM_CACHE = previousCache;
+      if (previousImage === undefined) delete process.env.AI_RUNNER_DOCKER_IMAGE;
+      else process.env.AI_RUNNER_DOCKER_IMAGE = previousImage;
+    }
+  });
+
+  it('reports an unpinned or missing runner image as UNAVAILABLE before execution', async () => {
+    const root = workspace();
+    write(root, 'package.json', JSON.stringify({ name: 'demo', version: '1.0.0', scripts: { build: 'node build.js', test: 'node test.js' } }));
+    write(root, 'package-lock.json', JSON.stringify({ name: 'demo', version: '1.0.0', lockfileVersion: 3, packages: { '': { name: 'demo', version: '1.0.0' } } }));
+    const previousCache = process.env.AI_RUNNER_NPM_CACHE;
+    const previousImage = process.env.AI_RUNNER_DOCKER_IMAGE;
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-cache-test-'));
+    roots.push(cache);
+    process.env.AI_RUNNER_NPM_CACHE = cache;
+    delete process.env.AI_RUNNER_DOCKER_IMAGE;
+    try {
+      const result = await runProjectCommands(root);
+      expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE', summary: 'Pinned runner image is not configured' });
+      expect(result.commands.every(command => command.status === 'UNAVAILABLE')).toBe(true);
+    } finally {
+      if (previousCache === undefined) delete process.env.AI_RUNNER_NPM_CACHE;
+      else process.env.AI_RUNNER_NPM_CACHE = previousCache;
+      if (previousImage === undefined) delete process.env.AI_RUNNER_DOCKER_IMAGE;
+      else process.env.AI_RUNNER_DOCKER_IMAGE = previousImage;
+    }
+  });
 });
 
 describe('isolated npm runner preflight', () => {
