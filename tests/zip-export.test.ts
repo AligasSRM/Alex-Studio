@@ -35,6 +35,21 @@ describe('project ZIP export', () => {
     }
   });
 
+  it('excludes common secret-bearing filenames and directories at any depth', () => {
+    fs.mkdirSync(path.join(root, 'config'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'secrets'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'index.html'), 'safe');
+    fs.writeFileSync(path.join(root, 'credentials.json'), 'credential-secret');
+    fs.writeFileSync(path.join(root, 'id_rsa'), 'private-key');
+    fs.writeFileSync(path.join(root, 'config', 'secrets.txt'), 'secret-value');
+    fs.writeFileSync(path.join(root, 'secrets', 'config.json'), 'nested-secret');
+    const zip = createProjectZip(root);
+    expect(zip.includes(Buffer.from('index.html'))).toBe(true);
+    for (const excluded of ['credentials.json', 'credential-secret', 'id_rsa', 'private-key', 'secrets.txt', 'secret-value', 'config.json', 'nested-secret']) {
+      expect(zip.includes(Buffer.from(excluded))).toBe(false);
+    }
+  });
+
   it('rejects a symlink as the project root', () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-outside-'));
     const link = path.join(root, 'linked-project');
