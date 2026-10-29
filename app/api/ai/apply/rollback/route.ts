@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not read batch manifest' }, { status: 400 });
   }
   if (!manifest) return NextResponse.json({ error: 'AI apply batch not found' }, { status: 404 });
-  if (manifest.status !== 'applied') {
+  if (!['applied', 'rollback-failed', 'rolling-back'].includes(manifest.status)) {
     return NextResponse.json({ error: 'Only a currently applied batch can be rolled back', status: manifest.status }, { status: 409 });
   }
 
