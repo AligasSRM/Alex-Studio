@@ -17,6 +17,7 @@ import { issueVerificationProof } from '@/lib/ai-verification-proof';
 import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, runProjectCommands, type CommandRun } from '@/lib/ai-command-runner';
 import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
+import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -67,7 +68,7 @@ function safePath(projectId: string, value: unknown) {
   if (typeof value !== 'string') throw new Error('Invalid AI file path');
   const normalized = value.replace(/\\/g, '/');
   resolveProjectPath(projectId, normalized);
-  if (normalized !== value || SENSITIVE_PATH.test(normalized)) {
+  if (normalized !== value || normalized !== normalized.trim() || isProtectedAIGeneratedPath(normalized)) {
     throw new Error('Protected or non-canonical path denied');
   }
   return normalized;
