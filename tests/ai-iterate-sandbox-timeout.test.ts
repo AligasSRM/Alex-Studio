@@ -18,8 +18,7 @@ describe('AI iterate sandbox timeout cleanup ordering', () => {
     jest.clearAllMocks();
   });
 
-  it('waits for the Docker CLI close event before removing and inspecting the container', async () => {
-    jest.useFakeTimers();
+  function dockerChild() {
     const child = Object.assign(new EventEmitter(), {
       stdout: new PassThrough(),
       stderr: new PassThrough(),
@@ -30,7 +29,12 @@ describe('AI iterate sandbox timeout cleanup ordering', () => {
       if (args[0] === 'ps') return { status: 0, stdout: '', stderr: '' };
       return { status: 0, stdout: 'removed', stderr: '' };
     });
+    return child;
+  }
 
+  it('waits for the Docker CLI close event before removing and inspecting the container', async () => {
+    jest.useFakeTimers();
+    const child = dockerChild();
     const resultPromise = runSandbox(process.cwd());
     await jest.advanceTimersByTimeAsync(20_000);
 
@@ -39,10 +43,29 @@ describe('AI iterate sandbox timeout cleanup ordering', () => {
 
     child.emit('close', null);
     const result = await resultPromise;
-
     expect(mockSpawnSync).toHaveBeenCalledTimes(2);
     expect(result.ok).toBe(false);
     expect(result.summary).toContain('timed out');
     expect(result.output).toContain('container absence verified: true');
+  });
+
+  it('returns UNAVAILABLE when close is never observed and retries cleanup on late close', async () => {
+    jest.useFakeTimers();
+    const child = dockerChild();
+    const resultPromise = runSandbox(process.cwd());
+
+    await jest.advanceTimersByTimeAsync(25_000);
+    const result = await resultPromise;
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(mockSpawnSync).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      ok: false,
+      available: false,
+      summary: 'Sandbox timed out; Docker CLI close was not observed and container cleanup is unverified',
+    });
+    expect(result.output).toContain('Docker CLI close was not observed');
+
+    child.emit('close', null);
+    expect(mockSpawnSync).toHaveBeenCalledTimes(4);
   });
 });
