@@ -9,6 +9,7 @@ import { readProjectFile, writeProjectFile } from '@/lib/files';
 import { verifyVerificationProof } from '@/lib/ai-verification-proof';
 import { rollbackAppliedSnapshots } from '@/lib/ai-apply-rollback';
 import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
+import { saveAIApplyBatch } from '@/lib/ai-apply-batches';
 import { readJsonBody } from '@/lib/request-body';
 
 const MAX_APPLY_BODY_BYTES = 3 * 1024 * 1024;
@@ -76,13 +77,30 @@ export async function POST(request: Request) {
   }
 
   const batchId = randomUUID();
+  const createdAt = new Date().toISOString();
   const auditEvent = {
     batchId,
-    timestamp: new Date().toISOString(),
+    timestamp: createdAt,
     paths: changes.map((change) => change.path),
     beforeHashes: snapshots.map((snapshot) => snapshot.content === null ? null : hash(snapshot.content)),
     afterHashes: changes.map((change) => hash(change.content)),
   };
+  const batchManifest = {
+    batchId,
+    createdAt,
+    updatedAt: createdAt,
+    status: 'started' as const,
+    snapshots: snapshots.map((snapshot, index) => ({
+      path: snapshot.path,
+      beforeContent: snapshot.content,
+      afterContent: changes[index].content,
+    })),
+  };
+  try {
+    saveAIApplyBatch(body.projectId, batchManifest);
+  } catch {
+    return NextResponse.json({ error: 'Could not persist the AI apply batch snapshots; no files were changed' }, { status: 500 });
+  }
   try {
     recordAIApplyAudit(body.projectId, { ...auditEvent, outcome: 'started' });
   } catch {
@@ -95,7 +113,9 @@ export async function POST(request: Request) {
       writeProjectFile(body.projectId, change.path, change.content);
       applied.push(change.path);
     }
-    recordAIApplyAudit(body.projectId, { ...auditEvent, timestamp: new Date().toISOString(), outcome: 'applied', rollbackStatus: 'not-needed' });
+    const appliedAt = new Date().toISOString();
+    saveAIApplyBatch(body.projectId, { ...batchManifest, updatedAt: appliedAt, status: 'applied' });
+    recordAIApplyAudit(body.projectId, { ...auditEvent, timestamp: appliedAt, outcome: 'applied', rollbackStatus: 'not-needed' });
     return NextResponse.json({ ok: true, batchId, applied, count: applied.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     const rollbackFailures = rollbackAppliedSnapshots(snapshots, applied, (snapshot) => {
@@ -104,8 +124,19 @@ export async function POST(request: Request) {
       else writeProjectFile(body.projectId as string, snapshot.path, snapshot.content);
     });
     const rollbackStatus = rollbackFailures.length ? 'failed' : 'succeeded';
+    const failedAt = new Date().toISOString();
     try {
-      recordAIApplyAudit(body.projectId, { ...auditEvent, timestamp: new Date().toISOString(), outcome: 'failed', rollbackStatus });
+      saveAIApplyBatch(body.projectId, {
+        ...batchManifest,
+        updatedAt: failedAt,
+        status: rollbackFailures.length ? 'rollback-failed' : 'rolled-back',
+        ...(rollbackFailures.length ? { rollbackError: rollbackFailures.join(', ') } : {}),
+      });
+    } catch {
+      // The started manifest remains evidence if the final status update fails.
+    }
+    try {
+      recordAIApplyAudit(body.projectId, { ...auditEvent, timestamp: failedAt, outcome: 'failed', rollbackStatus });
     } catch {
       // The initial started event remains as evidence if the final audit append also fails.
     }
