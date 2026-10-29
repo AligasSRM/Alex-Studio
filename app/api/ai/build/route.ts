@@ -9,6 +9,7 @@ import { assertLocalMutation } from '@/lib/path-security';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { readJsonBody } from '@/lib/request-body';
+import { extractAIResponseText } from '@/lib/ai-response';
 
 const MAX_BODY_BYTES = 24 * 1024;
 const MAX_PROMPT_CHARS = 12_000;
@@ -166,6 +167,7 @@ export async function POST(request: Request) {
     }
     const rawResult = await response.json() as {
       output_text?: unknown;
+      output?: unknown;
       usage?: { input_tokens?: unknown; output_tokens?: unknown };
       message?: { content?: unknown };
       prompt_eval_count?: unknown;
@@ -173,13 +175,13 @@ export async function POST(request: Request) {
     };
     const result = provider === 'ollama'
       ? {
-          output_text: rawResult.message?.content,
+          output_text: extractAIResponseText(rawResult),
           usage: {
             input_tokens: rawResult.prompt_eval_count,
             output_tokens: rawResult.eval_count,
           },
         }
-      : rawResult;
+      : { output_text: extractAIResponseText(rawResult), usage: rawResult.usage };
     if (typeof result.output_text !== 'string') return NextResponse.json({ error: 'AI provider returned an invalid response' }, { status: 502 });
     const inputTokens = Number.isInteger(result.usage?.input_tokens) ? result.usage?.input_tokens as number : null;
     const outputTokens = Number.isInteger(result.usage?.output_tokens) ? result.usage?.output_tokens as number : null;
