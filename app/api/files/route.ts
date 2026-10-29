@@ -1,3 +1,64 @@
-export const runtime='nodejs';import {NextResponse} from 'next/server';import {assertLocalMutation,assertLocalRequest} from '@/lib/path-security';import {readProjectFile,writeProjectFile,listProjectFiles} from '@/lib/files';import {getProject} from '@/lib/project-store';
-export async function GET(r:Request){if(!assertLocalRequest(r))return NextResponse.json({error:'Local requests only'},{status:403});const u=new URL(r.url),id=u.searchParams.get('projectId')||'',p=u.searchParams.get('path')||'';if(!getProject(id))return NextResponse.json({error:'Project not found'},{status:404});if(!p)return NextResponse.json({files:listProjectFiles(id)},{headers:{'Cache-Control':'no-store'}});try{return NextResponse.json({path:p,content:readProjectFile(id,p)},{headers:{'Cache-Control':'no-store'}});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Read failed'},{status:400});}}
-export async function POST(r:Request){if(!assertLocalMutation(r))return NextResponse.json({error:'Local same-origin requests only'},{status:403});const b=await r.json().catch(()=>null);if(!b||typeof b.projectId!=='string'||typeof b.path!=='string'||typeof b.content!=='string')return NextResponse.json({error:'projectId, path and content are required'},{status:400});if(b.approved!==true)return NextResponse.json({error:'Explicit approval required'},{status:409});if(!getProject(b.projectId))return NextResponse.json({error:'Project not found'},{status:404});try{return NextResponse.json({ok:true,path:b.path,...writeProjectFile(b.projectId,b.path,b.content)});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:'Write failed'},{status:400});}}
+export const runtime = 'nodejs';
+
+import { NextResponse } from 'next/server';
+import { assertLocalMutation, assertLocalRequest } from '@/lib/path-security';
+import { readProjectFile, writeProjectFile, listProjectFiles } from '@/lib/files';
+import { getProject } from '@/lib/project-store';
+import { readJsonBody } from '@/lib/request-body';
+
+const MAX_WRITE_BODY_BYTES = 1_100_000;
+
+export async function GET(request: Request) {
+  if (!assertLocalRequest(request)) {
+    return NextResponse.json({ error: 'Local requests only' }, { status: 403 });
+  }
+
+  const url = new URL(request.url);
+  const projectId = url.searchParams.get('projectId') || '';
+  const filePath = url.searchParams.get('path') || '';
+  if (!getProject(projectId)) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  }
+
+  if (!filePath) {
+    return NextResponse.json({ files: listProjectFiles(projectId) }, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  }
+
+  try {
+    return NextResponse.json({ path: filePath, content: readProjectFile(projectId, filePath) }, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Read failed' }, { status: 400 });
+  }
+}
+
+export async function POST(request: Request) {
+  if (!assertLocalMutation(request)) {
+    return NextResponse.json({ error: 'Local same-origin requests only' }, { status: 403 });
+  }
+
+  const parsed = await readJsonBody(request, MAX_WRITE_BODY_BYTES);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+
+  const body = parsed.value as { projectId?: unknown; path?: unknown; content?: unknown; approved?: unknown } | null;
+  if (!body || typeof body.projectId !== 'string' || typeof body.path !== 'string' || typeof body.content !== 'string') {
+    return NextResponse.json({ error: 'projectId, path and content are required' }, { status: 400 });
+  }
+  if (body.approved !== true) {
+    return NextResponse.json({ error: 'Explicit approval required' }, { status: 409 });
+  }
+  if (!getProject(body.projectId)) {
+    return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  }
+
+  try {
+    return NextResponse.json({ ok: true, path: body.path, ...writeProjectFile(body.projectId, body.path, body.content) }, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Write failed' }, { status: 400 });
+  }
+}
