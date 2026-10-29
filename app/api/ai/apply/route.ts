@@ -7,6 +7,7 @@ import { assertLocalMutation, resolveProjectPath, assertTextContent } from '@/li
 import { getProject } from '@/lib/project-store';
 import { readProjectFile, writeProjectFile } from '@/lib/files';
 import { verifyVerificationProof } from '@/lib/ai-verification-proof';
+import { rollbackAppliedSnapshots } from '@/lib/ai-apply-rollback';
 import { readJsonBody } from '@/lib/request-body';
 
 const MAX_APPLY_BODY_BYTES = 3 * 1024 * 1024;
@@ -81,13 +82,21 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ ok: true, applied, count: applied.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    for (const snapshot of snapshots.filter((item) => applied.includes(item.path)).reverse()) {
-      try {
-        const target = resolveProjectPath(body.projectId, snapshot.path);
-        if (snapshot.content === null) fs.rmSync(target, { force: true });
-        else writeProjectFile(body.projectId, snapshot.path, snapshot.content);
-      } catch { /* Preserve the original failure; any rollback issue must be surfaced below. */ }
+    const rollbackFailures = rollbackAppliedSnapshots(snapshots, applied, (snapshot) => {
+      const target = resolveProjectPath(body.projectId as string, snapshot.path);
+      if (snapshot.content === null) fs.rmSync(target, { force: true });
+      else writeProjectFile(body.projectId as string, snapshot.path, snapshot.content);
+    });
+    const originalError = error instanceof Error ? error.message : 'unknown write error';
+    if (rollbackFailures.length) {
+      return NextResponse.json({
+        error: 'Batch apply failed: ' + originalError + '. Rollback was incomplete; manual recovery may be required for: ' + rollbackFailures.join(', '),
+        rollback: { status: 'INCOMPLETE', failedPaths: rollbackFailures },
+      }, { status: 500 });
     }
-    return NextResponse.json({ error: error instanceof Error ? 'Batch apply failed; rollback was attempted: ' + error.message : 'Batch apply failed; rollback was attempted' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Batch apply failed: ' + originalError + '. All previously applied files were restored from snapshots.',
+      rollback: { status: 'COMPLETE', restoredPaths: applied.slice().reverse() },
+    }, { status: 500 });
   }
 }
