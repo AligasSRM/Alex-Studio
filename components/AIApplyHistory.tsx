@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 type Batch = {
   batchId: string;
@@ -33,7 +33,7 @@ export function AIApplyHistory({ projectId, refreshKey, onRolledBack }: {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     if (!projectId) { setBatches([]); return; }
     setLoading(true);
     try {
@@ -45,9 +45,9 @@ export function AIApplyHistory({ projectId, refreshKey, onRolledBack }: {
     } finally {
       setLoading(false);
     }
-  }
+  }, [projectId]);
 
-  useEffect(() => { void refresh(); }, [projectId, refreshKey]);
+  useEffect(() => { void refresh(); }, [refresh, refreshKey]);
 
   async function rollback(batch: Batch) {
     const files = batch.paths.join(', ');
