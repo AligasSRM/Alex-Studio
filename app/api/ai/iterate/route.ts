@@ -263,6 +263,11 @@ export async function POST(request: Request) {
     }
     if (!changed.length || changed.length > MAX_FILES) return NextResponse.json({ error: 'Final draft must contain 1–10 changed files', diagnostic, repairs }, { status: 422 });
     const acceptance = analyzeGeneratedProject(Array.from(working.entries()).map(([filePath, content]) => ({ path: filePath, content })), body.requirements);
+    acceptance.requirements = acceptance.requirements.map((item, index) => {
+      const evidence = diagnostic.requirementEvidence?.[index];
+      return evidence ? { ...item, status: evidence.status, evidence: evidence.method + ': ' + evidence.evidence } : item;
+    });
+    if (acceptance.requirements.some(item => item.status === 'fail')) acceptance.status = 'fail';
     const verificationProof = diagnostic.ok ? issueVerificationProof(body.projectId, changed) : null;
     return NextResponse.json({ ok: diagnostic.ok, verificationProof, commandChecks, summary: diagnostic.ok ? 'Isolated browser smoke test and applicable project commands passed; inspect the acceptance report for requirements that remain unverified.' : 'Verification ended with failures; inspect browser and command diagnostics before applying.', diagnostic, repairs, acceptance,
       build: { summary: 'Draft checked by the sandbox smoke test; not applied to the real project.', plan: repairs.map(x => 'Repair round ' + x.round + ': ' + x.summary), requirements: Array.isArray(body.requirements) ? body.requirements.filter((item): item is string => typeof item === 'string').slice(0, 20) : [], files: changed }, appliedToProject: false }, { headers: { 'Cache-Control': 'no-store' } });
