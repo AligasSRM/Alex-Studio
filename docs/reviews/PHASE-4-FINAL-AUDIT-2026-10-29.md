@@ -3,8 +3,8 @@
 **Repository:** `AligasSRM/Alex-Studio`  
 **Audit scope:** ZIP export security, editor undo/redo lifecycle, approved multi-file apply rollback, evidence gates, and phase disposition.  
 **Baseline:** `main` commit `ab92cf2479fc85db06ea6c37ccdbf0b6fa2ae029` (initial audit baseline).  
-**Latest implementation:** PR [#78](https://github.com/AligasSRM/Alex-Studio/pull/78) merged as `98d55fe5267658764ecc2c9705de31ae563d551c`; pre-merge CI [40895335131](https://github.com/AligasSRM/Alex-Studio/actions/runs/40895335131) passed. Main-branch post-merge CI [40895826408](https://github.com/AligasSRM/Alex-Studio/actions/runs/40895826408) is pending final result at report update time.  
-**Disposition:** Phase 4 remains OPEN until post-merge main CI is green and the final scope/acceptance decision is recorded.
+**Latest implementation:** PR [#78](https://github.com/AligasSRM/Alex-Studio/pull/78) merged as `98d55fe5267658764ecc2c9705de31ae563d551c`; pre-merge CI [40895335131](https://github.com/AligasSRM/Alex-Studio/actions/runs/40895335131) passed. Main-branch post-merge CI [40895826408](https://github.com/AligasSRM/Alex-Studio/actions/runs/40895826408) completed successfully on merge commit `98d55fe5267658764ecc2c9705de31ae563d551c`.  
+**Disposition:** Phase 4 remains OPEN only pending the explicit product acceptance decision for session-only editor undo/redo.
 
 ## Ordered work items
 
