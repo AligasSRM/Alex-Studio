@@ -132,12 +132,12 @@ export async function POST(request: Request) {
         ? await fetch('https://api.groq.com/openai/v1/responses', {
             method: 'POST', signal: controller.signal,
             headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
+            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000, text: { format: { type: 'json_object' } } }),
           })
         : await fetch('https://api.openai.com/v1/responses', {
             method: 'POST', signal: controller.signal,
             headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
+            body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000, text: { format: { type: 'json_object' } } }),
           });
     if (!response.ok) {
       let providerError: { error?: { type?: unknown; code?: unknown } } = {};
