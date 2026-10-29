@@ -5,7 +5,7 @@ import { deflateRawSync } from 'node:zlib';
 const MAX_FILES = 10000;
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 const EXCLUDED_DIRS = new Set(['.git', '.alex', 'node_modules']);
-const SENSITIVE_NAME = /^(?:\.env(?:\..*)?|credentials(?:\..*)?|id_rsa(?:\..*)?|id_ed25519(?:\..*)?|secrets?(?:\..*)?)$/i;
+const SENSITIVE_NAME = /^(?:\.env(?:\..*)?|credentials(?:[-_.].*)?|id_rsa(?:\..*)?|id_ed25519(?:\..*)?|secrets?(?:[-_.].*)?)$/i;
 
 function isSensitiveName(name: string) {
   return name.startsWith('.') || EXCLUDED_DIRS.has(name) || SENSITIVE_NAME.test(name);
