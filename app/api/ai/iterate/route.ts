@@ -63,7 +63,7 @@ function safePath(projectId: string, value: unknown) {
   if (typeof value !== 'string') throw new Error('Invalid AI file path');
   const normalized = value.replace(/\\/g, '/');
   resolveProjectPath(projectId, normalized);
-  if (normalized !== value || isProtectedAIGeneratedPath(normalized)) {
+  if (normalized !== value || normalized !== normalized.trim() || isProtectedAIGeneratedPath(normalized)) {
     throw new Error('Protected or non-canonical path denied');
   }
   return normalized;
