@@ -173,7 +173,7 @@ function stageReadableProjectCopy(root: string): { sourcePath: string; cleanupPa
  */
 export function removeAndVerifyContainer(containerName: string): { verified: boolean; output: string } {
   const env = { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' };
-  const removed = spawnSync('docker', ['rm', '--force', '--time', '1', containerName], {
+  const removed = spawnSync('docker', ['rm', '--force', containerName], {
     encoding: 'utf8', timeout: 5000, env,
   });
   const inspected = spawnSync('docker', ['ps', '-a', '--filter', 'name=' + containerName, '--format', '{{.Names}}'], {
