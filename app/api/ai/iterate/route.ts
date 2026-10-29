@@ -12,6 +12,7 @@ import { listProjectFiles, readProjectFile } from '@/lib/files';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
+import { evaluateRequirements, parseBrowserSnapshot, type RequirementEvidence } from '@/lib/ai-requirement-evidence';
 import { issueVerificationProof } from '@/lib/ai-verification-proof';
 import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, runProjectCommands, type CommandRun } from '@/lib/ai-command-runner';
 import { readJsonBody } from '@/lib/request-body';
