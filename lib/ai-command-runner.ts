@@ -371,7 +371,12 @@ try {
       });
     });
     child.on('close', code => {
-      if (settled) return;
+      if (settled) {
+        // A close event arriving after the fail-closed fallback is still a cleanup
+        // opportunity: repeat removal/absence verification after the creator CLI is gone.
+        if (timedOut) removeAndVerifyContainer(containerName);
+        return;
+      }
       if (timeoutFallback) clearTimeout(timeoutFallback);
       const cleanup = removeAndVerifyContainer(containerName);
       if (timedOut) {
