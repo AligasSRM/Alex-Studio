@@ -5,6 +5,11 @@ import { deflateRawSync } from 'node:zlib';
 const MAX_FILES = 10000;
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
 const EXCLUDED_DIRS = new Set(['.git', '.alex', 'node_modules']);
+const SENSITIVE_NAME = /^(?:\.env(?:\..*)?|credentials(?:\..*)?|id_rsa(?:\..*)?|id_ed25519(?:\..*)?|secrets?(?:\..*)?)$/i;
+
+function isSensitiveName(name: string) {
+  return name.startsWith('.') || EXCLUDED_DIRS.has(name) || SENSITIVE_NAME.test(name);
+}
 
 function crc32(data: Buffer): number {
   let crc = 0xffffffff;
@@ -34,7 +39,7 @@ export function createProjectZip(projectDirectory: string): Buffer {
 
   function walk(directory: string, relative = '') {
     for (const item of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (item.name.startsWith('.') || EXCLUDED_DIRS.has(item.name) || item.isSymbolicLink()) continue;
+      if (isSensitiveName(item.name) || item.isSymbolicLink()) continue;
       const absolute = path.join(directory, item.name);
       const name = relative ? relative + '/' + item.name : item.name;
       if (item.isDirectory()) walk(absolute, name);
