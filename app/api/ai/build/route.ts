@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   try { body = JSON.parse(raw); } catch { return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 }); }
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   const input = body as { projectId?: unknown; prompt?: unknown; approved?: unknown };
-  if (input.approved !== true) return NextResponse.json({ error: 'Explicit approval required before paid generation' }, { status: 409 });
+  if (input.approved !== true) return NextResponse.json({ error: 'Explicit approval required before generation' }, { status: 409 });
   if (typeof input.projectId !== 'string' || typeof input.prompt !== 'string' ||
       !input.prompt.trim() || input.prompt.length > MAX_PROMPT_CHARS) {
     return NextResponse.json({ error: 'projectId and prompt (1–12000 characters) are required' }, { status: 400 });
@@ -176,7 +176,7 @@ export async function POST(request: Request) {
     if (typeof result.output_text !== 'string') return NextResponse.json({ error: 'AI provider returned an invalid response' }, { status: 502 });
     const inputTokens = Number.isInteger(result.usage?.input_tokens) ? result.usage?.input_tokens as number : null;
     const outputTokens = Number.isInteger(result.usage?.output_tokens) ? result.usage?.output_tokens as number : null;
-    const estimatedCostUsd = estimateAICostUsd(inputTokens, outputTokens);
+    const estimatedCostUsd = provider === 'ollama' ? 0 : estimateAICostUsd(inputTokens, outputTokens);
     let accounting: { monthlyCostUsd: number | null; budgetWarning: boolean };
     try {
       accounting = recordAIUsage(input.projectId, { timestamp: new Date().toISOString(), model, inputTokens, outputTokens, estimatedCostUsd });
