@@ -9,7 +9,10 @@ const enabled = process.env.RUN_DOCKER_INTEGRATION === '1';
   it('uses the approved image and verifies container cleanup after the browser smoke test', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-iterate-browser-test-'));
     try {
-      fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><head><title>Sandbox Test</title></head><body><main>Browser runner acceptance</main></body></html>\n', 'utf8');
+      fs.chmodSync(root, 0o755);
+      const indexPath = path.join(root, 'index.html');
+      fs.writeFileSync(indexPath, '<!doctype html><html><head><title>Sandbox Test</title></head><body><main>Browser runner acceptance</main></body></html>\n', { encoding: 'utf8', mode: 0o644 });
+      fs.chmodSync(indexPath, 0o644);
       const result = await runSandbox(root);
       if (!result.ok || !result.available) throw new Error('Browser sandbox failed: ' + JSON.stringify(result));
       expect(result.summary).toContain('container cleanup verified');
