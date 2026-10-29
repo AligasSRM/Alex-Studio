@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     responseRequirements: { planSteps: '1–12', requirements: '1–20 observable acceptance requirements', files: '1–10', fullFileContents: true },
   });
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const timeout = setTimeout(() => controller.abort(), provider === 'ollama' ? 120_000 : 30_000);
   try {
     const response = provider === 'ollama'
       ? await fetch('http://127.0.0.1:11434/api/chat', {
