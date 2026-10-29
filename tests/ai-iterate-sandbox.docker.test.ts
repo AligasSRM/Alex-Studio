@@ -11,7 +11,7 @@ const enabled = process.env.RUN_DOCKER_INTEGRATION === '1';
     try {
       fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><head><title>Sandbox Test</title></head><body><main>Browser runner acceptance</main></body></html>\n', 'utf8');
       const result = await runSandbox(root);
-      expect(result).toMatchObject({ ok: true, available: true }); // Failure output is emitted by Jest's received-value diff.
+      if (!result.ok || !result.available) throw new Error('Browser sandbox failed: ' + JSON.stringify(result));
       expect(result.summary).toContain('container cleanup verified');
       expect(result.output).toContain('container absence verified: true');
     } finally {
