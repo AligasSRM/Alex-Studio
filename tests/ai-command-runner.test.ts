@@ -131,7 +131,7 @@ describe('isolated npm runner preflight', () => {
     const previousCache = process.env.AI_RUNNER_NPM_CACHE;
     const previousImage = process.env.AI_RUNNER_DOCKER_IMAGE;
     delete process.env.AI_RUNNER_NPM_CACHE;
-    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64);
+    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2';
     try {
       const result = await runProjectCommands(root);
       expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE', summary: 'Offline npm cache is not configured' });
@@ -184,7 +184,7 @@ describe('isolated npm runner preflight', () => {
     const previousImage = process.env.AI_RUNNER_DOCKER_IMAGE;
     const previousPath = process.env.PATH;
     process.env.AI_RUNNER_NPM_CACHE = cache;
-    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64);
+    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2';
     process.env.PATH = fakeBin;
     try {
       const result = await runProjectCommands(root);
