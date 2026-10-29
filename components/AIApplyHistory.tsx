@@ -47,7 +47,10 @@ export function AIApplyHistory({ projectId, refreshKey, onRolledBack }: {
     }
   }, [projectId]);
 
-  useEffect(() => { void refresh(); }, [refresh, refreshKey]);
+  useEffect(() => {
+    // Defer the async refresh so loading-state updates happen after the effect's synchronous phase.
+    void Promise.resolve().then(() => refresh());
+  }, [refresh, refreshKey]);
 
   async function rollback(batch: Batch) {
     const files = batch.paths.join(', ');
