@@ -318,13 +318,20 @@ try {
   try {
     return await new Promise<CommandRun>((resolve) => {
     const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
-    let stdout = ''; let stderr = ''; let settled = false;
-    const finish = (value: CommandRun) => { if (!settled) { settled = true; clearTimeout(timer); resolve(value); } };
+    let stdout = ''; let stderr = ''; let settled = false; let timedOut = false;
+    let timeoutFallback: ReturnType<typeof setTimeout> | undefined;
+    const finish = (value: CommandRun) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        if (timeoutFallback) clearTimeout(timeoutFallback);
+        resolve(value);
+      }
+    };
     const collect = (current: string, chunk: Buffer) => (current + chunk.toString('utf8')).slice(-20000);
     child.stdout.on('data', chunk => { stdout = collect(stdout, chunk); });
     child.stderr.on('data', chunk => { stderr = collect(stderr, chunk); });
-    const timer = setTimeout(() => {
-      child.kill('SIGKILL');
+    const timeoutResult = () => {
       const cleanup = removeAndVerifyContainer(containerName);
       const status: CommandStatus = cleanup.verified ? 'FAIL' : 'UNAVAILABLE';
       const reason = cleanup.verified
@@ -340,6 +347,15 @@ try {
         output: ((stdout + stderr).slice(-8000) + '\n' + cleanup.output).slice(-12000),
         commands, cleanupVerified: cleanup.verified, cleanupOutput: cleanup.output,
       });
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      // Wait for the Docker CLI to close before inspecting or removing the container.
+      // This avoids a create-vs-cleanup race in which the daemon creates a container
+      // after an early cleanup check already reported that the name was absent.
+      child.kill('SIGKILL');
+      // Defensive fallback if the child process never emits close after SIGKILL.
+      timeoutFallback = setTimeout(timeoutResult, 5000);
     }, 90000);
     child.on('error', error => {
       const cleanup = removeAndVerifyContainer(containerName);
@@ -355,7 +371,26 @@ try {
       });
     });
     child.on('close', code => {
+      if (settled) return;
+      if (timeoutFallback) clearTimeout(timeoutFallback);
       const cleanup = removeAndVerifyContainer(containerName);
+      if (timedOut) {
+        const status: CommandStatus = cleanup.verified ? 'FAIL' : 'UNAVAILABLE';
+        const reason = cleanup.verified
+          ? 'Runner wall-clock timeout; container termination and removal verified.'
+          : 'Runner wall-clock timeout; container cleanup could not be verified.';
+        const commands = plan.scripts.map(item => ({
+          ...baseEvidence(item.name, item.required, status, reason, plan.lockfileSha256),
+          terminationReason: reason,
+        }));
+        finish({
+          ok: false, available: cleanup.verified, status,
+          summary: cleanup.verified ? 'Isolated npm runner timed out' : 'Runner timed out and cleanup is unverified',
+          output: ((stdout + stderr).slice(-8000) + '\n' + cleanup.output).slice(-12000),
+          commands, cleanupVerified: cleanup.verified, cleanupOutput: cleanup.output,
+        });
+        return;
+      }
       if (!cleanup.verified) {
         const reason = 'Container cleanup could not be verified; runner result is not trusted.';
         finish({
