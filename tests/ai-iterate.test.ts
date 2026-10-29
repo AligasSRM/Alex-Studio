@@ -84,4 +84,31 @@ describe('isolated AI verify and repair loop', () => {
     expect(response.status).toBe(413);
   });
 
+  it('rejects AI repair changes to package lockfiles before provider or sandbox access', async () => {
+    const id = await project();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    const before = readProjectFile(id, 'index.html');
+    const response = await iteratePost(localPost('http://localhost:3000/api/ai/iterate', {
+      projectId: id, prompt: 'Change the package lockfile', approved: true,
+      files: [{ path: 'package-lock.json', content: '{"lockfileVersion":3}', baseHash: null }],
+    }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/protected or non-canonical path/i);
+    expect(readProjectFile(id, 'index.html')).toBe(before);
+    expect(fs.existsSync(projectRoot(id) + '/package-lock.json')).toBe(false);
+  });
+
+  it('rejects whitespace-padded paths before sandbox execution', async () => {
+    const id = await project();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    const before = readProjectFile(id, 'index.html');
+    const response = await iteratePost(localPost('http://localhost:3000/api/ai/iterate', {
+      projectId: id, prompt: 'Update the title', approved: true,
+      files: [{ path: ' index.html ', content: '<!doctype html><title>Changed</title>', baseHash: hash(before) }],
+    }));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/non-canonical/i);
+    expect(readProjectFile(id, 'index.html')).toBe(before);
+  });
+
 });
