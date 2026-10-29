@@ -131,4 +131,43 @@ describe('isolated npm runner preflight', () => {
       else process.env.AI_RUNNER_DOCKER_IMAGE = previousImage;
     }
   });
+
+  it('classifies a Docker daemon connection failure as UNAVAILABLE', async () => {
+    const root = workspace();
+    write(root, 'package.json', JSON.stringify({
+      name: 'demo', version: '1.0.0', scripts: { build: 'node build.js', test: 'node test.js' },
+    }));
+    write(root, 'package-lock.json', JSON.stringify({
+      name: 'demo', version: '1.0.0', lockfileVersion: 3,
+      packages: { '': { name: 'demo', version: '1.0.0' } },
+    }));
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-cache-daemon-test-'));
+    const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-fake-docker-'));
+    roots.push(cache, fakeBin);
+    const fakeDocker = path.join(fakeBin, 'docker');
+    fs.writeFileSync(fakeDocker, '#!/bin/sh\necho "Cannot connect to the Docker daemon" >&2\nexit 125\n', { mode: 0o755 });
+    const previousCache = process.env.AI_RUNNER_NPM_CACHE;
+    const previousImage = process.env.AI_RUNNER_DOCKER_IMAGE;
+    const previousPath = process.env.PATH;
+    process.env.AI_RUNNER_NPM_CACHE = cache;
+    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64);
+    process.env.PATH = fakeBin;
+    try {
+      const result = await runProjectCommands(root);
+      expect(result).toMatchObject({
+        ok: false, available: false, status: 'UNAVAILABLE',
+        summary: 'Docker image or daemon unavailable',
+      });
+      expect(result.commands.every(command => command.status === 'UNAVAILABLE')).toBe(true);
+      expect(result.output).toContain('Cannot connect to the Docker daemon');
+    } finally {
+      if (previousCache === undefined) delete process.env.AI_RUNNER_NPM_CACHE;
+      else process.env.AI_RUNNER_NPM_CACHE = previousCache;
+      if (previousImage === undefined) delete process.env.AI_RUNNER_DOCKER_IMAGE;
+      else process.env.AI_RUNNER_DOCKER_IMAGE = previousImage;
+      if (previousPath === undefined) delete process.env.PATH;
+      else process.env.PATH = previousPath;
+    }
+  });
+
 });
