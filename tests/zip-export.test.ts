@@ -58,15 +58,17 @@ describe('project ZIP export', () => {
     fs.mkdirSync(path.join(root, 'secrets'), { recursive: true });
     fs.writeFileSync(path.join(root, 'index.html'), 'safe');
     fs.writeFileSync(path.join(root, 'credentials.json'), 'credential-secret');
+    fs.writeFileSync(path.join(root, 'credentials_backup.json'), 'backup-credential-secret');
     fs.writeFileSync(path.join(root, 'id_rsa'), 'private-key');
     fs.writeFileSync(path.join(root, 'config', 'secrets.txt'), 'secret-value');
+    fs.writeFileSync(path.join(root, 'config', 'secrets-local.json'), 'local-secret-value');
     fs.writeFileSync(path.join(root, 'secrets', 'config.json'), 'nested-secret');
     const entries = readZipEntries(createProjectZip(root));
     expect(entries.get('index.html')).toBe('safe');
-    for (const excludedPath of ['credentials.json', 'id_rsa', 'config/secrets.txt', 'secrets/config.json']) {
+    for (const excludedPath of ['credentials.json', 'credentials_backup.json', 'id_rsa', 'config/secrets.txt', 'config/secrets-local.json', 'secrets/config.json']) {
       expect(entries.has(excludedPath)).toBe(false);
     }
-    for (const excludedContent of ['credential-secret', 'private-key', 'secret-value', 'nested-secret']) {
+    for (const excludedContent of ['credential-secret', 'backup-credential-secret', 'private-key', 'secret-value', 'local-secret-value', 'nested-secret']) {
       expect(Array.from(entries.values()).some((content) => content.includes(excludedContent))).toBe(false);
     }
   });
