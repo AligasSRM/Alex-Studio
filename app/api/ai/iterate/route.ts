@@ -101,7 +101,15 @@ export function runSandbox(root: string): Promise<Result> {
       IMAGE, 'node', '-e', runner];
     const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
     let output = ''; let settled = false; let timedOut = false;
-    const finish = (result: Result) => { if (!settled) { settled = true; clearTimeout(timer); resolve(result); } };
+    let timeoutFallback: ReturnType<typeof setTimeout> | undefined;
+    const finish = (result: Result) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        if (timeoutFallback) clearTimeout(timeoutFallback);
+        resolve(result);
+      }
+    };
     const collect = (chunk: Buffer) => { output = (output + chunk.toString('utf8')).slice(-12000); };
     const cleanupResult = () => removeAndVerifyContainer(containerName);
     child.stdout.on('data', collect); child.stderr.on('data', collect);
@@ -111,12 +119,28 @@ export function runSandbox(root: string): Promise<Result> {
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGKILL');
+      // Bound the request if the process never emits close, but do not claim cleanup
+      // is verified while the container-creating CLI has not been observed exiting.
+      timeoutFallback = setTimeout(() => {
+        const cleanup = cleanupResult();
+        finish({ ok: false, available: false, summary: 'Sandbox timed out; Docker CLI close was not observed and container cleanup is unverified',
+          output: (output + '\nDocker CLI close was not observed.\n' + cleanup.output).slice(-16000) });
+      }, 5000);
     }, 20000);
     child.on('error', e => {
+      if (settled) {
+        if (timedOut) cleanupResult();
+        return;
+      }
       const cleanup = cleanupResult();
       finish({ ok: false, available: false, summary: cleanup.verified ? 'Docker unavailable' : 'Docker unavailable and container cleanup unverified', output: (e.message + '\n' + cleanup.output).slice(-16000) });
     });
     child.on('close', code => {
+      if (settled) {
+        if (timedOut) cleanupResult();
+        return;
+      }
+      if (timeoutFallback) clearTimeout(timeoutFallback);
       const cleanup = cleanupResult();
       const unavailable = /cannot connect to the docker daemon|unable to find image|pull access denied|error during connect/i.test(output);
       if (!cleanup.verified) {
