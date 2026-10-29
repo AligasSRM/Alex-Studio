@@ -235,7 +235,7 @@ export async function POST(request: Request) {
     writeFiles();
     let browserDiagnostic = await runSandbox(root);
     let commandChecks = await runProjectCommands(root);
-    let diagnostic = combineVerification(browserDiagnostic, commandChecks);
+    let diagnostic = combineVerification(browserDiagnostic, commandChecks, body.requirements);
     if (!diagnostic.available) return NextResponse.json({ error: 'Isolated verification is unavailable; no repair was attempted and project files were not changed.', diagnostic, commandChecks }, { status: 503 });
     const repairs: { round: number; summary: string; diagnostic: Result }[] = [];
     const model = provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b') : provider === 'groq' ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
