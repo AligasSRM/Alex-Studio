@@ -27,16 +27,20 @@ const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex')
 type FileDraft = { path: string; content: string; baseHash: string | null };
 type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun; pageSnapshot?: { title: string; body: string; errors: string[] } | null; requirementEvidence?: RequirementEvidence[] };
 
-function combineVerification(browser: Result, commands: CommandRun): Result {
-  const ok = browser.ok && commands.ok;
+function combineVerification(browser: Result, commands: CommandRun, requestedRequirements: unknown): Result {
+  const requirementEvidence = evaluateRequirements(requestedRequirements, browser.pageSnapshot);
+  const failedRequirements = requirementEvidence.filter(item => item.status === 'fail');
+  const ok = browser.ok && commands.ok && failedRequirements.length === 0;
   const available = browser.available && commands.available;
   return {
-    ok, available,
+    ok, available, pageSnapshot: browser.pageSnapshot, requirementEvidence,
     summary: !available ? 'Verification unavailable; inspect browser and command-runner diagnostics.'
-      : ok ? 'Isolated browser smoke test and applicable project commands passed.'
+      : failedRequirements.length ? 'One or more deterministic user requirements failed; repair and re-test are required.'
+      : ok ? 'Isolated browser smoke test, deterministic requirements, and applicable project commands passed.'
       : 'Browser smoke test or one or more project commands failed.',
     output: [
       'BROWSER SMOKE TEST: ' + browser.summary, browser.output,
+      'USER REQUIREMENT EVIDENCE: ' + JSON.stringify(requirementEvidence),
       'PROJECT COMMAND RUNNER: ' + commands.status + ' — ' + commands.summary, commands.output,
     ].join('\n').slice(-20000),
     commandChecks: commands,
