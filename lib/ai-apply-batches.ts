@@ -70,7 +70,7 @@ function validManifest(value: unknown, batchId: string): value is AIApplyBatchMa
 /** Persist full before/after snapshots in the private .alex metadata directory, never in the ZIP export. */
 export function saveAIApplyBatch(projectId: string, manifest: AIApplyBatchManifest) {
   if (!validManifest(manifest, manifest.batchId)) throw new Error('Invalid AI apply batch manifest');
-  const serialized = JSON.stringify(manifest) + '\\n';
+  const serialized = JSON.stringify(manifest) + '\n';
   if (Buffer.byteLength(serialized, 'utf8') > MAX_MANIFEST_BYTES) throw new Error('AI apply batch snapshots exceed the safe storage limit');
   const destination = manifestPath(projectId, manifest.batchId);
   const temporary = path.join(path.dirname(destination), '.' + randomUUID() + '.tmp');
@@ -80,7 +80,7 @@ export function saveAIApplyBatch(projectId: string, manifest: AIApplyBatchManife
   try {
     const stat = fs.fstatSync(descriptor);
     if (!stat.isFile()) throw new Error('AI apply batch manifest must be a regular file');
-    fs.writeFileSync(descriptor, JSON.stringify(manifest) + '\n', 'utf8');
+    fs.writeFileSync(descriptor, serialized, 'utf8');
     fs.fchmodSync(descriptor, 0o600);
     fs.fsyncSync(descriptor);
   } finally {
