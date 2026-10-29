@@ -25,7 +25,7 @@ const SENSITIVE_PATH = /(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed2551
 const IMAGE = APPROVED_RUNNER_IMAGE;
 const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 type FileDraft = { path: string; content: string; baseHash: string | null };
-type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun };
+type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun; pageSnapshot?: { title: string; body: string; errors: string[] } | null; requirementEvidence?: RequirementEvidence[] };
 
 function combineVerification(browser: Result, commands: CommandRun): Result {
   const ok = browser.ok && commands.ok;
