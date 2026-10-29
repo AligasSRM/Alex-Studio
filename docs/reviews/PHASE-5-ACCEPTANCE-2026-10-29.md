@@ -24,4 +24,4 @@ Scope: Phase 5 only. This document records the acceptance gates for project ZIP 
 - ZIP export route regression tests added.
 - Post-apply rollback success, repeat-operation rejection and stale-file protection tests added.
 - Batch history/rollback UI and API routes added.
-- **CI acceptance: pending execution on the phase-5 pull request. Do not mark Phase 5 closed until required checks pass and the merged commit is verified.**
+- **CI evidence:** PR #79 CI passed on commit `de9c64ccd35c8b2ecf05ed0bd6d99f8ff20187cb` (run `40895361311`): unit tests, typecheck, lint, production build and browser acceptance succeeded. Because this report is being updated after that run, rerun CI on the final report commit before merge and verify the merged commit afterward.
