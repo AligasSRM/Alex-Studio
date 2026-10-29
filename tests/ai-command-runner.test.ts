@@ -50,7 +50,9 @@ describe('isolated runner container cleanup verification', () => {
 
 describe('isolated npm runner preflight', () => {
   it('requires the trusted Playwright image to be pinned by a SHA-256 digest', () => {
-    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64))).toBe(true);
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2')).toBe(true);
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble@sha256:' + 'a'.repeat(64))).toBe(false);
+    expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.57.0-noble@sha256:' + 'a'.repeat(64))).toBe(false);
     expect(isPinnedRunnerImage('mcr.microsoft.com/playwright:v1.56.1-noble')).toBe(false);
     expect(isPinnedRunnerImage('docker.io/example/runner:latest@sha256:' + 'a'.repeat(64))).toBe(false);
     expect(isPinnedRunnerImage(undefined)).toBe(false);
