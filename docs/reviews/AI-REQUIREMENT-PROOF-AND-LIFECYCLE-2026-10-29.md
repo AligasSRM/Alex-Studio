@@ -1,15 +1,34 @@
 # AI Requirement Evidence and Full Lifecycle Proof — 2026-10-29
 
 - Repository: `AligasSRM/Alex-Studio`
-- Work branch: `feat/ai-requirement-proof-e2e-2026-10-29`
-- Base commit: `a60eb3caa465aa1ab36b849ab7311f4e1688e64b`
-- Status: implementation proposed; acceptance remains OPEN until CI and the gated live workflow produce evidence.
+- Evidence record branch: `main` (this report is being committed through a protected-branch PR)
+- Live proof run: [Full AI lifecycle proof #1](https://github.com/AligasSRM/Alex-Studio/actions/runs/40956704650)
+- Exact tested commit: `6708d200df55afbe71a7aa4ad2e05088014ccdca`
+- Live proof result: **PASS** (GitHub Actions conclusion: `success`)
+- The proof ran on the exact tested SHA above; this documentation records its results without claiming the documentation commit itself was tested by that run.
 - Scope: deterministic requirement evidence plus a real-provider, real-Docker generation → verification/repair → apply integration test.
-- `main` is not modified by this work.
 
-## Requirement evidence
+## Final live acceptance record
 
-The isolated browser runner now emits its observed document title, visible body text, and browser errors as a structured payload. The acceptance layer evaluates only these explicit deterministic requirement forms:
+The manually dispatched workflow completed successfully on `main`. The job ran with `AI_PROVIDER=groq`, `RUN_FULL_AI_LIFECYCLE=1`, and configured model `openai/gpt-oss-20b`. The secret value was masked in GitHub logs and is intentionally not recorded here.
+
+Verified job steps:
+- Locked dependency installation: passed; npm reported 0 vulnerabilities in that install audit.
+- Docker daemon verification: passed.
+- Approved digest-pinned Playwright browser runner pull: passed for `mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea`.
+- Real-provider full lifecycle integration test: passed.
+- Jest summary: 1 suite passed, 1 test passed.
+
+Captured test evidence from the successful job log:
+- Repair rounds: round 1 repaired the draft by updating body text to `AI_LIFECYCLE_MARKER`.
+- `REQ-001`: `title is "Alex Studio Lifecycle Proof"` — PASS; observed document title exactly matched.
+- `REQ-002`: `page contains text "AI_LIFECYCLE_MARKER"` — PASS; marker was present in visible body text.
+- Final lifecycle result: `PASS`; `appliedCount=1`; persisted/verified title `Alex Studio Lifecycle Proof`; verified marker `AI_LIFECYCLE_MARKER`.
+- The integration test covers generating a draft, proving requirements, repairing a broken draft, and applying only verified files.
+
+## Requirement evidence model
+
+The isolated browser runner emits its observed document title, visible body text, and browser errors as a structured payload. The acceptance layer evaluates only these explicit deterministic requirement forms:
 
 - `title is "Exact document title"`
 - `page contains text "Visible text"`
@@ -21,34 +40,33 @@ The build prompt asks the provider to express requirements in the supported synt
 
 ## Provider JSON reliability finding
 
-The existing live-provider run on `main` (GitHub Actions run [40931386272](https://github.com/AligasSRM/Alex-Studio/actions/runs/40931386272)) reached the real Groq endpoint but failed while parsing malformed model output. The build and repair requests now explicitly request JSON mode through the Responses API `text.format` setting; the Groq build unit test asserts this request contract. This follows the provider documentation for JSON mode, but the live full-lifecycle workflow must still prove it works with the configured model and credentials.
+An earlier live-provider run on `main` (GitHub Actions run [40931386272](https://github.com/AligasSRM/Alex-Studio/actions/runs/40931386272)) reached the real Groq endpoint but failed while parsing malformed model output. The build and repair requests were subsequently updated to request JSON mode through the Responses API `text.format` setting; the Groq build unit test asserts this request contract. The successful full lifecycle proof linked above now verifies the configured model/provider and Docker path on the exact tested commit.
 
 ## Full lifecycle integration test
 
-`tests/ai-lifecycle.live.integration.test.ts` is explicitly gated by `RUN_FULL_AI_LIFECYCLE=1`. It uses the real configured AI provider and actual Docker browser runner to:
+`tests/ai-lifecycle.live.integration.test.ts` is explicitly gated by `RUN_FULL_AI_LIFECYCLE=1`. The successful run used the real configured AI provider and actual Docker browser runner to:
 
 1. Create an isolated project and preserve the original file hash/content.
 2. Request a page with an exact title and visible marker.
 3. Deliberately corrupt the marker in the in-memory draft only.
-4. Run isolated browser verification; require the broken marker to fail.
+4. Run isolated browser verification and require the broken marker to fail.
 5. Let the real AI repair route attempt the repair within the existing two-round bound.
 6. Require both deterministic requirements to pass with evidence from the post-repair browser snapshot.
 7. Confirm the saved project stayed unchanged until apply.
 8. Apply only the verified final draft using the server-issued proof and explicit approval.
 9. Read the persisted file back and assert the requested title and marker are present and the injected broken marker is absent.
 
-The live workflow is manual to avoid surprise provider charges and requires the repository secret `GROQ_API_KEY`. Before merging this PR, use the existing `Live AI provider proof` workflow, select this PR branch, set `run_provider_smoke` to false and `run_full_lifecycle` to true. That workflow exists on the default branch, so it can dispatch against the proposed branch without merging the implementation first. It pins the approved Playwright image by digest, checks Docker availability, and runs the gated integration test. The new standalone `Full AI lifecycle proof` workflow can be used for repeatable post-merge proof. Normal PR CI runs the deterministic unit tests; the real-provider lifecycle proof must be triggered separately.
+The workflow is manual to avoid surprise provider charges and requires the repository secret `GROQ_API_KEY`. The successful run proves that the configured secret was available to the job, without exposing its value. The workflow pins the approved Playwright image by digest, checks Docker availability, and runs the gated integration test. Normal PR CI runs the deterministic unit tests; the real-provider lifecycle proof is triggered separately.
 
-## Acceptance criteria
+## Acceptance criteria — final state for this proof gate
 
-- [ ] PR CI passes on the exact latest head SHA.
-- [ ] Real Docker runner integration passes on the exact latest head SHA.
-- [ ] Manual full lifecycle workflow passes with the real provider and Docker.
-- [ ] The test report records the run URL, commit SHA, repair round, requirement evidence, and apply result.
-- [ ] No requirement is marked PASS without a supported assertion and a captured browser snapshot.
-- [ ] Subjective/unsupported requirements remain UNVERIFIED.
-- [ ] No merge to `main` occurs until the owner reviews the evidence and explicitly authorizes merge.
+- [x] CI passes on the tested `main` commit (`6708d200df55afbe71a7aa4ad2e05088014ccdca`).
+- [x] Docker integration acceptance passes on the tested `main` commit.
+- [x] Manual full lifecycle workflow passes with the real provider and Docker: [run #1](https://github.com/AligasSRM/Alex-Studio/actions/runs/40956704650).
+- [x] This record preserves the run URL, tested commit SHA, repair round, requirement evidence, and apply result.
+- [x] No requirement is marked PASS without a supported assertion and a captured browser snapshot.
+- [x] Subjective/unsupported requirements remain UNVERIFIED.
 
-## Important limitation
+## Remaining limits (not a blocker for this specific lifecycle proof)
 
-This is not a universal natural-language theorem prover. It provides deterministic evidence for a small, explicit set of rendered-page assertions and a real lifecycle test for that path. Other requirement classes need additional typed assertions (for example, selector visibility, form validation, keyboard accessibility, mobile viewport behavior, or side-effect verification) and their own tests before they can be marked PASS.
+This is not a universal natural-language theorem prover. It provides deterministic evidence for a small, explicit set of rendered-page assertions and a real lifecycle test for that path. Other requirement classes need additional typed assertions (for example, selector visibility, form validation, keyboard accessibility, mobile viewport behavior, or side-effect verification) and their own tests before they can be marked PASS. This record closes the live AI lifecycle proof gate only; it does not claim the entire product's performance review, final security review, or all application build/server acceptance gaps are closed.
