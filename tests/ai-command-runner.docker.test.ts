@@ -110,6 +110,7 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
     }
     expect(result.commands.map(command => command.name)).toEqual(['build', 'test']);
     expect(result.commands.every(command => command.status === 'PASS')).toBe(true);
+    expect(result.cleanupVerified).toBe(true);
     await expectNoNewRunnerContainers(before);
   }, 120000);
 
@@ -122,6 +123,7 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
     }
     expect(result.status).toBe('FAIL');
     expect(result.commands.find(command => command.name === 'test')?.terminationReason).toContain('timed out');
+    expect(result.cleanupVerified).toBe(true);
     await expectNoNewRunnerContainers(before);
   }, 120000);
   it('reports a normal non-zero generated command as FAIL and still cleans up the container', async () => {
