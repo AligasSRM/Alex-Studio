@@ -64,6 +64,7 @@ describe('AI iterate sandbox timeout cleanup ordering', () => {
       summary: 'Sandbox timed out; Docker CLI close was not observed and container cleanup is unverified',
     });
     expect(result.output).toContain('Docker CLI close was not observed');
+    expect(result.output).not.toContain('container absence verified: true');
 
     child.emit('close', null);
     expect(mockSpawnSync).toHaveBeenCalledTimes(4);
