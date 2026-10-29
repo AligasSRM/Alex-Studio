@@ -357,4 +357,36 @@ describe('AI project build workflow', () => {
     expect(fs.existsSync(path.join(projectRoot(id), 'package-lock.json'))).toBe(false);
   });
 
+  it('rejects whitespace-padded paths at both build and apply boundaries', async () => {
+    const id = await makeProject();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    const original = readProjectFile(id, 'index.html');
+    const paddedFile = { path: ' index.html ', content: '<!doctype html><title>Padded path</title>', baseHash: hash(original) };
+
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      output_text: JSON.stringify({
+        summary: 'Attempt to use a non-canonical path',
+        plan: ['Update the page'],
+        requirements: ['The page title is Padded path.'],
+        files: [{ path: paddedFile.path, content: paddedFile.content }],
+      }),
+      usage: { input_tokens: 10, output_tokens: 20 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const buildResponse = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: id, prompt: 'Update the page title', approved: true,
+    })));
+    expect(buildResponse.status).toBe(502);
+    expect((await buildResponse.json()).error).toMatch(/non-canonical/i);
+    expect(readProjectFile(id, 'index.html')).toBe(original);
+
+    const applyResponse = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
+      projectId: id, approved: true, files: [paddedFile],
+      verificationProof: issueVerificationProof(id, [paddedFile]),
+    })));
+    expect(applyResponse.status).toBe(400);
+    expect((await applyResponse.json()).error).toMatch(/non-canonical/i);
+    expect(readProjectFile(id, 'index.html')).toBe(original);
+  });
+
 });
