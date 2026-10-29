@@ -5,6 +5,7 @@ on:
       - '.github/workflows/docker-integration.yml'
       - 'lib/ai-command-runner.ts'
       - 'tests/ai-command-runner.docker.test.ts'
+      - 'docs/reviews/PHASE-3-SECURITY-AND-RUNNER-AUDIT-2026-10-29.md'
       - 'package.json'
       - 'package-lock.json'
   push:
@@ -13,6 +14,7 @@ on:
       - '.github/workflows/docker-integration.yml'
       - 'lib/ai-command-runner.ts'
       - 'tests/ai-command-runner.docker.test.ts'
+      - 'docs/reviews/PHASE-3-SECURITY-AND-RUNNER-AUDIT-2026-10-29.md'
       - 'package.json'
       - 'package-lock.json'
   workflow_dispatch:
