@@ -8,8 +8,8 @@ import { projectRoot } from '../lib/path-security';
 import { resetRateLimitsForTests } from '../lib/rate-limit';
 
 const createdIds: string[] = [];
-const originalKey = process.env.OPENAI_API_KEY;
 const originalProvider = process.env.AI_PROVIDER;
+const originalOllamaModel = process.env.OLLAMA_MODEL;
 
 function localPost(url: string, body: unknown) {
   return new Request(url, {
@@ -23,10 +23,10 @@ afterEach(() => {
   jest.restoreAllMocks();
   resetRateLimitsForTests();
   for (const id of createdIds.splice(0)) fs.rmSync(projectRoot(id), { recursive: true, force: true });
-  if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
-  else process.env.OPENAI_API_KEY = originalKey;
   if (originalProvider === undefined) delete process.env.AI_PROVIDER;
   else process.env.AI_PROVIDER = originalProvider;
+  if (originalOllamaModel === undefined) delete process.env.OLLAMA_MODEL;
+  else process.env.OLLAMA_MODEL = originalOllamaModel;
 });
 
 describe('Phase 1 performance guardrails (local CI baseline)', () => {
@@ -54,19 +54,20 @@ describe('Phase 1 performance guardrails (local CI baseline)', () => {
     expect(Math.max(...samplesMs)).toBeLessThan(2000);
   });
 
-  it('returns a provider-mocked AI build draft within the 10-second API budget', async () => {
+  it('returns a locally mocked Ollama build draft within the 10-second API budget', async () => {
     const project = createProject('Phase 1 API Performance ' + Date.now());
     createdIds.push(project.id);
-    process.env.AI_PROVIDER = 'openai';
-    process.env.OPENAI_API_KEY = 'phase1-performance-test-key';
+    process.env.AI_PROVIDER = 'ollama';
+    process.env.OLLAMA_MODEL = 'phase1-performance-fixture';
     jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
-      output_text: JSON.stringify({
+      message: { content: JSON.stringify({
         summary: 'Performance fixture draft',
         plan: ['Update the page title'],
         requirements: ['The page title is Performance Draft.'],
         files: [{ path: 'index.html', content: '<!doctype html><title>Performance Draft</title>' }],
-      }),
-      usage: { input_tokens: 10, output_tokens: 20 },
+      }) },
+      prompt_eval_count: 10,
+      eval_count: 20,
     }), { status: 200, headers: { 'content-type': 'application/json' } }));
 
     const start = performance.now();
