@@ -324,4 +324,37 @@ describe('AI project build workflow', () => {
     expect(events[1].rollbackStatus).toBe('failed');
     expect(events.every((event) => event.batchId === data.batchId)).toBe(true);
   });
+  it('rejects AI-generated package lockfiles during build, repair, and apply', async () => {
+    const id = await makeProject();
+    process.env.OPENAI_API_KEY = 'test-server-secret';
+    const originalIndex = readProjectFile(id, 'index.html');
+    const generatedLock = { path: 'package-lock.json', content: JSON.stringify({ lockfileVersion: 3 }), baseHash: null };
+
+    jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      output_text: JSON.stringify({
+        summary: 'Attempt to replace the lockfile',
+        plan: ['Replace package lock'],
+        requirements: ['Use the replacement lockfile'],
+        files: [{ path: generatedLock.path, content: generatedLock.content }],
+      }),
+      usage: { input_tokens: 10, output_tokens: 20 },
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const buildResponse = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: id, prompt: 'Replace the package lockfile', approved: true,
+    })));
+    expect(buildResponse.status).toBe(502);
+    expect((await buildResponse.json()).error).toMatch(/protected path/i);
+    expect(readProjectFile(id, 'index.html')).toBe(originalIndex);
+    expect(fs.existsSync(path.join(projectRoot(id), 'package-lock.json'))).toBe(false);
+
+    const proof = issueVerificationProof(id, [generatedLock]);
+    const applyResponse = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
+      projectId: id, approved: true, files: [generatedLock], verificationProof: proof,
+    })));
+    expect(applyResponse.status).toBe(400);
+    expect((await applyResponse.json()).error).toMatch(/protected path/i);
+    expect(fs.existsSync(path.join(projectRoot(id), 'package-lock.json'))).toBe(false);
+  });
+
 });
