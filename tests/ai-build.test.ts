@@ -246,9 +246,16 @@ describe('AI project build workflow', () => {
       projectId: id, approved: true, files, verificationProof: issueVerificationProof(id, files),
     })));
     expect(response.status).toBe(200);
-    const data = await response.json() as { count: number; applied: string[] };
+    const data = await response.json() as { count: number; applied: string[]; batchId: string };
     expect(data.count).toBe(2);
+    expect(data.batchId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(data.applied).toEqual(['index.html', 'app.js']);
+    const audit = fs.readFileSync(path.join(projectRoot(id), '.alex', 'ai-apply-audit.jsonl'), 'utf8');
+    const auditEvents = audit.trim().split('\n').map((line) => JSON.parse(line) as { outcome: string; paths: string[]; batchId: string });
+    expect(auditEvents.map((event) => event.outcome)).toEqual(['started', 'applied']);
+    expect(auditEvents.every((event) => event.batchId === data.batchId)).toBe(true);
+    expect(auditEvents[1].paths).toEqual(['index.html', 'app.js']);
+    expect(audit).not.toContain('<!doctype html>');
     expect(readProjectFile(id, 'index.html')).toContain('Updated');
     expect(readProjectFile(id, 'app.js')).toContain('dataset.ready');
   });
