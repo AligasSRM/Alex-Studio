@@ -33,7 +33,7 @@ The build prompt asks the provider to express requirements in the supported synt
 8. Apply only the verified final draft using the server-issued proof and explicit approval.
 9. Read the persisted file back and assert the requested title and marker are present and the injected broken marker is absent.
 
-The live workflow is manual to avoid surprise provider charges and requires the repository secret `GROQ_API_KEY`. It pins the approved Playwright image by digest, checks Docker availability, and runs the gated integration test. Normal PR CI runs the deterministic unit tests; the real-provider lifecycle proof must be triggered separately.
+The live workflow is manual to avoid surprise provider charges and requires the repository secret `GROQ_API_KEY`. Before merging this PR, use the existing `Live AI provider proof` workflow, select this PR branch, set `run_provider_smoke` to false and `run_full_lifecycle` to true. That workflow exists on the default branch, so it can dispatch against the proposed branch without merging the implementation first. It pins the approved Playwright image by digest, checks Docker availability, and runs the gated integration test. The new standalone `Full AI lifecycle proof` workflow can be used for repeatable post-merge proof. Normal PR CI runs the deterministic unit tests; the real-provider lifecycle proof must be triggered separately.
 
 ## Acceptance criteria
 
