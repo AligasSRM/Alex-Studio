@@ -33,8 +33,9 @@ describe('project ZIP export', () => {
     const zip = createProjectZip(root);
     expect(zip.readUInt32LE(0)).toBe(0x04034b50);
     expect(zip.readUInt32LE(zip.length - 22)).toBe(0x06054b50);
-    expect(zip.includes(Buffer.from('index.html'))).toBe(true);
-    expect(zip.includes(Buffer.from('assets/site.css'))).toBe(true);
+    const entries = readZipEntries(zip);
+    expect(entries.get('index.html')).toBe('<h1>Hello</h1>');
+    expect(entries.get('assets/site.css')).toBe('body { color: black; }');
   });
 
   it('excludes hidden metadata, backups, dependencies, and Git data', () => {
@@ -80,6 +81,34 @@ describe('project ZIP export', () => {
     for (const sensitiveContent of Object.values(sensitiveFiles)) {
       expect(Array.from(entries.values()).some((content) => content.includes(sensitiveContent))).toBe(false);
     }
+  });
+
+  it('does not export files reached through nested symbolic links', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-outside-'));
+    fs.writeFileSync(path.join(outside, 'private.txt'), 'outside-private-content');
+    fs.mkdirSync(path.join(root, 'nested'));
+    try {
+      fs.symlinkSync(outside, path.join(root, 'nested', 'external'), 'dir');
+      fs.writeFileSync(path.join(root, 'nested', 'normal.txt'), 'inside-content');
+      const entries = readZipEntries(createProjectZip(root));
+      expect(entries.get('nested/normal.txt')).toBe('inside-content');
+      expect(entries.has('nested/external/private.txt')).toBe(false);
+      expect(Array.from(entries.values()).some((content) => content.includes('outside-private-content'))).toBe(false);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a project exceeding the 50 MiB total uncompressed export limit', () => {
+    fs.writeFileSync(path.join(root, 'large.bin'), Buffer.alloc(50 * 1024 * 1024 + 1, 0x61));
+    expect(() => createProjectZip(root)).toThrow('50 MiB export limit');
+  });
+
+  it('rejects projects containing more than 10,000 files', () => {
+    for (let index = 0; index <= 10000; index++) {
+      fs.writeFileSync(path.join(root, 'file-' + index + '.txt'), '');
+    }
+    expect(() => createProjectZip(root)).toThrow('too many files to export');
   });
 
   it('rejects a symlink as the project root', () => {
