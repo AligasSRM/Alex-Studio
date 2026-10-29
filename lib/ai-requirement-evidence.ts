@@ -52,9 +52,9 @@ export function evaluateRequirements(
   return requirements.map((raw, index) => {
     const requirement = raw.trim().slice(0, 500);
     const id = 'REQ-' + String(index + 1).padStart(3, '0');
-    const match = requirement.match(/^(?:TEST:\\s*)?(?:page\\s+)?title\\s+is\\s+["'](.+)["']$/i)
-      ?? requirement.match(/^(?:TEST:\\s*)?page\\s+contains\\s+text\\s+["'](.+)["']$/i)
-      ?? requirement.match(/^(?:TEST:\\s*)?page\\s+does\\s+not\\s+contain\\s+text\\s+["'](.+)["']$/i);
+    const match = requirement.match(/^(?:TEST:\s*)?(?:page\s+)?title\s+is\s+["'](.+)["']$/i)
+      ?? requirement.match(/^(?:TEST:\s*)?page\s+contains\s+text\s+["'](.+)["']$/i)
+      ?? requirement.match(/^(?:TEST:\s*)?page\s+does\s+not\s+contain\s+text\s+["'](.+)["']$/i);
 
     if (!match) {
       return { id, requirement, status: 'unverified', method: 'unsupported-assertion', evidence: 'No deterministic assertion matches the supported requirement syntax; manual review or a dedicated test is required.' };
@@ -63,8 +63,8 @@ export function evaluateRequirements(
       return { id, requirement, status: 'unverified', method: 'isolated-browser', evidence: 'No parseable browser snapshot was returned; this requirement was not verified.' };
     }
 
-    const isTitle = /title\\s+is/i.test(requirement.replace(/^TEST:\\s*/i, ''));
-    const isNegativeText = /does\\s+not\\s+contain\\s+text/i.test(requirement);
+    const isTitle = /title\s+is/i.test(requirement.replace(/^TEST:\s*/i, ''));
+    const isNegativeText = /does\s+not\s+contain\s+text/i.test(requirement);
     const expected = match[1];
     const actual = isTitle ? snapshot.title : snapshot.body;
     const passed = isTitle ? actual === expected : isNegativeText ? !actual.includes(expected) : actual.includes(expected);
