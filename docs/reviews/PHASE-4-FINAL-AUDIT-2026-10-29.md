@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 1 | ZIP export security | `lib/zip-export.ts`, `tests/zip-export.test.ts`; PR [#70](https://github.com/AligasSRM/Alex-Studio/pull/70) merged as `f0e8fb29e13de66a598a11ed74b5d7e6fc73011c`; [main CI run 40882059206](https://github.com/AligasSRM/Alex-Studio/actions/runs/40882059206) completed successfully | PASS for implemented checks; residual limitation documented |
 | 2 | Editor undo/redo lifecycle | `lib/edit-history.ts`, `tests/edit-history.test.ts`, `tests/browser/undo-redo.spec.ts` | Core behavior tested; persistence is intentionally in-memory and resets on save/reopen or file/project switch |
-| 3 | Approved multi-file batch rollback and user-visible history | `app/api/ai/apply/route.ts` validates file hashes, snapshots contents, attempts reverse-order rollback on failure | Partial: failure rollback exists, but rollback errors are swallowed and there is no durable applied-batch history or user-facing post-apply rollback control |
+| 3 | Approved multi-file batch rollback and user-visible history | `app/api/ai/apply/route.ts`, `lib/ai-apply-rollback.ts`, `tests/ai-apply-rollback.test.ts`; PR [#72](https://github.com/AligasSRM/Alex-Studio/pull/72) merged as `ab92cf2479fc85db06ea6c37ccdbf0b6fa2ae029`; [PR CI run 40882793268](https://github.com/AligasSRM/Alex-Studio/actions/runs/40882793268) passed | Partial: rollback failures are now surfaced and unit-tested; no durable applied-batch history or user-facing post-apply rollback control |
 | 4 | Acceptance evidence | CI run linked above is green on exact main commit `f0e8fb29e13de66a598a11ed74b5d7e6fc73011c`; editor behavior has unit and browser tests | Partial: no automated route-level regression proof found for injected mid-batch failure and rollback failure |
 | 5 | Final report and closure decision | This report | Report recorded; phase remains OPEN pending remaining acceptance gaps |
 
@@ -34,22 +34,24 @@ The editor uses an in-memory history capped at 100 prior values. Unit tests cove
 The AI apply endpoint requires explicit approval and a successful current verification proof; validates canonical unique paths, protected paths, base hashes, file count and byte limits; snapshots current contents; and attempts to roll back previously applied files in reverse order if a later write fails.
 
 **Findings:**
-- Rollback is best-effort. Rollback exceptions are swallowed, so the response does not enumerate files that could not be restored.
+- The API now returns `rollback.status` plus either `failedPaths` when restoration is incomplete or `restoredPaths` when all previously applied files were restored.
+- The extracted rollback helper continues restoring other files after one restore fails; unit tests cover reverse order, unapplied files, and failed restore reporting. PR #72 and its CI passed before merge.
 - Existing-file writes create per-file backups, but there is no durable transaction manifest for an approved batch.
 - No user-facing action was found to list approved batches or reverse a successfully applied batch after the fact.
-- No route-level regression proof was found for a deliberately injected mid-batch write failure followed by verification that every file matches its original bytes.
+- Route-level failure injection verifying original bytes after a mid-batch failure is still missing.
 
-These are the main blockers if Phase 4 acceptance requires reliable transactional recovery and post-apply rollback, rather than only best-effort recovery during a failed write.
+These remaining gaps matter if Phase 4 acceptance requires durable transactional history and post-apply rollback, rather than failure-time best-effort recovery with explicit diagnostics.
 
 ## Item 4 — Evidence and validation gate
 
 - [x] ZIP regression tests, type check, lint, production build, and browser acceptance passed in [CI run 40882059206](https://github.com/AligasSRM/Alex-Studio/actions/runs/40882059206).
 - [x] The run tested exact main commit `f0e8fb29e13de66a598a11ed74b5d7e6fc73011c`.
 - [x] Editor unit and browser tests exist for the documented in-session history lifecycle.
-- [ ] Add route-level tests for batch apply success, stale base hash rejection, a mid-batch failure, complete reverse-order restoration, and a rollback failure that is surfaced explicitly.
+- [x] Unit tests cover rollback order, skipped unapplied paths, and explicit reporting of rollback failures; [PR CI run 40882793268](https://github.com/AligasSRM/Alex-Studio/actions/runs/40882793268) passed on the PR head before merge.
+- [ ] Add route-level tests for batch apply success, stale base hash rejection, a mid-batch failure, and verification that all original file bytes are restored.
 - [ ] Decide whether durable batch history and post-apply rollback are required for Phase 4. If required, implement and test them before closure; if not, document this as an explicit scope limitation.
 - [ ] Decide whether persistent undo history is required. Current implementation is session-only and tests should continue to assert that contract unless persistence is deliberately implemented.
 
 ## Closure decision
 
-**Phase 4 is not closed.** Item 1 is complete with a green main CI run. The editor history contract is tested but session-only. The apply endpoint has best-effort failure rollback, but durable batch history, user-facing rollback, and route-level failure-injection proof remain unresolved. Do not close the phase until the project acceptance criteria explicitly resolve these gaps and the resulting code and evidence pass CI on the same main commit.
+**Phase 4 is not closed.** Item 1 is complete with a green main CI run. Item 3 now surfaces incomplete rollback paths and has passing helper-level regression tests, but durable batch history, user-facing post-apply rollback, and route-level failure-injection proof remain unresolved. The editor history contract is tested but session-only. Do not close the phase until the project acceptance criteria explicitly resolve these gaps and the resulting code and evidence pass CI on the same main commit.
