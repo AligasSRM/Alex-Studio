@@ -12,6 +12,7 @@ import { listProjectFiles, readProjectFile } from '@/lib/files';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
+import { evaluateRequirements, parseBrowserSnapshot, type RequirementEvidence } from '@/lib/ai-requirement-evidence';
 import { issueVerificationProof } from '@/lib/ai-verification-proof';
 import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, runProjectCommands, type CommandRun } from '@/lib/ai-command-runner';
 import { readJsonBody } from '@/lib/request-body';
@@ -24,18 +25,22 @@ const SENSITIVE_PATH = /(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed2551
 const IMAGE = APPROVED_RUNNER_IMAGE;
 const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 type FileDraft = { path: string; content: string; baseHash: string | null };
-type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun };
+type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun; pageSnapshot?: { title: string; body: string; errors: string[] } | null; requirementEvidence?: RequirementEvidence[] };
 
-function combineVerification(browser: Result, commands: CommandRun): Result {
-  const ok = browser.ok && commands.ok;
+function combineVerification(browser: Result, commands: CommandRun, requestedRequirements: unknown): Result {
+  const requirementEvidence = evaluateRequirements(requestedRequirements, browser.pageSnapshot);
+  const failedRequirements = requirementEvidence.filter(item => item.status === 'fail');
+  const ok = browser.ok && commands.ok && failedRequirements.length === 0;
   const available = browser.available && commands.available;
   return {
-    ok, available,
+    ok, available, pageSnapshot: browser.pageSnapshot, requirementEvidence,
     summary: !available ? 'Verification unavailable; inspect browser and command-runner diagnostics.'
-      : ok ? 'Isolated browser smoke test and applicable project commands passed.'
+      : failedRequirements.length ? 'One or more deterministic user requirements failed; repair and re-test are required.'
+      : ok ? 'Isolated browser smoke test, deterministic requirements, and applicable project commands passed.'
       : 'Browser smoke test or one or more project commands failed.',
     output: [
       'BROWSER SMOKE TEST: ' + browser.summary, browser.output,
+      'USER REQUIREMENT EVIDENCE: ' + JSON.stringify(requirementEvidence),
       'PROJECT COMMAND RUNNER: ' + commands.status + ' — ' + commands.summary, commands.output,
     ].join('\n').slice(-20000),
     commandChecks: commands,
@@ -53,7 +58,7 @@ const runner = [
   " await page.goto('file:///workspace/index.html', { waitUntil: 'load', timeout: 10000 });",
   " const body = (await page.locator('body').innerText().catch(() => '')).trim();",
   " if (!body) errors.push('The page body is empty');",
-  " process.stdout.write(JSON.stringify({ ok: !errors.length, title: await page.title().catch(() => ''), errors }) + '\\n');",
+  " process.stdout.write(JSON.stringify({ ok: !errors.length, title: await page.title().catch(() => ''), body: body.slice(0, 12000), errors }) + '\\n');",
   " if (errors.length) process.exitCode = 1; } finally { await browser.close(); }",
   "})().catch(e => { process.stderr.write(String(e.stack || e)); process.exitCode = 1; });",
 ].join('\n');
@@ -151,7 +156,7 @@ export function runSandbox(root: string): Promise<Result> {
         finish({ ok: false, available: true, summary: 'Sandbox timed out; container removal verified', output: (output + '\n' + cleanup.output).slice(-16000) });
         return;
       }
-      finish({ ok: code === 0, available: !unavailable, summary: code === 0 ? 'Isolated browser test passed; container cleanup verified' : unavailable ? 'Docker sandbox unavailable' : 'Isolated browser test failed; container cleanup verified', output: (output + '\n' + cleanup.output).slice(-16000) });
+      finish({ ok: code === 0, available: !unavailable, summary: code === 0 ? 'Isolated browser test passed; container cleanup verified' : unavailable ? 'Docker sandbox unavailable' : 'Isolated browser test failed; container cleanup verified', pageSnapshot: parseBrowserSnapshot(output), output: (output + '\n' + cleanup.output).slice(-16000) });
     });
   });
 }
@@ -167,7 +172,7 @@ async function getRepair(apiKey: string | undefined, model: string, provider: 'o
       headers: provider === 'ollama' ? { 'Content-Type': 'application/json' } : { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify(provider === 'ollama'
         ? { model, stream: false, format: 'json', messages: [{ role: 'system', content: instructions }, { role: 'user', content: input }], options: { num_predict: 12000 } }
-        : { model, max_output_tokens: 12000, instructions, input }),
+        : { model, max_output_tokens: 12000, instructions, input, text: { format: { type: 'json_object' } } }),
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw new Error('AI repair request timed out');
@@ -230,7 +235,7 @@ export async function POST(request: Request) {
     writeFiles();
     let browserDiagnostic = await runSandbox(root);
     let commandChecks = await runProjectCommands(root);
-    let diagnostic = combineVerification(browserDiagnostic, commandChecks);
+    let diagnostic = combineVerification(browserDiagnostic, commandChecks, body.requirements);
     if (!diagnostic.available) return NextResponse.json({ error: 'Isolated verification is unavailable; no repair was attempted and project files were not changed.', diagnostic, commandChecks }, { status: 503 });
     const repairs: { round: number; summary: string; diagnostic: Result }[] = [];
     const model = provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b') : provider === 'groq' ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
@@ -248,7 +253,7 @@ export async function POST(request: Request) {
       fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755); writeFiles();
       browserDiagnostic = await runSandbox(root);
       commandChecks = await runProjectCommands(root);
-      diagnostic = combineVerification(browserDiagnostic, commandChecks);
+      diagnostic = combineVerification(browserDiagnostic, commandChecks, body.requirements);
       repairs.push({ round, summary: next.summary, diagnostic });
       if (!diagnostic.available) break;
     }
@@ -258,6 +263,11 @@ export async function POST(request: Request) {
     }
     if (!changed.length || changed.length > MAX_FILES) return NextResponse.json({ error: 'Final draft must contain 1–10 changed files', diagnostic, repairs }, { status: 422 });
     const acceptance = analyzeGeneratedProject(Array.from(working.entries()).map(([filePath, content]) => ({ path: filePath, content })), body.requirements);
+    acceptance.requirements = acceptance.requirements.map((item, index) => {
+      const evidence = diagnostic.requirementEvidence?.[index];
+      return evidence ? { ...item, status: evidence.status, evidence: evidence.method + ': ' + evidence.evidence } : item;
+    });
+    if (acceptance.requirements.some(item => item.status === 'fail')) acceptance.status = 'fail';
     const verificationProof = diagnostic.ok ? issueVerificationProof(body.projectId, changed) : null;
     return NextResponse.json({ ok: diagnostic.ok, verificationProof, commandChecks, summary: diagnostic.ok ? 'Isolated browser smoke test and applicable project commands passed; inspect the acceptance report for requirements that remain unverified.' : 'Verification ended with failures; inspect browser and command diagnostics before applying.', diagnostic, repairs, acceptance,
       build: { summary: 'Draft checked by the sandbox smoke test; not applied to the real project.', plan: repairs.map(x => 'Repair round ' + x.round + ': ' + x.summary), requirements: Array.isArray(body.requirements) ? body.requirements.filter((item): item is string => typeof item === 'string').slice(0, 20) : [], files: changed }, appliedToProject: false }, { headers: { 'Cache-Control': 'no-store' } });

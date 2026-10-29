@@ -15,7 +15,7 @@ export type AcceptanceReport = {
   requirements: {
     id: string;
     text: string;
-    status: 'unverified';
+    status: AcceptanceStatus;
     evidence: string;
   }[];
   checks: AcceptanceCheck[];
