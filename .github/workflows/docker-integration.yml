@@ -26,7 +26,7 @@ on:
       runner_image:
         description: "Only the reviewed and approved Microsoft Playwright image digest is allowed (exact match)."
         required: false
-        default: "mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2"
+        default: "mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea"
         type: string
 
 permissions:
@@ -49,9 +49,9 @@ jobs:
 
       - name: Validate pinned runner image
         env:
-          RUNNER_IMAGE: ${{ inputs.runner_image || 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2' }}
+          RUNNER_IMAGE: ${{ inputs.runner_image || 'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea' }}
         run: |
-          APPROVED_RUNNER_IMAGE='mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2'
+          APPROVED_RUNNER_IMAGE='mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea'
           if [ "$RUNNER_IMAGE" != "$APPROVED_RUNNER_IMAGE" ]; then
             echo "::error::runner_image must exactly match the reviewed and approved image digest."
             exit 1
@@ -73,7 +73,7 @@ jobs:
       - name: Run real Docker integration tests
         env:
           RUN_DOCKER_INTEGRATION: "1"
-          AI_RUNNER_DOCKER_IMAGE: ${{ inputs.runner_image || 'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2' }}
+          AI_RUNNER_DOCKER_IMAGE: ${{ inputs.runner_image || 'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea' }}
           AI_RUNNER_NPM_CACHE: ${{ runner.temp }}/npm-cache
         run: |
           mkdir -p "$AI_RUNNER_NPM_CACHE"
