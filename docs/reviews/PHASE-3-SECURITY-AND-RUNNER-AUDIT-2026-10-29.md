@@ -4,7 +4,7 @@
 **Audit branch:** `phase/3-finalize-runner-audit-2026-10-29`  
 **Baseline:** `main` at `1067ecad31b579b5bbc7aae06b9259e43426ed4d`  
 **Scope:** The Phase 3 checklist previously discussed: isolated execution of generated projects, dependency installation, evidence reporting, isolation/resource controls, and post-change CI/Docker proof.  
-**Disposition:** Final Phase 3 verification recorded against `main` commit `85878beea5aa6cbc4ad6e4a848de56a7502e5dbb`; this update adds explicit Docker-daemon-unavailable regression coverage. Close Phase 3 only after this report and test change pass CI and real-Docker integration on the same candidate commit.
+**Disposition:** PHASE 3 CLOSED. PR #69 is merged. Main CI and real-Docker integration both passed on the exact PR head commit `fe867319e4afa0cca70f2f37a847f2200c1d7987` (CI run 40878971790; Docker Integration run 40878972379). This closure retains the documented trusted-computing-base limitation and does not claim complete host/kernel isolation.
 
 ## Checklist and evidence
 
@@ -39,4 +39,4 @@
 - [x] Real-Docker cleanup assertions cover normal completion, timeout, and non-zero exit.
 - [x] Preserve the trusted-computing-base limitation; do not claim full host/kernel isolation.
 
-**Current decision:** The remaining outcome-classification gap is addressed by a new regression test simulating a Docker daemon connection failure and asserting `UNAVAILABLE`. Both CI and real-Docker workflows passed on candidate commit `03642aef691931c8829ff9d1272163fa07b637b8`: [CI run 40878651086](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878651086) and [Docker Integration run 40878651094](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878651094). The report-only evidence update itself must also pass both required workflows before merge.
+**Final decision — CLOSED:** The daemon-unavailable regression distinguishes infrastructure failure (`UNAVAILABLE`) from a generated command's non-zero exit (`FAIL`). PR #69 is merged, and both required workflows passed on its exact head commit `fe867319e4afa0cca70f2f37a847f2200c1d7987`: [CI run 40878971790](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878971790) and [Docker Integration run 40878972379](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878972379). Phase 3 acceptance gates are satisfied within the documented scope. Docker daemon, host kernel, pinned image, and trusted cache remain trusted components; this is not a claim of complete host/kernel isolation.
