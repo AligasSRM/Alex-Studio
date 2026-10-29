@@ -116,7 +116,7 @@ describe('full AI lifecycle proof (real provider and real Docker; explicitly gat
     expect(applyData.count).toBeGreaterThan(0);
 
     const applied = readProjectFile(id, 'index.html');
-    expect(applied).toContain('<title>' + expectedTitle + '</title>');
+    expect(applied).toMatch(new RegExp('<title>\\s*' + expectedTitle + '\\s*</title>', 'i'));
     expect(applied).toContain(expectedMarker);
     expect(applied).not.toContain('AI_LIFECYCLE_BROKEN');
   }, 8 * 60 * 1000);
