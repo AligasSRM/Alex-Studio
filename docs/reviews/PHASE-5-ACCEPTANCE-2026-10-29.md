@@ -9,7 +9,7 @@ Scope: Phase 5 acceptance and evidence only.
 2. **Durable batch manifest:** the current main branch contains private per-batch snapshots in `lib/ai-apply-batches.ts`; `tests/ai-apply-batches.test.ts` verifies persistence, restrictive permissions, and metadata-only history output.
 3. **User-facing history and rollback:** `components/AIApplyHistory.tsx`, `app/api/ai/apply/history/route.ts`, and `app/api/ai/apply/rollback/route.ts` provide the history and guarded rollback workflow.
 4. **Regression evidence:** `tests/ai-apply-rollback-route.test.ts` covers apply, history, rollback, stale-file rejection, and recovery behavior. `tests/projects-export-route.test.ts` covers ZIP download behavior and exclusion rules.
-5. **CI and closure evidence:** this pull request must pass unit tests, typecheck, lint, production build, and browser acceptance. The merged commit must then be verified before the phase is marked closed.
+5. **CI and closure evidence:** verified successful GitHub Actions run #507 (`40896719575`) on merged commit `a6dca8b826772829f72073e6bc6cf65f8a0aa6d9`; unit tests, typecheck, lint, production build, browser acceptance, dependency audit, and security mitigation checks all passed.
 
 ## Acceptance notes
 
@@ -20,4 +20,4 @@ Scope: Phase 5 acceptance and evidence only.
 
 ## Evidence status
 
-Batch manifests, history, and guarded rollback are already present on the current main branch. This Phase 5 change adds the missing export-route acceptance test and consolidates the five acceptance gates. Final closure depends on successful CI for this pull request and post-merge verification; this document is not itself a substitute for those checks.
+Batch manifests, metadata-only history, guarded post-apply rollback, and ZIP route regression coverage are present on main. PR #81 was merged as `a6dca8b826772829f72073e6bc6cf65f8a0aa6d9`. Post-merge CI run #507 completed successfully on that exact merge commit; its required test, type, lint, production-build, and browser-acceptance steps all passed. The five Phase 5 acceptance gates are satisfied and Phase 5 is closed.
