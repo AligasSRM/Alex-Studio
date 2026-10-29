@@ -5,6 +5,7 @@ import { getProject } from '@/lib/project-store';
 import { assertLocalMutation } from '@/lib/path-security';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
+import { extractAIResponseText } from '@/lib/ai-response';
 
 const MAX_BODY_BYTES = 24 * 1024;
 const MAX_PROMPT_CHARS = 20_000;
@@ -79,9 +80,11 @@ export async function POST(request: Request) {
     }
     const result = await response.json() as {
       output_text?: unknown;
+      output?: unknown;
       usage?: { input_tokens?: unknown; output_tokens?: unknown };
     };
-    if (typeof result.output_text !== 'string') {
+    const outputText = extractAIResponseText(result);
+    if (typeof outputText !== 'string') {
       return NextResponse.json({ error: 'AI provider returned an invalid response' }, { status: 502 });
     }
     const inputTokens = Number.isInteger(result.usage?.input_tokens) ? result.usage?.input_tokens as number : null;
@@ -96,7 +99,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'AI usage could not be recorded; response withheld' }, { status: 500 });
     }
     return NextResponse.json({
-      output: result.output_text,
+      output: outputText,
       usage: { inputTokens, outputTokens, estimatedCostUsd, ...accounting },
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
