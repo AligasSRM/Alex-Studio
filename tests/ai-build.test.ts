@@ -40,6 +40,27 @@ afterEach(() => {
 });
 
 describe('AI project build workflow', () => {
+  it('rejects oversized request bodies even without a trustworthy Content-Length header', async () => {
+    const response = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: 'not-needed-before-body-validation',
+      prompt: 'x'.repeat(25 * 1024),
+      approved: true,
+    })));
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: 'Request body too large' });
+  });
+
+  it('rejects malformed JSON before rate limiting or provider access', async () => {
+    const request = new Request('http://localhost:3000/api/ai/build', {
+      method: 'POST',
+      headers: { host: 'localhost:3000', origin: 'http://localhost:3000', 'content-type': 'application/json' },
+      body: '{',
+    });
+    const response = await buildPost(request);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Malformed JSON' });
+  });
+
   it('requires explicit approval before paid build generation', async () => {
     const id = await makeProject();
     const response = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({ projectId: id, prompt: 'Build a portfolio' })));
