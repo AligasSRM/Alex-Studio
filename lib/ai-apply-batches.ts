@@ -13,6 +13,8 @@ export type AIApplyBatchManifest = {
   snapshots: AIApplyBatchSnapshot[];
   rollbackError?: string;
 };
+const MAX_MANIFEST_BYTES = 16 * 1024 * 1024;
+
 export type AIApplyBatchSummary = {
   batchId: string;
   createdAt: string;
@@ -68,6 +70,8 @@ function validManifest(value: unknown, batchId: string): value is AIApplyBatchMa
 /** Persist full before/after snapshots in the private .alex metadata directory, never in the ZIP export. */
 export function saveAIApplyBatch(projectId: string, manifest: AIApplyBatchManifest) {
   if (!validManifest(manifest, manifest.batchId)) throw new Error('Invalid AI apply batch manifest');
+  const serialized = JSON.stringify(manifest) + '\\n';
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_MANIFEST_BYTES) throw new Error('AI apply batch snapshots exceed the safe storage limit');
   const destination = manifestPath(projectId, manifest.batchId);
   const temporary = path.join(path.dirname(destination), '.' + randomUUID() + '.tmp');
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL |
@@ -100,7 +104,7 @@ export function readAIApplyBatch(projectId: string, batchId: string): AIApplyBat
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw error;
   }
-  if (stat.isSymbolicLink() || !stat.isFile() || stat.size > 5 * 1024 * 1024) {
+  if (stat.isSymbolicLink() || !stat.isFile() || stat.size > MAX_MANIFEST_BYTES) {
     throw new Error('Invalid AI apply batch manifest file');
   }
   const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
