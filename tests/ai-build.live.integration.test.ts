@@ -6,7 +6,7 @@ import { readProjectFile } from '../lib/files';
 import { resetRateLimitsForTests } from '../lib/rate-limit';
 
 const createdIds: string[] = [];
-const liveTest = process.env.RUN_REAL_OPENAI_INTEGRATION === '1' ? it : it.skip;
+const liveTest = process.env.RUN_REAL_AI_INTEGRATION === '1' ? it : it.skip;
 
 function localPost(url: string, body: string) {
   return new Request(url, {
@@ -39,11 +39,11 @@ afterEach(() => {
   }
 });
 
-describe('live OpenAI provider proof (explicitly gated)', () => {
-  liveTest('calls the real provider through the build route and leaves original files unchanged', async () => {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error('OPENAI_API_KEY is required for this explicitly enabled live integration test');
-    }
+describe('live AI provider proof (explicitly gated)', () => {
+  liveTest('calls the configured real provider through the build route and leaves original files unchanged', async () => {
+    const provider = process.env.AI_PROVIDER === 'groq' ? 'groq' : 'openai';
+    const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error(provider === 'groq' ? 'GROQ_API_KEY is required for this live integration test' : 'OPENAI_API_KEY is required for this live integration test');
 
     const id = await makeProject();
     const original = readProjectFile(id, 'index.html');
