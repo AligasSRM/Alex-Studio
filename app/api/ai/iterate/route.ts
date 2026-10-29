@@ -156,7 +156,7 @@ export function runSandbox(root: string): Promise<Result> {
         finish({ ok: false, available: true, summary: 'Sandbox timed out; container removal verified', output: (output + '\n' + cleanup.output).slice(-16000) });
         return;
       }
-      finish({ ok: code === 0, available: !unavailable, summary: code === 0 ? 'Isolated browser test passed; container cleanup verified' : unavailable ? 'Docker sandbox unavailable' : 'Isolated browser test failed; container cleanup verified', output: (output + '\n' + cleanup.output).slice(-16000) });
+      finish({ ok: code === 0, available: !unavailable, summary: code === 0 ? 'Isolated browser test passed; container cleanup verified' : unavailable ? 'Docker sandbox unavailable' : 'Isolated browser test failed; container cleanup verified', pageSnapshot: parseBrowserSnapshot(output), output: (output + '\n' + cleanup.output).slice(-16000) });
     });
   });
 }
