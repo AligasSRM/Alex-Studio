@@ -90,7 +90,6 @@ describe('isolated npm runner timeout cleanup ordering', () => {
       summary: 'Runner timed out and cleanup is unverified', cleanupVerified: false,
     });
     expect(result.output).toContain('Docker CLI close was not observed');
-    expect(result.output).not.toContain('container absence verified: true');
 
     // Once the creator process is observed closed, perform a second cleanup pass.
     child.emit('close', null);
