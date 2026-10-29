@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     const originalError = error instanceof Error ? error.message : 'unknown write error';
     if (rollbackFailures.length) {
       return NextResponse.json({
-        error: 'Batch apply failed: ' + originalError + '. Rollback was incomplete; manual recovery may be required for: ' + rollbackFailures.join(', '),
+        error: 'Batch apply failed: ' + originalError + '. Rollback failed; manual recovery may be required for: ' + rollbackFailures.join(', '),
         batchId,
         rollbackStatus: 'failed',
         rollback: { status: 'INCOMPLETE', failedPaths: rollbackFailures },
