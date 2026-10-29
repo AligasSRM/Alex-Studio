@@ -154,6 +154,8 @@ describe('AI project build workflow', () => {
       method: 'POST',
       headers: { Authorization: 'Bearer test-groq-secret', 'Content-Type': 'application/json' },
     }));
+    const requestInit = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(requestInit.body)).text).toEqual({ format: { type: 'json_object' } });
     const data = await response.json() as { build: { files: { path: string }[] }; usage: { estimatedCostUsd: number | null } };
     expect(data.build.files[0].path).toBe('index.html');
     expect(data.usage.estimatedCostUsd).toBeNull();
