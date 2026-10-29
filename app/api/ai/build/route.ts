@@ -43,7 +43,7 @@ function parseBuild(output: string, projectId: string, originals: Map<string, st
     }
     const normalized = file.path.replace(/\\/g, '/');
     resolveProjectPath(projectId, normalized);
-    if (normalized !== file.path || seen.has(normalized)) throw new Error('AI returned duplicate or non-canonical paths');
+    if (normalized !== file.path || normalized !== normalized.trim() || seen.has(normalized)) throw new Error('AI returned duplicate or non-canonical paths');
     if (isProtectedAIGeneratedPath(normalized)) {
       throw new Error('AI attempted to modify a protected path');
     }
