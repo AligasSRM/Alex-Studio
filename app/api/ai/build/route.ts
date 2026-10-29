@@ -73,8 +73,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'projectId and prompt (1–12000 characters) are required' }, { status: 400 });
   }
   if (!getProject(input.projectId)) return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+  const provider = process.env.AI_PROVIDER === 'ollama' ? 'ollama' : 'openai';
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'AI provider is not configured on this server' }, { status: 503 });
+  if (provider === 'openai' && !apiKey) {
+    return NextResponse.json({ error: 'No AI provider configured. Set AI_PROVIDER=ollama for a free local model, or configure OPENAI_API_KEY.' }, { status: 503 });
+  }
 
   const originals = new Map<string, string>();
   let contextBytes = 0;
@@ -94,7 +97,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not safely read project context' }, { status: 400 });
   }
 
-  const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+  const model = provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
   const system = [
     'You are the implementation agent inside Alex Studio, a local-first project builder.',
     'Return only valid JSON with exactly this shape: {"summary":"...","plan":["..."],"requirements":["observable acceptance requirement 1","..."],"files":[{"path":"relative/path","content":"complete UTF-8 file content"}]}.',
@@ -112,11 +115,22 @@ export async function POST(request: Request) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST', signal: controller.signal,
-      headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
-    });
+    const response = provider === 'ollama'
+      ? await fetch('http://127.0.0.1:11434/api/chat', {
+          method: 'POST', signal: controller.signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model, stream: false,
+            format: 'json',
+            messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+            options: { num_predict: 12000 },
+          }),
+        })
+      : await fetch('https://api.openai.com/v1/responses', {
+          method: 'POST', signal: controller.signal,
+          headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, instructions: system, input: user, max_output_tokens: 12000 }),
+        });
     if (!response.ok) {
       let providerError: { error?: { type?: unknown; code?: unknown } } = {};
       try {
@@ -143,7 +157,22 @@ export async function POST(request: Request) {
         headers,
       });
     }
-    const result = await response.json() as { output_text?: unknown; usage?: { input_tokens?: unknown; output_tokens?: unknown } };
+    const rawResult = await response.json() as {
+      output_text?: unknown;
+      usage?: { input_tokens?: unknown; output_tokens?: unknown };
+      message?: { content?: unknown };
+      prompt_eval_count?: unknown;
+      eval_count?: unknown;
+    };
+    const result = provider === 'ollama'
+      ? {
+          output_text: rawResult.message?.content,
+          usage: {
+            input_tokens: rawResult.prompt_eval_count,
+            output_tokens: rawResult.eval_count,
+          },
+        }
+      : rawResult;
     if (typeof result.output_text !== 'string') return NextResponse.json({ error: 'AI provider returned an invalid response' }, { status: 502 });
     const inputTokens = Number.isInteger(result.usage?.input_tokens) ? result.usage?.input_tokens as number : null;
     const outputTokens = Number.isInteger(result.usage?.output_tokens) ? result.usage?.output_tokens as number : null;
