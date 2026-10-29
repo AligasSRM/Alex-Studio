@@ -7,6 +7,9 @@ import { assertLocalMutation, resolveProjectPath, assertTextContent } from '@/li
 import { getProject } from '@/lib/project-store';
 import { readProjectFile, writeProjectFile } from '@/lib/files';
 import { verifyVerificationProof } from '@/lib/ai-verification-proof';
+import { readJsonBody } from '@/lib/request-body';
+
+const MAX_APPLY_BODY_BYTES = 3 * 1024 * 1024;
 
 type Change = { path: string; content: string; baseHash: string | null };
 function hash(content: string) {
@@ -15,9 +18,9 @@ function hash(content: string) {
 
 export async function POST(request: Request) {
   if (!assertLocalMutation(request)) return NextResponse.json({ error: 'Local same-origin requests only' }, { status: 403 });
-  const length = Number(request.headers.get('content-length') || 0);
-  if (length > 3 * 1024 * 1024) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
-  const body = await request.json().catch(() => null) as { projectId?: unknown; approved?: unknown; files?: unknown; verificationProof?: unknown } | null;
+  const parsed = await readJsonBody(request, MAX_APPLY_BODY_BYTES);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+  const body = parsed.value as { projectId?: unknown; approved?: unknown; files?: unknown; verificationProof?: unknown } | null;
   if (!body || typeof body.projectId !== 'string' || !Array.isArray(body.files)) {
     return NextResponse.json({ error: 'projectId and files are required' }, { status: 400 });
   }
