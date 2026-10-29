@@ -2,8 +2,9 @@
 
 **Repository:** `AligasSRM/Alex-Studio`  
 **Audit scope:** ZIP export security, editor undo/redo lifecycle, approved multi-file apply rollback, evidence gates, and phase disposition.  
-**Baseline:** `main` commit `ab92cf2479fc85db06ea6c37ccdbf0b6fa2ae029`.  
-**Disposition:** Phase 4 remains OPEN. ZIP-export item 1 is implemented and its main-branch CI passed; the remaining findings below must be resolved or explicitly accepted before phase closure.
+**Baseline:** `main` commit `ab92cf2479fc85db06ea6c37ccdbf0b6fa2ae029` (initial audit baseline).  
+**Latest implementation:** PR [#78](https://github.com/AligasSRM/Alex-Studio/pull/78) merged as `98d55fe5267658764ecc2c9705de31ae563d551c`; pre-merge CI [40895335131](https://github.com/AligasSRM/Alex-Studio/actions/runs/40895335131) passed. Main-branch post-merge CI [40895826408](https://github.com/AligasSRM/Alex-Studio/actions/runs/40895826408) is pending final result at report update time.  
+**Disposition:** Phase 4 remains OPEN until post-merge main CI is green and the final scope/acceptance decision is recorded.
 
 ## Ordered work items
 
@@ -40,7 +41,7 @@ The AI apply endpoint requires explicit approval and a successful current verifi
 - A local-only history endpoint and workspace controls list batch summaries and offer explicit post-apply rollback. The rollback endpoint checks that each affected file still matches the batch output or an already-restored original state; it refuses to overwrite newer user edits.
 - Route/storage tests cover history without exposing contents, successful post-apply rollback, stale/newer-edit rejection, explicit approval and same-origin enforcement, interrupted rollback recovery, manifest permissions, invalid manifests, and symlinked metadata directories. PR #78 merged as `98d55fe5267658764ecc2c9705de31ae563d551c`; CI [#40895335131](https://github.com/AligasSRM/Alex-Studio/actions/runs/40895335131) passed on tested head `1ccdcb1f9dd1c2d82dbfc21b88eb1054669e5015`.
 
-The current main-branch CI, including unit tests, type check, lint, production build, and browser acceptance, passed on `ab92cf2479fc85db06ea6c37ccdbf0b6fa2ae029`: [CI run 40883041909](https://github.com/AligasSRM/Alex-Studio/actions/runs/40883041909). These remaining gaps matter if Phase 4 acceptance requires durable transactional history and post-apply rollback, rather than failure-time recovery with explicit diagnostics.
+The current main-branch CI, including unit tests, type check, lint, production build, and browser acceptance, passed on `ab92cf2479fc85db06ea6c37ccdbf0b6fa2ae029`: [CI run 40883041909](https://github.com/AligasSRM/Alex-Studio/actions/runs/40883041909). Durable transaction history and user-facing post-apply rollback are now implemented in PR #78. The remaining gate is successful post-merge CI and an explicit product decision on whether editor undo/redo must persist across reloads; current behavior is deliberately session-only.
 
 ## Item 4 — Evidence and validation gate
 
