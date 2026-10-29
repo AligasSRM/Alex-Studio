@@ -31,12 +31,12 @@
 
 ## Acceptance gate to close Phase 3
 
-- [x] Unit tests passed on merge commit `85878beea5aa6cbc4ad6e4a848de56a7502e5dbb` — [CI run 40877392173](https://github.com/AligasSRM/Alex-Studio/actions/runs/40877392173). The new daemon regression test must pass on the final candidate before closure.
+- [x] Unit tests passed on merge commit `85878beea5aa6cbc4ad6e4a848de56a7502e5dbb` — [CI run 40877392173](https://github.com/AligasSRM/Alex-Studio/actions/runs/40877392173). The new daemon regression test passed on candidate commit `03642aef691931c8829ff9d1272163fa07b637b8` — [CI run 40878651086](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878651086).
 - [x] Type check, lint, production build, browser acceptance, and archive validation passed on the same commit — [CI run 40877392173](https://github.com/AligasSRM/Alex-Studio/actions/runs/40877392173).
-- [x] Real Docker integration passed on the same commit — [Docker Integration run 40877392043](https://github.com/AligasSRM/Alex-Studio/actions/runs/40877392043). The final candidate must rerun this workflow.
+- [x] Real Docker integration passed on the same commit — [Docker Integration run 40877392043](https://github.com/AligasSRM/Alex-Studio/actions/runs/40877392043). The final candidate passed real-Docker integration — [Docker Integration run 40878651094](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878651094).
 - [x] Regression tests verify host-only environment isolation and byte-identical host project files after attempted writes.
-- [x] Existing tests distinguish success, non-zero failure, timeout, unavailable offline cache, missing/unpinned runner image, and missing required scripts. A new daemon-unavailable regression test is added in this candidate and must pass before closure.
+- [x] Existing tests distinguish success, non-zero failure, timeout, unavailable offline cache, missing/unpinned runner image, and missing required scripts. The Docker daemon-unavailable regression test passed on candidate commit `03642aef691931c8829ff9d1272163fa07b637b8` — [CI run 40878651086](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878651086).
 - [x] Real-Docker cleanup assertions cover normal completion, timeout, and non-zero exit.
 - [x] Preserve the trusted-computing-base limitation; do not claim full host/kernel isolation.
 
-**Current decision:** The remaining outcome-classification gap is addressed by a new regression test simulating a Docker daemon connection failure and asserting `UNAVAILABLE`. Phase 3 closure is contingent on both CI and real-Docker workflows passing on the same final PR head SHA; record those exact run URLs before merging this audit.
+**Current decision:** The remaining outcome-classification gap is addressed by a new regression test simulating a Docker daemon connection failure and asserting `UNAVAILABLE`. Both CI and real-Docker workflows passed on candidate commit `03642aef691931c8829ff9d1272163fa07b637b8`: [CI run 40878651086](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878651086) and [Docker Integration run 40878651094](https://github.com/AligasSRM/Alex-Studio/actions/runs/40878651094). The report-only evidence update itself must also pass both required workflows before merge.
