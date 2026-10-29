@@ -95,7 +95,7 @@ export function runSandbox(root: string): Promise<Result> {
     }
     const containerName = 'alex-studio-browser-' + randomUUID().slice(0, 12);
     const args = ['run', '--rm', '--init', '--name', containerName, '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
-      '--memory', '256m', '--cpus', '1', '--pids-limit', '64', '--user', '10001:10001', '--shm-size', '64m',
+      '--memory', '768m', '--cpus', '1', '--pids-limit', '96', '--user', '10001:10001', '--shm-size', '128m',
       '--tmpfs', '/tmp:rw,nosuid,size=64m', '--mount', 'type=bind,src=' + root + ',dst=/workspace,readonly',
       '--mount', 'type=bind,src=' + modules + ',dst=/app/node_modules,readonly', '--env', 'NODE_PATH=/app/node_modules', '--env', 'HOME=/tmp', '--env', 'PLAYWRIGHT_BROWSERS_PATH=/ms-playwright',
       IMAGE, 'node', '-e', runner];
