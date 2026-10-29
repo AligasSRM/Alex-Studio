@@ -76,7 +76,7 @@ export function AIApplyHistory({ projectId, refreshKey, onRolledBack }: {
       <div><p className="eyebrow">CHANGE RECOVERY</p><h3 id="ai-apply-history-title">AI apply history</h3></div>
       <button type="button" className="secondary" onClick={() => void refresh()} disabled={loading || !!busyBatch}>Refresh</button>
     </div>
-    <p className="muted">Private before/after snapshots are stored in project metadata. Rollback is available only while every affected file still matches that batch's applied output; newer edits are never overwritten.</p>
+    <p className="muted">Private before/after snapshots are stored in project metadata. Rollback is available only while every affected file still matches that batch&apos;s applied output; newer edits are never overwritten.</p>
     {error && <p className="alert error" role="alert">{error}</p>}
     {notice && <p className="alert success" role="status">{notice}</p>}
     {loading ? <p>Loading history…</p> : !batches.length ? <p className="muted">No AI apply batches recorded for this project.</p> :
