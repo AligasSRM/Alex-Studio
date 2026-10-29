@@ -80,5 +80,5 @@ jobs:
           # Copy the trusted cache created by npm ci; integration fixtures have no external dependencies.
           npm_cache="$(npm config get cache)"
           if [ -d "$npm_cache" ]; then cp -a "$npm_cache/." "$AI_RUNNER_NPM_CACHE/"; fi
-          npx jest tests/ai-command-runner.docker.test.ts --runInBand
+          npx jest tests/ai-command-runner.docker.test.ts tests/ai-iterate-sandbox.docker.test.ts --runInBand
         timeout-minutes: 8
