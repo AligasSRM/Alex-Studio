@@ -49,7 +49,7 @@ export async function POST(request: Request) {
       if (totalBytes > 2 * 1024 * 1024) throw new Error('Generated batch exceeds 2 MiB');
       const normalized = file.path.replace(/\\/g, '/');
       resolveProjectPath(body.projectId, normalized);
-      if (normalized !== file.path || seen.has(normalized)) throw new Error('Duplicate or non-canonical file path');
+      if (normalized !== file.path || normalized !== normalized.trim() || seen.has(normalized)) throw new Error('Duplicate or non-canonical file path');
       if (isProtectedAIGeneratedPath(normalized)) {
         throw new Error('Protected path denied');
       }
