@@ -1,10 +1,12 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { POST as buildPost } from '../app/api/ai/build/route';
 import { POST as applyPost } from '../app/api/ai/apply/route';
 import { POST as createProjectPost } from '../app/api/projects/route';
 import { projectRoot } from '../lib/path-security';
 import { readProjectFile } from '../lib/files';
+import * as fileOps from '../lib/files';
 import { resetRateLimitsForTests } from '../lib/rate-limit';
 import { issueVerificationProof } from '../lib/ai-verification-proof';
 
@@ -246,10 +248,80 @@ describe('AI project build workflow', () => {
       projectId: id, approved: true, files, verificationProof: issueVerificationProof(id, files),
     })));
     expect(response.status).toBe(200);
-    const data = await response.json() as { count: number; applied: string[] };
+    const data = await response.json() as { count: number; applied: string[]; batchId: string };
     expect(data.count).toBe(2);
+    expect(data.batchId).toMatch(/^[0-9a-f-]{36}$/i);
     expect(data.applied).toEqual(['index.html', 'app.js']);
+    const audit = fs.readFileSync(path.join(projectRoot(id), '.alex', 'ai-apply-audit.jsonl'), 'utf8');
+    const auditEvents = audit.trim().split('\n').map((line) => JSON.parse(line) as { outcome: string; paths: string[]; batchId: string });
+    expect(auditEvents.map((event) => event.outcome)).toEqual(['started', 'applied']);
+    expect(auditEvents.every((event) => event.batchId === data.batchId)).toBe(true);
+    expect(auditEvents[1].paths).toEqual(['index.html', 'app.js']);
+    expect(audit).not.toContain('<!doctype html>');
     expect(readProjectFile(id, 'index.html')).toContain('Updated');
     expect(readProjectFile(id, 'app.js')).toContain('dataset.ready');
+  });
+
+  it('rolls back a partially applied batch and records the rollback result', async () => {
+    const id = await makeProject();
+    const original = readProjectFile(id, 'index.html');
+    const files = [
+      { path: 'index.html', content: '<!doctype html><title>Must roll back</title>', baseHash: hash(original) },
+      { path: 'app.js', content: 'throw new Error("injected");', baseHash: null },
+    ];
+    const realWrite = fileOps.writeProjectFile;
+    jest.spyOn(fileOps, 'writeProjectFile').mockImplementation((projectId, filePath, content) => {
+      if (filePath === 'app.js') throw new Error('injected write failure');
+      return realWrite(projectId, filePath, content);
+    });
+
+    const response = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
+      projectId: id, approved: true, files, verificationProof: issueVerificationProof(id, files),
+    })));
+
+    expect(response.status).toBe(500);
+    const data = await response.json() as { batchId: string; rollbackStatus: string };
+    expect(data.rollbackStatus).toBe('succeeded');
+    expect(readProjectFile(id, 'index.html')).toBe(original);
+    expect(fs.existsSync(path.join(projectRoot(id), 'app.js'))).toBe(false);
+    const events = fs.readFileSync(path.join(projectRoot(id), '.alex', 'ai-apply-audit.jsonl'), 'utf8')
+      .trim().split(String.fromCharCode(10)).map((line) => JSON.parse(line) as { outcome: string; rollbackStatus?: string; batchId: string });
+    expect(events.map((event) => event.outcome)).toEqual(['started', 'failed']);
+    expect(events[1].rollbackStatus).toBe('succeeded');
+    expect(events.every((event) => event.batchId === data.batchId)).toBe(true);
+  });
+
+  it('records rollback failure when restoration itself throws', async () => {
+    const id = await makeProject();
+    const original = readProjectFile(id, 'index.html');
+    const files = [
+      { path: 'index.html', content: '<!doctype html><title>Rollback failure fixture</title>', baseHash: hash(original) },
+      { path: 'app.js', content: 'throw new Error("injected apply failure");', baseHash: null },
+    ];
+    const realWrite = fileOps.writeProjectFile;
+    let indexWrites = 0;
+    jest.spyOn(fileOps, 'writeProjectFile').mockImplementation((projectId, filePath, content) => {
+      if (filePath === 'app.js') throw new Error('injected apply failure');
+      if (filePath === 'index.html') {
+        indexWrites += 1;
+        if (indexWrites === 2) throw new Error('injected rollback failure');
+      }
+      return realWrite(projectId, filePath, content);
+    });
+
+    const response = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
+      projectId: id, approved: true, files, verificationProof: issueVerificationProof(id, files),
+    })));
+
+    expect(response.status).toBe(500);
+    const data = await response.json() as { batchId: string; rollbackStatus: string; error: string };
+    expect(data.rollbackStatus).toBe('failed');
+    expect(data.error).toMatch(/rollback failed/i);
+    expect(readProjectFile(id, 'index.html')).toContain('Rollback failure fixture');
+    const events = fs.readFileSync(path.join(projectRoot(id), '.alex', 'ai-apply-audit.jsonl'), 'utf8')
+      .trim().split(String.fromCharCode(10)).map((line) => JSON.parse(line) as { outcome: string; rollbackStatus?: string; batchId: string });
+    expect(events.map((event) => event.outcome)).toEqual(['started', 'failed']);
+    expect(events[1].rollbackStatus).toBe('failed');
+    expect(events.every((event) => event.batchId === data.batchId)).toBe(true);
   });
 });
