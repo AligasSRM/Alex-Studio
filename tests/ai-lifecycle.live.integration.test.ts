@@ -91,13 +91,21 @@ describe('full AI lifecycle proof (real provider and real Docker; explicitly gat
       verificationProof?: string | null;
       repairs?: { round: number; summary: string }[];
       diagnostic?: { summary: string; output: string };
-      acceptance?: { requirements: { id: string; status: string; evidence: string }[] };
+      acceptance?: { requirements: { id: string; text: string; status: string; evidence: string }[] };
       build?: { files: { path: string; content: string; baseHash: string | null }[] };
     };
     expect(iterateResponse.status).toBe(200);
     expect(iterateData.ok).toBe(true);
     expect(iterateData.repairs?.length).toBeGreaterThanOrEqual(1);
     expect(iterateData.verificationProof).toEqual(expect.any(String));
+    console.log('AI_LIFECYCLE_REQUIREMENT_EVIDENCE ' + JSON.stringify({
+      commitSha: process.env.GITHUB_SHA ?? null,
+      runUrl: process.env.GITHUB_RUN_ID && process.env.GITHUB_REPOSITORY
+        ? (process.env.GITHUB_SERVER_URL ?? 'https://github.com') + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID
+        : null,
+      repairRounds: iterateData.repairs?.map(item => ({ round: item.round, summary: item.summary })),
+      requirements: iterateData.acceptance?.requirements,
+    }));
     expect(iterateData.acceptance?.requirements.map(item => item.status)).toEqual(['pass', 'pass']);
     expect(iterateData.acceptance?.requirements.every(item => item.evidence.length > 0)).toBe(true);
     expect(readProjectFile(id, 'index.html')).toBe(original);
@@ -119,5 +127,13 @@ describe('full AI lifecycle proof (real provider and real Docker; explicitly gat
     expect(applied).toMatch(new RegExp('<title>\\s*' + expectedTitle + '\\s*</title>', 'i'));
     expect(applied).toContain(expectedMarker);
     expect(applied).not.toContain('AI_LIFECYCLE_BROKEN');
+    console.log('AI_LIFECYCLE_FINAL_RESULT ' + JSON.stringify({
+      commitSha: process.env.GITHUB_SHA ?? null,
+      runUrl: process.env.GITHUB_RUN_ID && process.env.GITHUB_REPOSITORY
+        ? (process.env.GITHUB_SERVER_URL ?? 'https://github.com') + '/' + process.env.GITHUB_REPOSITORY + '/actions/runs/' + process.env.GITHUB_RUN_ID
+        : null,
+      result: 'PASS', appliedCount: applyData.count,
+      verifiedTitle: expectedTitle, verifiedMarker: expectedMarker,
+    }));
   }, 8 * 60 * 1000);
 });
