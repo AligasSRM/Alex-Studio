@@ -20,4 +20,8 @@ Scope: Phase 5 acceptance and evidence only.
 
 ## Evidence status
 
-Batch manifests, history, and guarded rollback are already present on the current main branch. This Phase 5 change adds the missing export-route acceptance test and consolidates the five acceptance gates. Final closure depends on successful CI for this pull request and post-merge verification; this document is not itself a substitute for those checks.
+Batch manifests, history, and guarded rollback are already present on the current main branch. This Phase 5 change adds the missing export-route acceptance test and consolidates the five acceptance gates. **Phase 5 acceptance PR:** #81, merged as `a6dca8b826772829f72073e6bc6cf65f8a0aa6d9`.
+
+**Post-merge CI:** run `40896719575` completed successfully on that merge commit, including unit tests, typecheck, lint, production build, and browser acceptance. The ZIP export route acceptance tests were included in that run.
+
+**Closure status:** Phase 5 acceptance gates are satisfied on the verified merge commit. This follow-up records closure evidence; its own CI must pass before the evidence record is final.
