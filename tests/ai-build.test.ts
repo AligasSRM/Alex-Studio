@@ -11,6 +11,8 @@ import { issueVerificationProof } from '../lib/ai-verification-proof';
 const createdIds: string[] = [];
 const originalKey = process.env.OPENAI_API_KEY;
 const originalModel = process.env.OPENAI_MODEL;
+const originalProvider = process.env.AI_PROVIDER;
+const originalOllamaModel = process.env.OLLAMA_MODEL;
 function localPost(url: string, body: string) {
   return new Request(url, {
     method: 'POST',
@@ -33,6 +35,8 @@ afterEach(() => {
   for (const id of createdIds.splice(0)) fs.rmSync(projectRoot(id), { recursive: true, force: true });
   if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
   if (originalModel === undefined) delete process.env.OPENAI_MODEL; else process.env.OPENAI_MODEL = originalModel;
+  if (originalProvider === undefined) delete process.env.AI_PROVIDER; else process.env.AI_PROVIDER = originalProvider;
+  if (originalOllamaModel === undefined) delete process.env.OLLAMA_MODEL; else process.env.OLLAMA_MODEL = originalOllamaModel;
 });
 
 describe('AI project build workflow', () => {
@@ -62,6 +66,39 @@ describe('AI project build workflow', () => {
     const data = await response.json() as { build: { files: { path: string; baseHash: string | null }[] } };
     expect(data.build.files[0].path).toBe('index.html');
     expect(data.build.files[0].baseHash).toBe(hash(original));
+    expect(readProjectFile(id, 'index.html')).toBe(original);
+  });
+
+  it('uses a local Ollama model without an API key and records zero cost', async () => {
+    const id = await makeProject();
+    delete process.env.OPENAI_API_KEY;
+    process.env.AI_PROVIDER = 'ollama';
+    process.env.OLLAMA_MODEL = 'qwen2.5-coder:7b';
+    const original = readProjectFile(id, 'index.html');
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      message: { content: JSON.stringify({
+        summary: 'Prepare a local draft',
+        plan: ['Update the page title'],
+        requirements: ['The page title must be Local Draft.'],
+        files: [{ path: 'index.html', content: '<!doctype html><title>Local Draft</title>' }],
+      }) },
+      prompt_eval_count: 100,
+      eval_count: 50,
+    }), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+    const response = await buildPost(localPost('http://localhost:3000/api/ai/build', JSON.stringify({
+      projectId: id, prompt: 'Update the home page title', approved: true,
+    })));
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:11434/api/chat', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    const data = await response.json() as { build: { files: { path: string; baseHash: string | null }[] }; usage: { estimatedCostUsd: number } };
+    expect(data.build.files[0].path).toBe('index.html');
+    expect(data.build.files[0].baseHash).toBe(hash(original));
+    expect(data.usage.estimatedCostUsd).toBe(0);
     expect(readProjectFile(id, 'index.html')).toBe(original);
   });
 
