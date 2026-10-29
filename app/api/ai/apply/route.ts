@@ -9,6 +9,7 @@ import { readProjectFile, writeProjectFile } from '@/lib/files';
 import { verifyVerificationProof } from '@/lib/ai-verification-proof';
 import { rollbackAppliedSnapshots } from '@/lib/ai-apply-rollback';
 import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
+import { writeBatchManifest, type BatchManifest } from '@/lib/ai-apply-manifest';
 import { readJsonBody } from '@/lib/request-body';
 
 const MAX_APPLY_BODY_BYTES = 3 * 1024 * 1024;
@@ -89,12 +90,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not record the apply audit; no files were changed' }, { status: 500 });
   }
 
+  const manifest: BatchManifest = {
+    batchId, timestamp: auditEvent.timestamp, status: 'prepared',
+    paths: auditEvent.paths, beforeContents: snapshots.map((snapshot) => snapshot.content),
+    beforeHashes: auditEvent.beforeHashes, afterHashes: auditEvent.afterHashes,
+  };
+  try {
+    writeBatchManifest(body.projectId, manifest);
+  } catch {
+    return NextResponse.json({ error: 'Could not persist the recovery manifest; no files were changed' }, { status: 500 });
+  }
+
   const applied: string[] = [];
   try {
     for (const change of changes) {
       writeProjectFile(body.projectId, change.path, change.content);
       applied.push(change.path);
     }
+    manifest.status = 'applied';
+    writeBatchManifest(body.projectId, manifest);
     recordAIApplyAudit(body.projectId, { ...auditEvent, timestamp: new Date().toISOString(), outcome: 'applied', rollbackStatus: 'not-needed' });
     return NextResponse.json({ ok: true, batchId, applied, count: applied.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
@@ -104,6 +118,8 @@ export async function POST(request: Request) {
       else writeProjectFile(body.projectId as string, snapshot.path, snapshot.content);
     });
     const rollbackStatus = rollbackFailures.length ? 'failed' : 'succeeded';
+    manifest.status = 'apply-failed';
+    try { writeBatchManifest(body.projectId, manifest); } catch { /* retain the last durable recovery state */ }
     try {
       recordAIApplyAudit(body.projectId, { ...auditEvent, timestamp: new Date().toISOString(), outcome: 'failed', rollbackStatus });
     } catch {
