@@ -54,7 +54,7 @@ const runner = [
   " await page.goto('file:///workspace/index.html', { waitUntil: 'load', timeout: 10000 });",
   " const body = (await page.locator('body').innerText().catch(() => '')).trim();",
   " if (!body) errors.push('The page body is empty');",
-  " process.stdout.write(JSON.stringify({ ok: !errors.length, title: await page.title().catch(() => ''), errors }) + '\\n');",
+  " process.stdout.write(JSON.stringify({ ok: !errors.length, title: await page.title().catch(() => ''), body: body.slice(0, 12000), errors }) + '\\n');",
   " if (errors.length) process.exitCode = 1; } finally { await browser.close(); }",
   "})().catch(e => { process.stderr.write(String(e.stack || e)); process.exitCode = 1; });",
 ].join('\n');
