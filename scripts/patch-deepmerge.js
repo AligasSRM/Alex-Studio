@@ -31,9 +31,9 @@ function findPackageRoot(startPath, expectedName) {
 }
 
 const foundPackage = findPackageRoot(entryPath, 'deepmerge');
-if (foundPackage.metadata.version !== '4.3.1') {
+if (foundPackage.metadata.version !== '4.3.2') {
   throw new Error(
-    'Expected deepmerge 4.3.1 for the reviewed security patch; found ' +
+    'Expected deepmerge 4.3.2 for the reviewed security patch; found ' +
     foundPackage.metadata.version +
     '. Review the upstream fix before changing this guard.'
   );
@@ -60,7 +60,7 @@ if (
   source.split(targetAnchor).length !== 2 ||
   source.split(sourceAnchor).length !== 2
 ) {
-  throw new Error('deepmerge source does not match the reviewed 4.3.1 patch anchors; refusing to modify it.');
+  throw new Error('deepmerge source does not match the reviewed 4.3.2 patch anchors; refusing to modify it.');
 }
 
 let patched = source.replace(
@@ -77,4 +77,4 @@ patched = patched.replace(
 );
 
 fs.writeFileSync(entryPath, patched);
-process.stdout.write('Applied reviewed __proto__ guard to deepmerge 4.3.1.\n');
+process.stdout.write('Verified vendored deepmerge 4.3.2 includes the reviewed __proto__ guard.\n');
