@@ -128,13 +128,23 @@ function runSandbox(root: string): Promise<Result> {
 async function getRepair(apiKey: string | undefined, model: string, provider: 'openai' | 'groq' | 'ollama', projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>) {
   const instructions = 'Repair the supplied static HTML/CSS/JS project using the isolated browser diagnostics. Return only JSON: {"summary":"...","files":[{"path":"relative/path","content":"complete file content"}]}. Maximum 10 files, each under 256 KiB. Use canonical relative paths only. Never change hidden paths, secrets, node_modules, .git, .alex or lockfiles. Do not include host shell commands. Do not claim tests passed unless diagnostics prove it.';
   const input = JSON.stringify({ request: prompt, diagnostics: result, files });
-  const response = await fetch(provider === 'ollama' ? 'http://127.0.0.1:11434/api/chat' : provider === 'groq' ? 'https://api.groq.com/openai/v1/responses' : 'https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: provider === 'ollama' ? { 'Content-Type': 'application/json' } : { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify(provider === 'ollama'
-      ? { model, stream: false, format: 'json', messages: [{ role: 'system', content: instructions }, { role: 'user', content: input }], options: { num_predict: 12000 } }
-      : { model, max_output_tokens: 12000, instructions, input }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), provider === 'ollama' ? 120_000 : 30_000);
+  let response: Response;
+  try {
+    response = await fetch(provider === 'ollama' ? 'http://127.0.0.1:11434/api/chat' : provider === 'groq' ? 'https://api.groq.com/openai/v1/responses' : 'https://api.openai.com/v1/responses', {
+      method: 'POST', signal: controller.signal,
+      headers: provider === 'ollama' ? { 'Content-Type': 'application/json' } : { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify(provider === 'ollama'
+        ? { model, stream: false, format: 'json', messages: [{ role: 'system', content: instructions }, { role: 'user', content: input }], options: { num_predict: 12000 } }
+        : { model, max_output_tokens: 12000, instructions, input }),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new Error('AI repair request timed out');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!response.ok) throw new Error('AI repair request failed (' + response.status + ')');
   const data = await response.json() as { output_text?: unknown; output?: unknown; message?: { content?: unknown }; usage?: { input_tokens?: unknown; output_tokens?: unknown }; prompt_eval_count?: unknown; eval_count?: unknown };
   const outputText = extractAIResponseText(data);
