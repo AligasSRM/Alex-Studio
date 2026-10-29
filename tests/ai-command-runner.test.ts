@@ -188,7 +188,8 @@ describe('isolated npm runner preflight', () => {
       const result = await runProjectCommands(root);
       expect(result).toMatchObject({
         ok: false, available: false, status: 'UNAVAILABLE',
-        summary: 'Docker image or daemon unavailable',
+        summary: 'Container cleanup could not be verified; runner result is not trusted.',
+        cleanupVerified: false,
       });
       expect(result.commands.every(command => command.status === 'UNAVAILABLE')).toBe(true);
       expect(result.output).toContain('Cannot connect to the Docker daemon');
