@@ -56,13 +56,13 @@ describe('live OpenAI provider proof (explicitly gated)', () => {
 
     // Provider-side 429s are surfaced by the route as a retryable 503. Retry only
     // that known transient response, with a bounded delay; do not hide other errors.
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 5; attempt++) {
       response = await buildPost(localPost('http://localhost:3000/api/ai/build', requestBody));
       if (response.ok) break;
 
       const payload = await response.json().catch(() => ({})) as { error?: string };
       const retryableBusy = response.status === 503 && payload.error === 'AI provider is busy; try again later';
-      if (!retryableBusy || attempt === 2) {
+      if (!retryableBusy || attempt === 4) {
         throw new Error(`Live AI build route returned HTTP ${response.status}: ${payload.error ?? 'unknown error'}`);
       }
 
@@ -70,7 +70,7 @@ describe('live OpenAI provider proof (explicitly gated)', () => {
       const retryAfterSeconds = retryAfterHeader && /^[0-9]{1,5}$/.test(retryAfterHeader)
         ? Number(retryAfterHeader)
         : 2 ** (attempt + 1);
-      const delayMs = Math.min(20_000, Math.max(1_000, retryAfterSeconds * 1_000));
+      const delayMs = Math.min(30_000, Math.max(1_000, retryAfterSeconds * 1_000));
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 

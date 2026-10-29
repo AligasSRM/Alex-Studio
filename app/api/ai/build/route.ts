@@ -8,6 +8,7 @@ import { resolveProjectPath } from '@/lib/path-security';
 import { assertLocalMutation } from '@/lib/path-security';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
+import { readJsonBody } from '@/lib/request-body';
 
 const MAX_BODY_BYTES = 24 * 1024;
 const MAX_PROMPT_CHARS = 12_000;
@@ -54,17 +55,13 @@ function parseBuild(output: string, projectId: string, originals: Map<string, st
 
 export async function POST(request: Request) {
   if (!assertLocalMutation(request)) return NextResponse.json({ error: 'Local same-origin requests only' }, { status: 403 });
-  const length = Number(request.headers.get('content-length') || 0);
-  if (length > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
   const rate = checkRateLimit('ai-build:' + new URL(request.url).host, 5, 60_000);
   if (!rate.allowed) return NextResponse.json({ error: 'Build generation rate limit exceeded' }, {
     status: 429, headers: { 'Retry-After': String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))) },
   });
-  let raw: string;
-  try { raw = await request.text(); } catch { return NextResponse.json({ error: 'Invalid request body' }, { status: 400 }); }
-  if (Buffer.byteLength(raw, 'utf8') > MAX_BODY_BYTES) return NextResponse.json({ error: 'Request body too large' }, { status: 413 });
-  let body: unknown;
-  try { body = JSON.parse(raw); } catch { return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 }); }
+  const parsed = await readJsonBody(request, MAX_BODY_BYTES);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+  const body = parsed.value;
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   const input = body as { projectId?: unknown; prompt?: unknown; approved?: unknown };
   if (input.approved !== true) return NextResponse.json({ error: 'Explicit approval required before generation' }, { status: 409 });
