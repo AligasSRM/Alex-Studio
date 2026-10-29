@@ -48,11 +48,21 @@ export async function POST(request: Request) {
   try {
     for (const snapshot of manifest.snapshots) {
       const target = resolveProjectPath(body.projectId, snapshot.path);
-      if (!fs.existsSync(target) || !fs.lstatSync(target).isFile() || fs.lstatSync(target).isSymbolicLink()) {
+      if (!fs.existsSync(target)) {
+        if (snapshot.beforeContent === null) {
+          current.push({ path: snapshot.path, content: '' });
+          continue;
+        }
+        throw new Error('A batch file is missing or is not a regular file: ' + snapshot.path);
+      }
+      const stat = fs.lstatSync(target);
+      if (!stat.isFile() || stat.isSymbolicLink()) {
         throw new Error('A batch file is missing or is not a regular file: ' + snapshot.path);
       }
       const content = readProjectFile(body.projectId, snapshot.path);
-      if (hash(content) !== hash(snapshot.afterContent)) {
+      const matchesApplied = hash(content) === hash(snapshot.afterContent);
+      const matchesAlreadyRestored = snapshot.beforeContent !== null && hash(content) === hash(snapshot.beforeContent);
+      if (!matchesApplied && !matchesAlreadyRestored) {
         throw new Error('Project files changed after this batch was applied. Refusing to overwrite newer edits: ' + snapshot.path);
       }
       current.push({ path: snapshot.path, content });
