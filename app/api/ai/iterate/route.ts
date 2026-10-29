@@ -253,7 +253,7 @@ export async function POST(request: Request) {
       fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755); writeFiles();
       browserDiagnostic = await runSandbox(root);
       commandChecks = await runProjectCommands(root);
-      diagnostic = combineVerification(browserDiagnostic, commandChecks);
+      diagnostic = combineVerification(browserDiagnostic, commandChecks, body.requirements);
       repairs.push({ round, summary: next.summary, diagnostic });
       if (!diagnostic.available) break;
     }
