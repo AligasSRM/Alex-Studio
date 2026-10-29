@@ -11,6 +11,17 @@ on:
       - 'lib/ai-usage.ts'
       - 'lib/project-store.ts'
   workflow_dispatch:
+    inputs:
+      run_provider_smoke:
+        description: 'Run the existing single real-provider build smoke test.'
+        required: false
+        default: true
+        type: boolean
+      run_full_lifecycle:
+        description: 'Run the real-provider + real-Docker generation, requirement proof, repair, and apply integration test.'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -21,6 +32,7 @@ concurrency:
 
 jobs:
   live-provider:
+    if: github.event_name != 'workflow_dispatch' || inputs.run_provider_smoke
     name: Real Groq request through AI build route
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -54,3 +66,46 @@ jobs:
           RUN_REAL_AI_INTEGRATION: '1'
         run: npm test -- tests/ai-build.live.integration.test.ts
         timeout-minutes: 3
+
+  full-lifecycle:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_full_lifecycle
+    name: Real AI generation, requirement proof, repair, Docker verification and apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AI_PROVIDER: groq
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-20b' }}
+      RUN_FULL_AI_LIFECYCLE: '1'
+      AI_RUNNER_DOCKER_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 20
+
+      - name: Fail clearly if the live AI secret is missing
+        if: ${{ env.GROQ_API_KEY == '' }}
+        run: |
+          echo 'GROQ_API_KEY repository secret is required for the live full-lifecycle proof.'
+          exit 1
+
+      - name: Install locked dependencies
+        run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
+        timeout-minutes: 8
+
+      - name: Verify Docker daemon
+        run: docker info
+
+      - name: Pull the approved digest-pinned browser runner
+        run: docker pull "$AI_RUNNER_DOCKER_IMAGE"
+        timeout-minutes: 5
+
+      - name: Run full real-provider lifecycle integration test
+        run: npm test -- tests/ai-lifecycle.live.integration.test.ts
+        timeout-minutes: 9
