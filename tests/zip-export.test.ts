@@ -67,7 +67,7 @@ describe('project ZIP export', () => {
       expect(entries.has(excludedPath)).toBe(false);
     }
     for (const excludedContent of ['credential-secret', 'private-key', 'secret-value', 'nested-secret']) {
-      expect([...entries.values()].some((content) => content.includes(excludedContent))).toBe(false);
+      expect(Array.from(entries.values()).some((content) => content.includes(excludedContent))).toBe(false);
     }
   });
 
