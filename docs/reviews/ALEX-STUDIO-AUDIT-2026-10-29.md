@@ -14,7 +14,7 @@ Boundary: `main` was not edited directly. No PR was merged.
 | AS-AUD-03 | P2 | The iterate endpoint read the entire request body before enforcing the byte limit when Content-Length was absent or inaccurate. | Uses the shared streaming `readJsonBody` helper with the 3 MiB limit. | Existing request-body and iterate regression tests plus CI required. |
 | AS-AUD-04 | P2 | The repair endpoint did not select Ollama even though the build endpoint supports it. | Aligns provider selection, model selection, request format, response extraction, and usage-cost handling for OpenAI, Groq, and Ollama. | Type/unit tests and provider-specific regression evidence required. |
 | AS-AUD-05 | P2 | Docker integration workflow path filters did not include the browser runner route. | Adds `app/api/ai/iterate/route.ts` to both pull-request and main-push path filters. | Verify workflow is triggered on the final head. |
-| AS-AUD-06 | P2 | `eslint-config-next` was on a different major version line from Next.js. | Aligns `eslint-config-next` with the project's Next.js version and updates the lockfile; preserves the repository's vendored `deepmerge` package identity metadata required by the lockfile-provenance gate. | Lockfile provenance, npm ci, audit, lint, typecheck, and build must pass on final head. |
+| AS-AUD-06 | P2 | `eslint-config-next` is on a different major version line from Next.js. | Investigated a coordinated upgrade. Updating only `eslint-config-next` to 16.4.3 fails `npm ci` because it requires ESLint >=9 while the project pins ESLint 8.57.1. The attempted package/lockfile change was reverted rather than bypassing peer checks. | **Open:** coordinate an ESLint major upgrade with a regenerated and provenance-valid lockfile, then rerun the complete CI gate. |
 | AS-AUD-07 | P2 | README release-readiness text was stale and listed already-implemented provider/rate-limit/usage features as entirely outstanding. | Corrects the status language and points to this audit; keeps production approval separate from implementation existence. | Documentation review complete; does not itself prove runtime acceptance. |
 
 ## Required verification before calling this remediation green
@@ -35,4 +35,4 @@ Boundary: `main` was not edited directly. No PR was merged.
 
 ## Current state
 
-The changes are proposed on the branch named above. This report does not claim that CI passed on the final head until the workflow runs have completed and their exact commit SHA has been checked.
+The code and workflow changes are proposed on the branch named above. The dependency-major upgrade remains open because the first attempt failed the peer-dependency check; it was reverted. This report does not claim that CI passed on the final head until workflow runs have completed and their exact commit SHA has been checked.
