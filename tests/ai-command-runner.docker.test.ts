@@ -124,6 +124,16 @@ describeDocker('isolated npm runner with a real Docker daemon', () => {
     expect(result.commands.find(command => command.name === 'test')?.terminationReason).toContain('timed out');
     await expectNoNewRunnerContainers(before);
   }, 120000);
+  it('reports a normal non-zero generated command as FAIL and still cleans up the container', async () => {
+    const before = new Set(runnerContainers());
+    const root = createProject('node -e "process.exit(23)"');
+    const result = await runProjectCommands(root);
+    expect(result.status).toBe('FAIL');
+    expect(result.available).toBe(true);
+    expect(result.commands.find(command => command.name === 'test')).toMatchObject({ status: 'FAIL', exitCode: 23 });
+    await expectNoNewRunnerContainers(before);
+  }, 120000);
+
   it('does not pass host-only environment secrets into generated commands', async () => {
     const key = 'ALEX_STUDIO_HOST_ONLY_SENTINEL';
     const previous = process.env[key];
