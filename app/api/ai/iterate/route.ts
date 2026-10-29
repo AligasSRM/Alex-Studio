@@ -100,15 +100,17 @@ export function runSandbox(root: string): Promise<Result> {
       '--mount', 'type=bind,src=' + modules + ',dst=/app/node_modules,readonly', '--env', 'NODE_PATH=/app/node_modules', '--env', 'HOME=/tmp', '--env', 'PLAYWRIGHT_BROWSERS_PATH=/ms-playwright',
       IMAGE, 'node', '-e', runner];
     const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
-    let output = ''; let settled = false;
+    let output = ''; let settled = false; let timedOut = false;
     const finish = (result: Result) => { if (!settled) { settled = true; clearTimeout(timer); resolve(result); } };
     const collect = (chunk: Buffer) => { output = (output + chunk.toString('utf8')).slice(-12000); };
     const cleanupResult = () => removeAndVerifyContainer(containerName);
     child.stdout.on('data', collect); child.stderr.on('data', collect);
+    // Do not inspect/remove the container until the Docker CLI has exited. Otherwise a
+    // timeout can race with "docker run" creating the named container after cleanup
+    // already reported that no container existed.
     const timer = setTimeout(() => {
+      timedOut = true;
       child.kill('SIGKILL');
-      const cleanup = cleanupResult();
-      finish({ ok: false, available: cleanup.verified, summary: cleanup.verified ? 'Sandbox timed out; container removal verified' : 'Sandbox timed out; container cleanup unverified', output: (output + '\n' + cleanup.output).slice(-16000) });
     }, 20000);
     child.on('error', e => {
       const cleanup = cleanupResult();
@@ -118,7 +120,11 @@ export function runSandbox(root: string): Promise<Result> {
       const cleanup = cleanupResult();
       const unavailable = /cannot connect to the docker daemon|unable to find image|pull access denied|error during connect/i.test(output);
       if (!cleanup.verified) {
-        finish({ ok: false, available: false, summary: 'Browser runner cleanup could not be verified', output: (output + '\n' + cleanup.output).slice(-16000) });
+        finish({ ok: false, available: false, summary: timedOut ? 'Sandbox timed out; container cleanup unverified' : 'Browser runner cleanup could not be verified', output: (output + '\n' + cleanup.output).slice(-16000) });
+        return;
+      }
+      if (timedOut) {
+        finish({ ok: false, available: true, summary: 'Sandbox timed out; container removal verified', output: (output + '\n' + cleanup.output).slice(-16000) });
         return;
       }
       finish({ ok: code === 0, available: !unavailable, summary: code === 0 ? 'Isolated browser test passed; container cleanup verified' : unavailable ? 'Docker sandbox unavailable' : 'Isolated browser test failed; container cleanup verified', output: (output + '\n' + cleanup.output).slice(-16000) });
