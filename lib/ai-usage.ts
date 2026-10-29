@@ -69,16 +69,16 @@ export function recordAIUsage(projectId: string, entry: AIUsageEntry) {
   const temporary = path.join(directory, '.' + randomUUID() + '.tmp');
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL |
     (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
-  const descriptor = fs.openSync(temporary, flags, 0o600);
   try {
-    if (!fs.fstatSync(descriptor).isFile()) throw new Error('Usage temporary file must be regular');
-    fs.writeFileSync(descriptor, serialized, 'utf8');
-    fs.fchmodSync(descriptor, 0o600);
-    fs.fsyncSync(descriptor);
-  } finally {
-    fs.closeSync(descriptor);
-  }
-  try {
+    const descriptor = fs.openSync(temporary, flags, 0o600);
+    try {
+      if (!fs.fstatSync(descriptor).isFile()) throw new Error('Usage temporary file must be regular');
+      fs.writeFileSync(descriptor, serialized, 'utf8');
+      fs.fchmodSync(descriptor, 0o600);
+      fs.fsyncSync(descriptor);
+    } finally {
+      fs.closeSync(descriptor);
+    }
     fs.renameSync(temporary, file);
     fs.chmodSync(file, 0o600);
   } catch (error) {
