@@ -21,7 +21,7 @@ describe('isolated runner container cleanup verification', () => {
     const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-fake-docker-cleanup-'));
     roots.push(fakeBin);
     const fakeDocker = path.join(fakeBin, 'docker');
-    fs.writeFileSync(fakeDocker, '#!/bin/sh\\nif [ "$1" = "rm" ]; then exit 1; fi\\nif [ "$1" = "ps" ]; then exit 0; fi\\nexit 2\\n', { mode: 0o755 });
+    fs.writeFileSync(fakeDocker, '#!/bin/sh\nif [ "$1" = "rm" ]; then exit 1; fi\nif [ "$1" = "ps" ]; then exit 0; fi\nexit 2\n', { mode: 0o755 });
     const previousPath = process.env.PATH;
     process.env.PATH = fakeBin;
     try {
@@ -36,7 +36,7 @@ describe('isolated runner container cleanup verification', () => {
     const fakeBin = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-fake-docker-stuck-'));
     roots.push(fakeBin);
     const fakeDocker = path.join(fakeBin, 'docker');
-    fs.writeFileSync(fakeDocker, '#!/bin/sh\\nif [ "$1" = "rm" ]; then exit 1; fi\\nif [ "$1" = "ps" ]; then printf "%s\\n" "alex-studio-runner-stuck-test"; exit 0; fi\\nexit 2\\n', { mode: 0o755 });
+    fs.writeFileSync(fakeDocker, '#!/bin/sh\nif [ "$1" = "rm" ]; then exit 1; fi\nif [ "$1" = "ps" ]; then printf "%s\n" "alex-studio-runner-stuck-test"; exit 0; fi\nexit 2\n', { mode: 0o755 });
     const previousPath = process.env.PATH;
     process.env.PATH = fakeBin;
     try {
