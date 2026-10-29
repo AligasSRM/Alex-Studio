@@ -113,11 +113,15 @@ export async function POST(request: Request) {
     if (rollbackFailures.length) {
       return NextResponse.json({
         error: 'Batch apply failed: ' + originalError + '. Rollback was incomplete; manual recovery may be required for: ' + rollbackFailures.join(', '),
+        batchId,
+        rollbackStatus: 'failed',
         rollback: { status: 'INCOMPLETE', failedPaths: rollbackFailures },
       }, { status: 500 });
     }
     return NextResponse.json({
       error: 'Batch apply failed: ' + originalError + '. All previously applied files were restored from snapshots.',
+      batchId,
+      rollbackStatus: 'succeeded',
       rollback: { status: 'COMPLETE', restoredPaths: applied.slice().reverse() },
     }, { status: 500 });
   }
