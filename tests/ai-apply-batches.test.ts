@@ -8,7 +8,7 @@ import { listAIApplyBatches, readAIApplyBatch, saveAIApplyBatch, type AIApplyBat
 const projectIds: string[] = [];
 
 function setupProject() {
-  const project = createProject('AI Apply Batch Store Test ' + Date.now() + '-' + randomUUID().slice(0, 8));
+  const project = createProject('batch-store-' + randomUUID().slice(0, 8));
   projectIds.push(project.id);
   return project;
 }
