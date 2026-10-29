@@ -69,7 +69,7 @@ export function validateProjectTreeLimits(root: string): void {
 }
 
 export const APPROVED_RUNNER_IMAGE =
-  'mcr.microsoft.com/playwright:v1.56.1-noble@sha256:42f02d323c310069b4d54c94bd91a608966a486c3492c48ae0b1cea747ec5ca2';
+  'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea';
 
 const APPROVED_RUNNER_IMAGES = new Set<string>([APPROVED_RUNNER_IMAGE]);
 
