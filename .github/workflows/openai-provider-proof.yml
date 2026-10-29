@@ -1,10 +1,12 @@
-name: Live OpenAI provider proof
+name: Live AI provider proof
 on:
   push:
     branches: [main]
     paths:
       - '.github/workflows/openai-provider-proof.yml'
       - 'app/api/ai/build/route.ts'
+      - 'app/api/ai/generate/route.ts'
+      - 'app/api/ai/iterate/route.ts'
       - 'tests/ai-build.live.integration.test.ts'
       - 'lib/ai-usage.ts'
       - 'lib/project-store.ts'
@@ -14,17 +16,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: alex-studio-live-openai-proof-${{ github.ref }}
+  group: alex-studio-live-ai-proof-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   live-provider:
-    name: Real OpenAI request through AI build route
+    name: Real Groq request through AI build route
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4.1-mini' }}
+      AI_PROVIDER: groq
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-20b' }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,13 +43,14 @@ jobs:
         run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
         timeout-minutes: 8
 
-      - name: Report missing provider secret without exposing credentials
-        if: ${{ env.OPENAI_API_KEY == '' }}
-        run: echo 'NOT RUN — configure the repository Actions secret OPENAI_API_KEY to enable the real-provider proof.'
+      - name: Fail clearly if the Groq secret is missing
+        if: ${{ env.GROQ_API_KEY == '' }}
+        run: |
+          echo 'GROQ_API_KEY repository secret is required for the live-provider proof.'
+          exit 1
 
-      - name: Exercise the real provider through /api/ai/build
-        if: ${{ env.OPENAI_API_KEY != '' }}
+      - name: Exercise the real Groq provider through /api/ai/build
         env:
-          RUN_REAL_OPENAI_INTEGRATION: '1'
+          RUN_REAL_AI_INTEGRATION: '1'
         run: npm test -- tests/ai-build.live.integration.test.ts
         timeout-minutes: 3
