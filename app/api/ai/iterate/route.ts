@@ -14,6 +14,7 @@ import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
 import { issueVerificationProof } from '@/lib/ai-verification-proof';
 import { runProjectCommands, type CommandRun } from '@/lib/ai-command-runner';
+import { extractAIResponseText } from '@/lib/ai-response';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -113,9 +114,10 @@ async function getRepair(apiKey: string, model: string, provider: 'openai' | 'gr
       input: JSON.stringify({ request: prompt, diagnostics: result, files }) }),
   });
   if (!response.ok) throw new Error('AI repair request failed (' + response.status + ')');
-  const data = await response.json() as { output_text?: unknown; usage?: { input_tokens?: unknown; output_tokens?: unknown } };
-  if (typeof data.output_text !== 'string') throw new Error('Invalid AI repair response');
-  const parsed = JSON.parse(data.output_text.trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/, '')) as { summary?: unknown; files?: unknown };
+  const data = await response.json() as { output_text?: unknown; output?: unknown; usage?: { input_tokens?: unknown; output_tokens?: unknown } };
+  const outputText = extractAIResponseText(data);
+  if (typeof outputText !== 'string') throw new Error('Invalid AI repair response');
+  const parsed = JSON.parse(outputText.trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/, '')) as { summary?: unknown; files?: unknown };
   if (typeof parsed.summary !== 'string') throw new Error('AI repair omitted summary');
   const filesOut = parseDraft(projectId, parsed.files, current, false);
   const inputTokens = Number.isInteger(data.usage?.input_tokens) ? data.usage?.input_tokens as number : null;
