@@ -7,6 +7,7 @@ import { issueVerificationProof } from '../lib/ai-verification-proof';
 import { POST as applyPOST } from '../app/api/ai/apply/route';
 import { POST as rollbackPOST } from '../app/api/ai/apply/rollback/route';
 import { GET as historyGET } from '../app/api/ai/apply/history/route';
+import { readAIApplyBatch, saveAIApplyBatch } from '../lib/ai-apply-batches';
 
 const projectIds: string[] = [];
 const original = '<h1>before</h1>\n';
@@ -87,6 +88,24 @@ describe('AI apply history and post-apply rollback routes', () => {
     expect(response.status).toBe(409);
     expect((await response.json()).error).toMatch(/refusing to overwrite newer edits/i);
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(newerEdit);
+  });
+
+  it('resumes an interrupted rollback when a file is already restored to its original bytes', async () => {
+    const project = setupProject();
+    const { batchId } = await applyBatch(project.id);
+    const manifest = readAIApplyBatch(project.id, batchId);
+    expect(manifest).not.toBeNull();
+    saveAIApplyBatch(project.id, { ...manifest!, status: 'rolling-back', updatedAt: new Date().toISOString() });
+    fs.writeFileSync(path.join(projectRoot(project.id), 'index.html'), original);
+
+    const response = await rollbackPOST(localRequest('http://localhost/api/ai/apply/rollback', {
+      projectId: project.id,
+      batchId,
+      approved: true,
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ok: true, batchId, status: 'rolled-back' });
+    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(original);
   });
 
   it('requires explicit approval and rejects cross-origin requests', async () => {
