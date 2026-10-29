@@ -290,4 +290,38 @@ describe('AI project build workflow', () => {
     expect(events[1].rollbackStatus).toBe('succeeded');
     expect(events.every((event) => event.batchId === data.batchId)).toBe(true);
   });
+
+  it('records rollback failure when restoration itself throws', async () => {
+    const id = await makeProject();
+    const original = readProjectFile(id, 'index.html');
+    const files = [
+      { path: 'index.html', content: '<!doctype html><title>Rollback failure fixture</title>', baseHash: hash(original) },
+      { path: 'app.js', content: 'throw new Error("injected apply failure");', baseHash: null },
+    ];
+    const realWrite = fileOps.writeProjectFile;
+    let indexWrites = 0;
+    jest.spyOn(fileOps, 'writeProjectFile').mockImplementation((projectId, filePath, content) => {
+      if (filePath === 'app.js') throw new Error('injected apply failure');
+      if (filePath === 'index.html') {
+        indexWrites += 1;
+        if (indexWrites === 2) throw new Error('injected rollback failure');
+      }
+      return realWrite(projectId, filePath, content);
+    });
+
+    const response = await applyPost(localPost('http://localhost:3000/api/ai/apply', JSON.stringify({
+      projectId: id, approved: true, files, verificationProof: issueVerificationProof(id, files),
+    })));
+
+    expect(response.status).toBe(500);
+    const data = await response.json() as { batchId: string; rollbackStatus: string; error: string };
+    expect(data.rollbackStatus).toBe('failed');
+    expect(data.error).toMatch(/rollback failed/i);
+    expect(readProjectFile(id, 'index.html')).toContain('Rollback failure fixture');
+    const events = fs.readFileSync(path.join(projectRoot(id), '.alex', 'ai-apply-audit.jsonl'), 'utf8')
+      .trim().split(String.fromCharCode(10)).map((line) => JSON.parse(line) as { outcome: string; rollbackStatus?: string; batchId: string });
+    expect(events.map((event) => event.outcome)).toEqual(['started', 'failed']);
+    expect(events[1].rollbackStatus).toBe('failed');
+    expect(events.every((event) => event.batchId === data.batchId)).toBe(true);
+  });
 });
