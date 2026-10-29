@@ -55,12 +55,12 @@ function parseBuild(output: string, projectId: string, originals: Map<string, st
 
 export async function POST(request: Request) {
   if (!assertLocalMutation(request)) return NextResponse.json({ error: 'Local same-origin requests only' }, { status: 403 });
-  const parsed = await readJsonBody(request, MAX_BODY_BYTES);
-  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   const rate = checkRateLimit('ai-build:' + new URL(request.url).host, 5, 60_000);
   if (!rate.allowed) return NextResponse.json({ error: 'Build generation rate limit exceeded' }, {
     status: 429, headers: { 'Retry-After': String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))) },
   });
+  const parsed = await readJsonBody(request, MAX_BODY_BYTES);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   const body = parsed.value;
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   const input = body as { projectId?: unknown; prompt?: unknown; approved?: unknown };
