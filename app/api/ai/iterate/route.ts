@@ -172,7 +172,7 @@ async function getRepair(apiKey: string | undefined, model: string, provider: 'o
       headers: provider === 'ollama' ? { 'Content-Type': 'application/json' } : { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify(provider === 'ollama'
         ? { model, stream: false, format: 'json', messages: [{ role: 'system', content: instructions }, { role: 'user', content: input }], options: { num_predict: 12000 } }
-        : { model, max_output_tokens: 12000, instructions, input }),
+        : { model, max_output_tokens: 12000, instructions, input, text: { format: { type: 'json_object' } } }),
     });
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') throw new Error('AI repair request timed out');
