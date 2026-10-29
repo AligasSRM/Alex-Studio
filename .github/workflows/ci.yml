@@ -43,6 +43,10 @@ jobs:
           const packages = Object.entries(lock.packages ?? {}).filter(([path]) => path !== '');
           const errors = [];
           for (const [path, pkg] of packages) {
+            if (path === 'vendor/deepmerge') {
+              if (pkg.name !== 'deepmerge' || pkg.version !== '4.3.2') errors.push(`${path}: unexpected vendored package identity/version`);
+              continue;
+            }
             if (pkg.link) continue;
             if (!pkg.resolved) { errors.push(`${path}: missing resolved URL`); continue; }
             if (!pkg.resolved.startsWith('https://registry.npmjs.org/')) errors.push(`${path}: unapproved source ${pkg.resolved}`);
@@ -60,7 +64,7 @@ jobs:
         run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
         timeout-minutes: 8
 
-      # npm audit still flags deepmerge 4.3.1 upstream; this repository applies a reviewed postinstall mitigation.
+      # npm audit still flags vendored deepmerge 4.3.2 upstream; this repository applies a reviewed postinstall mitigation.
       # Fail closed if the expected patch is absent or the dependency changes without review.
       - name: Verify deepmerge security mitigation
         run: |
@@ -80,15 +84,15 @@ jobs:
             if (parent === dir) break;
             dir = parent;
           }
-          if (!metadata || metadata.version !== '4.3.1') {
-            throw new Error('deepmerge version changed; review the security mitigation before proceeding.');
+          if (!metadata || metadata.version !== '4.3.2') {
+            throw new Error('deepmerge version changed; review the vendored security mitigation before proceeding.');
           }
           const source = fs.readFileSync(entry, 'utf8');
           if (!source.includes('function propertyIsForbidden(key)') ||
               !source.includes('if (propertyIsForbidden(key) || propertyIsUnsafe(target, key)) {')) {
             throw new Error('Reviewed deepmerge __proto__ mitigation is missing; refusing to continue.');
           }
-          console.log('Verified deepmerge 4.3.1 and the reviewed __proto__ mitigation.');
+          console.log('Verified vendored deepmerge 4.3.2 and the reviewed __proto__ mitigation.');
           NODE
 
       - name: Verify npm cache integrity
