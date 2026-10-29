@@ -75,5 +75,48 @@ describe('isolated npm runner timeout cleanup ordering', () => {
       summary: 'Isolated npm runner timed out',
       cleanupVerified: true,
     });
+
+  it('reports UNAVAILABLE when Docker CLI close is never observed after timeout', async () => {
+    jest.useFakeTimers();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-timeout-no-close-test-'));
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-runner-timeout-no-close-cache-'));
+    roots.push(root, cache);
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+      name: 'timeout-no-close-fixture', version: '1.0.0',
+      scripts: { build: 'node build.js', test: 'node test.js' },
+    }));
+    fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({
+      name: 'timeout-no-close-fixture', version: '1.0.0', lockfileVersion: 3,
+      packages: { '': { name: 'timeout-no-close-fixture', version: '1.0.0' } },
+    }));
+    process.env.AI_RUNNER_NPM_CACHE = cache;
+    process.env.AI_RUNNER_DOCKER_IMAGE = 'mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea';
+
+    const child = Object.assign(new EventEmitter(), {
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: jest.fn(),
+    });
+    mockSpawn.mockReturnValue(child);
+    mockSpawnSync.mockImplementation((_command: string, args: string[]) => {
+      if (args[0] === 'rm') return { status: 0, stdout: 'removed', stderr: '' };
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const resultPromise = runProjectCommands(root);
+    await jest.advanceTimersByTimeAsync(95_000);
+    const result = await resultPromise;
+
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(mockSpawnSync).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({
+      ok: false,
+      available: false,
+      status: 'UNAVAILABLE',
+      summary: 'Runner timed out and cleanup is unverified',
+      cleanupVerified: false,
+    });
+    expect(result.output).toContain('Docker CLI close was not observed');
+  });
   });
 });
