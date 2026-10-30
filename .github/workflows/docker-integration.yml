@@ -28,9 +28,11 @@ on:
     paths:
       - '.github/workflows/docker-integration.yml'
       - 'lib/ai-command-runner.ts'
+      - 'lib/ai-build-server-preview.ts'
       - 'app/api/ai/iterate/route.ts'
       - 'tests/ai-command-runner.docker.test.ts'
       - 'tests/ai-iterate-sandbox.docker.test.ts'
+      - 'tests/ai-build-server-preview.docker.test.ts'
       - 'tests/phase1-performance.test.ts'
       - 'docs/reviews/PHASE-3-SECURITY-AND-RUNNER-AUDIT-2026-10-29.md'
       - 'package.json'
