@@ -44,6 +44,11 @@ export async function runBuildServerPreview(root: string): Promise<BuildPreviewR
   try {
     const stat = fs.lstatSync(cache);
     if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('cache must be a real directory');
+    const realCache = fs.realpathSync(cache);
+    const realRoot = fs.realpathSync(root);
+    if (realCache === realRoot || realCache.startsWith(realRoot + path.sep) || realRoot.startsWith(realCache + path.sep)) {
+      throw new Error('cache directory must be separate from the generated project workspace');
+    }
   } catch (error) {
     return fail('UNAVAILABLE', 'Trusted offline npm cache is unavailable', error instanceof Error ? error.message : String(error));
   }
