@@ -149,12 +149,12 @@ const run = (cmd, args, timeout) => {
     if (browser) await browser.close().catch(() => {});
     if (server && server.pid) {
       try { process.kill(-server.pid, 'SIGTERM'); } catch {}
-      await Promise.race([new Promise(resolve => server.once('close', resolve)), new Promise(resolve => setTimeout(resolve, 3000))]);
-      if (server.exitCode === null) {
+      await Promise.race([new Promise(resolve => server.once('exit', resolve)), new Promise(resolve => setTimeout(resolve, 3000))]);
+      if (server.exitCode === null && server.signalCode === null) {
         try { process.kill(-server.pid, 'SIGKILL'); } catch {}
         await Promise.race([new Promise(resolve => server.once('close', resolve)), new Promise(resolve => setTimeout(resolve, 3000))]);
       }
-      serverClosed = server.exitCode !== null;
+      serverClosed = server.exitCode !== null || server.signalCode !== null;
     } else serverClosed = true;
     if (!serverClosed) {
       process.stderr.write('\\nPREVIEW_SERVER_CLEANUP_UNVERIFIED');
