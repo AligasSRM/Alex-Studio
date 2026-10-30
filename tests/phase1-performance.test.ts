@@ -2,8 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { POST as buildPost } from '../app/api/ai/build/route';
+import { GET as getFilesRoute } from '../app/api/files/route';
 import { createProject } from '../lib/project-store';
-import { listProjectFiles, readProjectFile } from '../lib/files';
+import { listProjectFiles } from '../lib/files';
 import { projectRoot } from '../lib/path-security';
 import { resetRateLimitsForTests } from '../lib/rate-limit';
 
@@ -30,7 +31,7 @@ afterEach(() => {
 });
 
 describe('Phase 1 performance guardrails (local CI baseline)', () => {
-  it('loads a 100-file project within the 2-second file-loading budget', () => {
+  it('loads a 100-file project through the file API within the 2-second budget', async () => {
     const project = createProject('Phase 1 Performance ' + Date.now());
     createdIds.push(project.id);
     const root = projectRoot(project.id);
@@ -44,8 +45,22 @@ describe('Phase 1 performance guardrails (local CI baseline)', () => {
     const samplesMs: number[] = [];
     for (let sampleIndex = 0; sampleIndex < 5; sampleIndex++) {
       const start = performance.now();
-      const files = listProjectFiles(project.id).filter((file) => file.type === 'file');
-      for (const file of files) readProjectFile(project.id, file.path);
+      const listingResponse = await getFilesRoute(new Request(
+        'http://localhost:3000/api/files?projectId=' + encodeURIComponent(project.id),
+        { headers: { host: 'localhost:3000' } },
+      ));
+      expect(listingResponse.status).toBe(200);
+      const listing = await listingResponse.json() as { files: { type: string; path: string }[] };
+      const files = listing.files.filter((file) => file.type === 'file');
+      for (const file of files) {
+        const readResponse = await getFilesRoute(new Request(
+          'http://localhost:3000/api/files?projectId=' + encodeURIComponent(project.id) + '&path=' + encodeURIComponent(file.path),
+          { headers: { host: 'localhost:3000' } },
+        ));
+        expect(readResponse.status).toBe(200);
+        const read = await readResponse.json() as { content?: unknown };
+        expect(typeof read.content).toBe('string');
+      }
       samplesMs.push(performance.now() - start);
     }
 
