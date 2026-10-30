@@ -148,13 +148,23 @@ const run = (cmd, args, timeout) => {
   } finally {
     if (browser) await browser.close().catch(() => {});
     if (server && server.pid) {
+      const groupAlive = () => {
+        try { process.kill(-server.pid, 0); return true; }
+        catch (error) { return (error && error.code) !== 'ESRCH'; }
+      };
+      const waitForGroupExit = async () => {
+        for (let attempt = 0; attempt < 30; attempt++) {
+          if (!groupAlive()) return true;
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        return !groupAlive();
+      };
       try { process.kill(-server.pid, 'SIGTERM'); } catch {}
-      await Promise.race([new Promise(resolve => server.once('exit', resolve)), new Promise(resolve => setTimeout(resolve, 3000))]);
-      if (server.exitCode === null && server.signalCode === null) {
+      serverClosed = await waitForGroupExit();
+      if (!serverClosed) {
         try { process.kill(-server.pid, 'SIGKILL'); } catch {}
-        await Promise.race([new Promise(resolve => server.once('close', resolve)), new Promise(resolve => setTimeout(resolve, 3000))]);
+        serverClosed = await waitForGroupExit();
       }
-      serverClosed = server.exitCode !== null || server.signalCode !== null;
     } else serverClosed = true;
     if (!serverClosed) {
       process.stderr.write('\\nPREVIEW_SERVER_CLEANUP_UNVERIFIED');
