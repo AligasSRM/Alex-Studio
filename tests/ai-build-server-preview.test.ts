@@ -8,6 +8,10 @@ function project(scripts: Record<string, string>) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-build-preview-unit-'));
   roots.push(root);
   fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'preview-unit', version: '1.0.0', scripts }));
+  fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({
+    name: 'preview-unit', version: '1.0.0', lockfileVersion: 3,
+    packages: { '': { name: 'preview-unit', version: '1.0.0' } },
+  }));
   return root;
 }
 afterEach(() => {
@@ -19,6 +23,14 @@ describe('build/server preview preflight', () => {
     const result = await runBuildServerPreview(project({ build: 'node build.js' }));
     expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE' });
     expect(result.summary).toContain('build and start');
+  });
+
+  it('fails closed when the npm lockfile is missing', async () => {
+    const root = project({ build: 'node build.js', start: 'node server.js' });
+    fs.rmSync(path.join(root, 'package-lock.json'));
+    const result = await runBuildServerPreview(root);
+    expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE' });
+    expect(result.output).toContain('package-lock.json is required');
   });
 
   it('reports a missing offline cache as UNAVAILABLE before starting Docker', async () => {
