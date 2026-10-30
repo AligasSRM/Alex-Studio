@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, validateProjectTreeLimits } from './ai-command-runner';
+import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, validateProjectTreeLimits, inspectGeneratedProject } from './ai-command-runner';
 
 export type BuildPreviewResult = {
   ok: boolean;
@@ -35,6 +35,8 @@ export async function runBuildServerPreview(root: string): Promise<BuildPreviewR
   } catch {
     return fail('UNAVAILABLE', 'Build/server preview requires a valid package.json', 'package.json could not be parsed.');
   }
+  const plan = inspectGeneratedProject(root);
+  if (plan.preflightError) return fail('UNAVAILABLE', 'npm project is not eligible for isolated build preview', plan.preflightError);
   const scripts = manifest.scripts || {};
   if (typeof scripts.build !== 'string' || !(typeof scripts.start === 'string' || typeof scripts.preview === 'string')) {
     return fail('UNAVAILABLE', 'Project must define build and start (or preview) scripts', 'No supported build + server lifecycle was detected; refusing to substitute a static-file smoke test.');
