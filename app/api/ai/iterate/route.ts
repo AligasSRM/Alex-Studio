@@ -14,7 +14,8 @@ import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
 import { evaluateRequirements, parseBrowserSnapshot, type RequirementEvidence } from '@/lib/ai-requirement-evidence';
 import { issueVerificationProof } from '@/lib/ai-verification-proof';
-import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, runProjectCommands, type CommandRun } from '@/lib/ai-command-runner';
+import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, runProjectCommands, inspectGeneratedProject, type CommandRun } from '@/lib/ai-command-runner';
+import { runBuildServerPreview } from '@/lib/ai-build-server-preview';
 import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
 import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
@@ -28,22 +29,25 @@ const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex')
 type FileDraft = { path: string; content: string; baseHash: string | null };
 type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun; pageSnapshot?: { title: string; body: string; errors: string[] } | null; requirementEvidence?: RequirementEvidence[] };
 
-function combineVerification(browser: Result, commands: CommandRun, requestedRequirements: unknown): Result {
+async function verifyProject(root: string, requestedRequirements: unknown): Promise<Result> {
+  const commands = await runProjectCommands(root);
+  const npmProject = inspectGeneratedProject(root).kind === 'npm';
+  const browser = npmProject ? await runBuildServerPreview(root) : await runSandbox(root);
   const requirementEvidence = evaluateRequirements(requestedRequirements, browser.pageSnapshot);
   const failedRequirements = requirementEvidence.filter(item => item.status === 'fail');
   const ok = browser.ok && commands.ok && failedRequirements.length === 0;
   const available = browser.available && commands.available;
   return {
     ok, available, pageSnapshot: browser.pageSnapshot, requirementEvidence,
-    summary: !available ? 'Verification unavailable; inspect browser and command-runner diagnostics.'
+    summary: !available ? 'Verification unavailable; inspect build/server preview and command-runner diagnostics.'
       : failedRequirements.length ? 'One or more deterministic user requirements failed; repair and re-test are required.'
-      : ok ? 'Isolated browser smoke test, deterministic requirements, and applicable project commands passed.'
-      : 'Browser smoke test or one or more project commands failed.',
+      : ok ? 'Build/server preview (or static browser smoke test), deterministic requirements, and applicable project commands passed.'
+      : 'Build, server readiness, browser acceptance, or project commands failed.',
     output: [
-      'BROWSER SMOKE TEST: ' + browser.summary, browser.output,
+      (npmProject ? 'BUILD + SERVER PREVIEW: ' : 'BROWSER SMOKE TEST: ') + browser.summary, browser.output,
       'USER REQUIREMENT EVIDENCE: ' + JSON.stringify(requirementEvidence),
       'PROJECT COMMAND RUNNER: ' + commands.status + ' — ' + commands.summary, commands.output,
-    ].join('\n').slice(-20000),
+    ].join('\\n').slice(-20000),
     commandChecks: commands,
   };
 }
@@ -234,9 +238,8 @@ export async function POST(request: Request) {
       }
     };
     writeFiles();
-    let browserDiagnostic = await runSandbox(root);
-    let commandChecks = await runProjectCommands(root);
-    let diagnostic = combineVerification(browserDiagnostic, commandChecks, body.requirements);
+    let diagnostic = await verifyProject(root, body.requirements);
+    let commandChecks = diagnostic.commandChecks!;
     if (!diagnostic.available) return NextResponse.json({ error: 'Isolated verification is unavailable; no repair was attempted and project files were not changed.', diagnostic, commandChecks }, { status: 503 });
     const repairs: { round: number; summary: string; diagnostic: Result }[] = [];
     const model = provider === 'ollama' ? (process.env.OLLAMA_MODEL || 'qwen2.5-coder:7b') : provider === 'groq' ? (process.env.GROQ_MODEL || 'openai/gpt-oss-20b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
@@ -252,9 +255,8 @@ export async function POST(request: Request) {
       catch (e) { repairs.push({ round, summary: e instanceof Error ? e.message : 'AI repair failed', diagnostic }); break; }
       for (const file of next.files) working.set(file.path, file.content);
       fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755); writeFiles();
-      browserDiagnostic = await runSandbox(root);
-      commandChecks = await runProjectCommands(root);
-      diagnostic = combineVerification(browserDiagnostic, commandChecks, body.requirements);
+      diagnostic = await verifyProject(root, body.requirements);
+      commandChecks = diagnostic.commandChecks!;
       repairs.push({ round, summary: next.summary, diagnostic });
       if (!diagnostic.available) break;
     }
@@ -270,8 +272,8 @@ export async function POST(request: Request) {
     });
     if (acceptance.requirements.some(item => item.status === 'fail')) acceptance.status = 'fail';
     const verificationProof = diagnostic.ok ? issueVerificationProof(body.projectId, changed) : null;
-    return NextResponse.json({ ok: diagnostic.ok, verificationProof, commandChecks, summary: diagnostic.ok ? 'Isolated browser smoke test and applicable project commands passed; inspect the acceptance report for requirements that remain unverified.' : 'Verification ended with failures; inspect browser and command diagnostics before applying.', diagnostic, repairs, acceptance,
-      build: { summary: 'Draft checked by the sandbox smoke test; not applied to the real project.', plan: repairs.map(x => 'Repair round ' + x.round + ': ' + x.summary), requirements: Array.isArray(body.requirements) ? body.requirements.filter((item): item is string => typeof item === 'string').slice(0, 20) : [], files: changed }, appliedToProject: false }, { headers: { 'Cache-Control': 'no-store' } });
+    return NextResponse.json({ ok: diagnostic.ok, verificationProof, commandChecks, summary: diagnostic.ok ? 'Isolated build/server preview or static browser verification and applicable project commands passed; inspect the acceptance report for requirements that remain unverified.' : 'Verification ended with failures; inspect browser and command diagnostics before applying.', diagnostic, repairs, acceptance,
+      build: { summary: 'Draft checked by the isolated static browser runner or the build/server preview runner; not applied to the real project.', plan: repairs.map(x => 'Repair round ' + x.round + ': ' + x.summary), requirements: Array.isArray(body.requirements) ? body.requirements.filter((item): item is string => typeof item === 'string').slice(0, 20) : [], files: changed }, appliedToProject: false }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : 'AI verify/repair failed' }, { status: 400 });
   } finally { if (root) fs.rmSync(root, { recursive: true, force: true }); }

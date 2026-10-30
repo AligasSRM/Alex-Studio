@@ -4,6 +4,7 @@ on:
     paths:
       - '.github/workflows/docker-integration.yml'
       - 'lib/ai-command-runner.ts'
+      - 'lib/ai-build-server-preview.ts'
       - 'app/api/ai/iterate/route.ts'
       - 'app/api/ai/build/route.ts'
       - 'app/api/files/apply/route.ts'
@@ -17,6 +18,7 @@ on:
       - 'tests/ai-verification-proof.test.ts'
       - 'tests/ai-command-runner.docker.test.ts'
       - 'tests/ai-iterate-sandbox.docker.test.ts'
+      - 'tests/ai-build-server-preview.docker.test.ts'
       - 'tests/phase1-performance.test.ts'
       - 'docs/reviews/PHASE-3-SECURITY-AND-RUNNER-AUDIT-2026-10-29.md'
       - 'package.json'
@@ -26,9 +28,11 @@ on:
     paths:
       - '.github/workflows/docker-integration.yml'
       - 'lib/ai-command-runner.ts'
+      - 'lib/ai-build-server-preview.ts'
       - 'app/api/ai/iterate/route.ts'
       - 'tests/ai-command-runner.docker.test.ts'
       - 'tests/ai-iterate-sandbox.docker.test.ts'
+      - 'tests/ai-build-server-preview.docker.test.ts'
       - 'tests/phase1-performance.test.ts'
       - 'docs/reviews/PHASE-3-SECURITY-AND-RUNNER-AUDIT-2026-10-29.md'
       - 'package.json'
@@ -92,5 +96,5 @@ jobs:
           # Copy the trusted cache created by npm ci; integration fixtures have no external dependencies.
           npm_cache="$(npm config get cache)"
           if [ -d "$npm_cache" ]; then cp -a "$npm_cache/." "$AI_RUNNER_NPM_CACHE/"; fi
-          npx jest tests/ai-command-runner.docker.test.ts tests/ai-iterate-sandbox.docker.test.ts --runInBand
+          npx jest tests/ai-command-runner.docker.test.ts tests/ai-iterate-sandbox.docker.test.ts tests/ai-build-server-preview.docker.test.ts --runInBand
         timeout-minutes: 8
