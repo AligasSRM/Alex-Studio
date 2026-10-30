@@ -98,6 +98,19 @@ const run = (cmd, args, timeout) => {
   const errors = [];
   try {
     fs.cpSync('/source', root, { recursive: true });
+    // The host bind mount is intentionally read-only. Restore write access only
+    // on the container's private tmpfs copy so build tools can create dist/.next.
+    const makeWorkspaceWritable = (dir) => {
+      fs.chmodSync(dir, 0o755);
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const target = path.join(dir, entry.name);
+        const stat = fs.lstatSync(target);
+        if (stat.isSymbolicLink()) throw new Error('Symbolic links are not permitted in the build workspace');
+        if (stat.isDirectory()) makeWorkspaceWritable(target);
+        else if (stat.isFile()) fs.chmodSync(target, stat.mode & 0o777 | 0o200);
+      }
+    };
+    makeWorkspaceWritable(root);
     fs.cpSync('/npm-cache', '/tmp/npm-cache', { recursive: true });
     run('npm', ['ci', '--offline', '--no-audit', '--no-fund', '--cache', '/tmp/npm-cache'], 45000);
     run('npm', ['run', 'build'], 60000);
