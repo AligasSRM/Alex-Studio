@@ -94,7 +94,7 @@ const run = (cmd, args, timeout) => {
   try {
     fs.cpSync('/source', root, { recursive: true });
     fs.cpSync('/npm-cache', '/tmp/npm-cache', { recursive: true });
-    run('npm', ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', '/tmp/npm-cache'], 45000);
+    run('npm', ['ci', '--offline', '--no-audit', '--no-fund', '--cache', '/tmp/npm-cache'], 45000);
     run('npm', ['run', 'build'], 60000);
     const startName = process.env.PREVIEW_SCRIPT;
     server = cp.spawn('npm', ['run', startName], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
