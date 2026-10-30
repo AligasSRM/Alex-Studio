@@ -65,3 +65,9 @@ Target: implement the same semantics in Android app-private storage (transaction
 - No arbitrary shell/host command API.
 - No public deployment or production secret setup as part of this audit.
 - No merge to main without explicit approval.
+
+## Android companion code audit (PR #107)
+
+The proposed client in PR #107 is a minimal Java Activity containing a WebView hard-coded to http://127.0.0.1:3000. It displays USB ADB reverse-tunnel troubleshooting and has no remote API client, local project database, local file workspace, or offline project lifecycle. Its manifest currently enables cleartext traffic globally. That setting is acceptable only for the explicitly local development companion; it must be removed for the standalone production client, which must use HTTPS-only network security configuration. The current Activity also restricts navigation to loopback hosts, so it must be redesigned for the authenticated cloud origin while retaining strict origin allowlisting and safe external-link handling.
+
+PR #107 remains open and unmerged. Its Android source is not present in main. The standalone branch was created from main, so it does not inherit the companion implementation. Integration must be an explicit next change (port/rebuild the client or merge the companion branch as a starting point); do not silently assume Android sources exist in this branch.
