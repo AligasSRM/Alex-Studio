@@ -175,7 +175,7 @@ const run = (cmd, args, timeout) => {
       image, 'node', '-e', script,
     ];
     const result = await new Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }>(resolve => {
-      const child = spawn('docker', args, { env: { PATH: process.env.PATH || '/usr/bin:/bin' }, stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
       let stdout = ''; let stderr = ''; let timedOut = false;
       child.stdout.on('data', chunk => { stdout = (stdout + chunk.toString()).slice(-16000); });
       child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-8000); });
