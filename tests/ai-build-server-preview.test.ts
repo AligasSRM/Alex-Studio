@@ -41,12 +41,17 @@ describe('build/server preview preflight', () => {
     fs.symlinkSync(outside, path.join(root, 'escape.txt'));
     try {
       const previous = process.env.AI_RUNNER_NPM_CACHE;
-      process.env.AI_RUNNER_NPM_CACHE = os.tmpdir();
-      const result = await runBuildServerPreview(root);
-      expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE' });
-      expect(result.summary).toContain('safely');
-      if (previous === undefined) delete process.env.AI_RUNNER_NPM_CACHE;
-      else process.env.AI_RUNNER_NPM_CACHE = previous;
+      const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-preview-cache-'));
+      roots.push(cache);
+      process.env.AI_RUNNER_NPM_CACHE = cache;
+      try {
+        const result = await runBuildServerPreview(root);
+        expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE' });
+        expect(result.summary).toContain('safely');
+      } finally {
+        if (previous === undefined) delete process.env.AI_RUNNER_NPM_CACHE;
+        else process.env.AI_RUNNER_NPM_CACHE = previous;
+      }
     } finally {
       fs.rmSync(outside, { force: true });
     }
