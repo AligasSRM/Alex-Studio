@@ -132,7 +132,10 @@ const run = (cmd, args, timeout) => {
     if (server && server.pid) {
       try { process.kill(-server.pid, 'SIGTERM'); } catch {}
       await Promise.race([new Promise(resolve => server.once('close', resolve)), new Promise(resolve => setTimeout(resolve, 3000))]);
-      if (server.exitCode === null) { try { process.kill(-server.pid, 'SIGKILL'); } catch {} }
+      if (server.exitCode === null) {
+        try { process.kill(-server.pid, 'SIGKILL'); } catch {}
+        await Promise.race([new Promise(resolve => server.once('close', resolve)), new Promise(resolve => setTimeout(resolve, 3000))]);
+      }
       serverClosed = server.exitCode !== null;
     } else serverClosed = true;
     if (!serverClosed) {
