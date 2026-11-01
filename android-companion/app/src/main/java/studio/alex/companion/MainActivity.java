@@ -1,47 +1,272 @@
 package studio.alex.companion;
 
 import android.app.Activity;
-import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.SafeBrowsingResponse;
+import android.webkit.SslErrorHandler;
+import android.net.http.SslError;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Toast;
+import android.widget.Button;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 
 public final class MainActivity extends Activity {
     private static final String APP_URL = "http://127.0.0.1:3000";
-    private WebView webView;
+    private static final int INK = Color.rgb(18, 25, 38);
+    private static final int MUTED = Color.rgb(105, 116, 133);
+    private static final int ACCENT = Color.rgb(91, 111, 245);
 
-    @Override public void onCreate(Bundle state) {
+    private FrameLayout root;
+    private WebView webView;
+    private ProgressBar progress;
+    private LinearLayout connectionPanel;
+    private TextView statusText;
+
+    @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
+        getWindow().setStatusBarColor(Color.rgb(248, 250, 253));
+        getWindow().setNavigationBarColor(Color.rgb(248, 250, 253));
+        if (Build.VERSION.SDK_INT >= 23) {
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        }
+        buildShell();
+        configureWebView();
+        if (state == null || webView.restoreState(state) == null) {
+            connect();
+        }
+    }
+
+    private void buildShell() {
+        root = new FrameLayout(this);
+        root.setBackgroundColor(Color.rgb(248, 250, 253));
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setBackgroundColor(Color.WHITE);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(20), dp(14), dp(20), dp(14));
+        header.setBackgroundColor(Color.WHITE);
+
+        TextView mark = new TextView(this);
+        mark.setText("A");
+        mark.setTextColor(Color.WHITE);
+        mark.setTextSize(18);
+        mark.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        mark.setGravity(Gravity.CENTER);
+        mark.setBackground(roundRect(ACCENT, 14));
+        header.addView(mark, new LinearLayout.LayoutParams(dp(42), dp(42)));
+
+        LinearLayout brand = new LinearLayout(this);
+        brand.setOrientation(LinearLayout.VERTICAL);
+        brand.setPadding(dp(12), 0, 0, 0);
+        TextView title = new TextView(this);
+        title.setText("Alex Studio");
+        title.setTextColor(INK);
+        title.setTextSize(17);
+        title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        TextView subtitle = new TextView(this);
+        subtitle.setText("AI development workspace");
+        subtitle.setTextColor(MUTED);
+        subtitle.setTextSize(11);
+        brand.addView(title);
+        brand.addView(subtitle);
+        header.addView(brand, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+
+        statusText = new TextView(this);
+        statusText.setText("غير متصل");
+        statusText.setTextColor(MUTED);
+        statusText.setTextSize(12);
+        header.addView(statusText);
+        shell.addView(header);
+
+        progress = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        progress.setIndeterminate(true);
+        progress.setVisibility(View.GONE);
+        shell.addView(progress, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
+
+        FrameLayout content = new FrameLayout(this);
+        shell.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+
         webView = new WebView(this);
-        webView.getSettings().setJavaScriptEnabled(true);
-        webView.getSettings().setDomStorageEnabled(true);
-        webView.getSettings().setAllowFileAccess(false);
-        webView.getSettings().setAllowContentAccess(false);
+        content.addView(webView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        connectionPanel = new LinearLayout(this);
+        connectionPanel.setOrientation(LinearLayout.VERTICAL);
+        connectionPanel.setGravity(Gravity.CENTER);
+        connectionPanel.setPadding(dp(28), dp(28), dp(28), dp(28));
+        connectionPanel.setBackgroundColor(Color.rgb(248, 250, 253));
+
+        TextView icon = new TextView(this);
+        icon.setText("↔");
+        icon.setTextColor(ACCENT);
+        icon.setTextSize(34);
+        icon.setGravity(Gravity.CENTER);
+        connectionPanel.addView(icon, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)));
+
+        TextView heading = new TextView(this);
+        heading.setText("اتصال Alex Studio مطلوب");
+        heading.setTextColor(INK);
+        heading.setTextSize(20);
+        heading.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        heading.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams headingLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        headingLp.topMargin = dp(12);
+        connectionPanel.addView(heading, headingLp);
+
+        TextView details = new TextView(this);
+        details.setText("شغّل Alex Studio على الكمبيوتر، ثم وصّل الهاتف عبر USB وفعّل USB debugging. نفّذ الأمر التالي على الكمبيوتر:");
+        details.setTextColor(MUTED);
+        details.setTextSize(14);
+        details.setGravity(Gravity.CENTER);
+        details.setLineSpacing(dp(4), 1f);
+        LinearLayout.LayoutParams detailsLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        detailsLp.topMargin = dp(12);
+        connectionPanel.addView(details, detailsLp);
+
+        TextView command = new TextView(this);
+        command.setText("adb reverse tcp:3000 tcp:3000");
+        command.setTextColor(INK);
+        command.setTextSize(13);
+        command.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        command.setGravity(Gravity.CENTER);
+        command.setPadding(dp(12), dp(14), dp(12), dp(14));
+        command.setBackground(roundRect(Color.rgb(232, 237, 246), 12));
+        LinearLayout.LayoutParams commandLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        commandLp.topMargin = dp(18);
+        connectionPanel.addView(command, commandLp);
+
+        Button retry = new Button(this);
+        retry.setText("إعادة المحاولة");
+        retry.setTextColor(Color.WHITE);
+        retry.setAllCaps(false);
+        retry.setTextSize(15);
+        retry.setBackground(roundRect(ACCENT, 12));
+        retry.setOnClickListener(v -> connect());
+        LinearLayout.LayoutParams retryLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        retryLp.topMargin = dp(18);
+        connectionPanel.addView(retry, retryLp);
+
+        content.addView(connectionPanel, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        connectionPanel.setVisibility(View.GONE);
+        root.addView(shell);
+        setContentView(root);
+    }
+
+    private void configureWebView() {
+        WebSettings settings = webView.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
+        settings.setSupportMultipleWindows(false);
+        settings.setGeolocationEnabled(false);
+        settings.setMediaPlaybackRequiresUserGesture(true);
+        if (Build.VERSION.SDK_INT >= 26) settings.setSafeBrowsingEnabled(true);
+
+        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                String host = request.getUrl().getHost();
-                return host == null || !(host.equals("127.0.0.1") || host.equals("localhost"));
+                return !isAllowed(request.getUrl());
             }
-            @Override public void onPageStarted(WebView view, String url, Bitmap favicon) {
-                super.onPageStarted(view, url, favicon);
+
+            @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (!isAllowed(request.getUrl())) {
+                    return new WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", null,
+                        new ByteArrayInputStream(new byte[0]));
+                }
+                return super.shouldInterceptRequest(view, request);
             }
-            @Override public void onReceivedError(WebView view, android.webkit.WebResourceRequest request, android.webkit.WebResourceError error) {
+
+            @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                progress.setVisibility(View.VISIBLE);
+                statusText.setText("جارٍ الاتصال");
+                connectionPanel.setVisibility(View.GONE);
+            }
+
+            @Override public void onPageFinished(WebView view, String url) {
+                progress.setVisibility(View.GONE);
+                statusText.setText("متصل");
+                connectionPanel.setVisibility(View.GONE);
+            }
+
+            @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 super.onReceivedError(view, request, error);
-                if (request.isForMainFrame()) showConnectionHelp();
+                if (request.isForMainFrame()) showConnectionPanel();
+            }
+
+            @Override public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                handler.cancel();
             }
         });
-        setContentView(webView);
-        if (state == null) webView.loadUrl(APP_URL); else webView.restoreState(state);
     }
 
-    private void showConnectionHelp() {
-        String html = "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:28px;background:#101827;color:#eef'><h2>Alex Studio</h2><p>تعذّر الاتصال بخادم Alex Studio على الكمبيوتر.</p><p>1. شغّل Alex Studio على الكمبيوتر على المنفذ 3000.</p><p>2. وصّل الهاتف بالكمبيوتر عبر USB وفعّل USB debugging.</p><p>3. نفّذ الأمر: <b>adb reverse tcp:3000 tcp:3000</b></p><p>4. اضغط إعادة المحاولة.</p><button onclick='location.href=\"http://127.0.0.1:3000\"'>إعادة المحاولة</button></body></html>";
-        webView.loadDataWithBaseURL("http://127.0.0.1/", html, "text/html", "UTF-8", null);
+    private boolean isAllowed(Uri uri) {
+        if (uri == null || !"http".equalsIgnoreCase(uri.getScheme())) return false;
+        String host = uri.getHost();
+        return ("127.0.0.1".equals(host) || "localhost".equals(host)) && uri.getPort() == 3000;
     }
 
-    @Override protected void onSaveInstanceState(Bundle outState) { webView.saveState(outState); super.onSaveInstanceState(outState); }
-    @Override public void onBackPressed() { if (webView != null && webView.canGoBack()) webView.goBack(); else super.onBackPressed(); }
-    @Override protected void onDestroy() { if (webView != null) webView.destroy(); super.onDestroy(); }
+    private void connect() {
+        connectionPanel.setVisibility(View.GONE);
+        progress.setVisibility(View.VISIBLE);
+        statusText.setText("جارٍ الاتصال");
+        webView.loadUrl(APP_URL);
+    }
+
+    private void showConnectionPanel() {
+        progress.setVisibility(View.GONE);
+        statusText.setText("غير متصل");
+        connectionPanel.setVisibility(View.VISIBLE);
+    }
+
+    private android.graphics.drawable.GradientDrawable roundRect(int color, int radius) {
+        android.graphics.drawable.GradientDrawable drawable = new android.graphics.drawable.GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(dp(radius));
+        return drawable;
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    @Override protected void onSaveInstanceState(Bundle outState) {
+        if (webView != null) webView.saveState(outState);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override public void onBackPressed() {
+        if (webView != null && webView.canGoBack()) webView.goBack();
+        else super.onBackPressed();
+    }
+
+    @Override protected void onDestroy() {
+        if (webView != null) {
+            webView.stopLoading();
+            webView.loadUrl("about:blank");
+            webView.destroy();
+        }
+        super.onDestroy();
+    }
 }
