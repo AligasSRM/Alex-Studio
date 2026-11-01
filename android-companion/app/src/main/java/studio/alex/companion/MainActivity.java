@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.webkit.SafeBrowsingResponse;
 import android.webkit.SslErrorHandler;
 import android.net.http.SslError;
 import android.webkit.WebResourceError;
@@ -25,7 +24,6 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
 
 public final class MainActivity extends Activity {
     private static final String APP_URL = "http://127.0.0.1:3000";
@@ -33,30 +31,27 @@ public final class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(105, 116, 133);
     private static final int ACCENT = Color.rgb(91, 111, 245);
 
-    private FrameLayout root;
     private WebView webView;
     private ProgressBar progress;
     private LinearLayout connectionPanel;
     private TextView statusText;
+    private boolean showingConnectionError;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
         getWindow().setStatusBarColor(Color.rgb(248, 250, 253));
         getWindow().setNavigationBarColor(Color.rgb(248, 250, 253));
-        if (Build.VERSION.SDK_INT >= 23) {
+        if (Build.VERSION.SDK_INT >= 26) {
             getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
+        } else if (Build.VERSION.SDK_INT >= 23) {
+            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         }
         buildShell();
         configureWebView();
-        if (state == null || webView.restoreState(state) == null) {
-            connect();
-        }
+        if (state == null || webView.restoreState(state) == null) connect();
     }
 
     private void buildShell() {
-        root = new FrameLayout(this);
-        root.setBackgroundColor(Color.rgb(248, 250, 253));
-
         LinearLayout shell = new LinearLayout(this);
         shell.setOrientation(LinearLayout.VERTICAL);
         shell.setBackgroundColor(Color.WHITE);
@@ -167,8 +162,7 @@ public final class MainActivity extends Activity {
 
         content.addView(connectionPanel, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         connectionPanel.setVisibility(View.GONE);
-        root.addView(shell);
-        setContentView(root);
+        setContentView(shell);
     }
 
     private void configureWebView() {
@@ -199,6 +193,7 @@ public final class MainActivity extends Activity {
             }
 
             @Override public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+                showingConnectionError = false;
                 progress.setVisibility(View.VISIBLE);
                 statusText.setText("جارٍ الاتصال");
                 connectionPanel.setVisibility(View.GONE);
@@ -206,8 +201,7 @@ public final class MainActivity extends Activity {
 
             @Override public void onPageFinished(WebView view, String url) {
                 progress.setVisibility(View.GONE);
-                statusText.setText("متصل");
-                connectionPanel.setVisibility(View.GONE);
+                if (!showingConnectionError) statusText.setText("متصل");
             }
 
             @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
@@ -228,6 +222,7 @@ public final class MainActivity extends Activity {
     }
 
     private void connect() {
+        showingConnectionError = false;
         connectionPanel.setVisibility(View.GONE);
         progress.setVisibility(View.VISIBLE);
         statusText.setText("جارٍ الاتصال");
@@ -235,6 +230,7 @@ public final class MainActivity extends Activity {
     }
 
     private void showConnectionPanel() {
+        showingConnectionError = true;
         progress.setVisibility(View.GONE);
         statusText.setText("غير متصل");
         connectionPanel.setVisibility(View.VISIBLE);
