@@ -17,8 +17,8 @@
 ## 2. طريقة التشغيل
 
 - **واجهة متجاوبة:** متوافقة مع هاتف سامسونغ والكمبيوتر.
-- **الوصول المتعدد:** البنية تسمح بالوصول من أجهزة مختلفة مستقبلاً، لكن لن يُفعّل الوصول عن بُعد إلا بعد تطبيق آلية مصادقة آمنة ومختبرة.
-- **الأمان أولاً:** حماية المشاريع والملفات ومفاتيح API أولوية مطلقة.
+- **نطاق الاستخدام:** تطبيق شخصي محلي لمستخدم واحد؛ لا توجد حسابات أو أدوار أو إدارة مستخدمين متعددين ضمن نطاق المشروع.
+- **الحماية التشغيلية:** حماية ملفات المشاريع ومفاتيح API وسلامة عمليات التطبيق والتشغيل جزء أساسي من الاستخدام المحلي.
 - **الاستخدام المحلي كقاعدة:** في هذه المرحلة، التشغيل على الجهاز المحلي فقط (localhost).
 - **مؤكد:** لا وصول عن بُعد في النسخة الأولى.
 
@@ -29,7 +29,7 @@
 - **التوسع:** تصميم البنية بحيث تُضاف أنواع أخرى (React + Vite، ثم ما يلزم) لاحقاً دون إعادة بناء النظام.
 - **الأولوية:** إثبات دورة إدارة الملفات → الاقتراح → المراجعة → الموافقة → المعاينة → الفحص على هذا النوع البسيط أولاً.
 
-## 4. التحكم بالتعديلات والأمان
+## 4. التحكم بالتعديلات والحماية التشغيلية
 
 - **مبدأ الاقتراح لا التنفيذ:** الذكاء الاصطناعي يقترح؛ المستخدم يراجع ويقرر.
 - **شفافية كاملة:** عرض الملفات والتغييرات المقترحة مع **Diff واضح** قبل التطبيق.
@@ -101,7 +101,7 @@
 
 ## 5. ترتيب التنفيذ المعتمد
 
-1. **الأساسيات والأمان:** تأسيس المشاريع والملفات، نظام الحفظ وإعادة الفتح، **عزل الملفات وحماية المفاتيح**.
+1. **الأساسيات التشغيلية:** تأسيس المشاريع والملفات، نظام الحفظ وإعادة الفتح، **عزل الملفات وحماية المفاتيح**.
 2. **المساعدة الذكية:** تحويل الطلبات إلى خطط عمل واضحة واقتراحات تعديل.
 3. **المراجعة والموافقة:** عرض Diff، زر اعتماد/رفض، تطبيق ذرّي بعد الموافقة فقط.
 4. **المعاينة والفحص المعزول:** معاينة HTML ثابت داخل iframe معزول بـ CSP صارمة، مع عرض نتائج الفحص الفعلية.
@@ -150,9 +150,8 @@
 
 ### القرار 4 — التخزين والوصول: محلي فقط في النسخة الأولى
 - **ملفات على القرص + Git** لكل مشروع.
-- **لا قاعدة بيانات،** لا سحابة، لا مصادقة متعددة المستخدمين.
-- **الواجهة تصمم بطبقة وصول** قابلة للاستبدال لاحقاً بمصادقة دون إعادة كتابة.
-- **الوصول عن بُعد مؤجل** حتى يوجد مصادقة حقيقية مختبرة (يتسق مع البند 2).
+- **لا قاعدة بيانات أو سحابة أو نظام حسابات**؛ الاستخدام محلي وشخصي لمستخدم واحد.
+- **الوصول عن بُعد والاستضافة العامة خارج نطاق المشروع الحالي** ولا تُعد متطلبات قبول.
 - **لماذا:** يقلل التعقيد والمخاطر، ويحقق «الأمان أولاً» بأبسط شكل.
 
 ### القرار 5 — حدود التكلفة: حد شهري بسيط + عداد
@@ -264,8 +263,8 @@
 
 **Phase 0 acceptance gate: CLOSED / PASS** for the defined P0-ACC-001–017 criteria. Evidence and the criterion-by-criterion matrix are recorded in [the Phase 0 acceptance report](docs/reviews/PHASE-0-ACCEPTANCE-TEST-BASELINE-2026-10-27.md). Verified code commit: `8ddef4083a17c578fc713cc93d640a5326bd4229`; [CI run](https://github.com/AligasSRM/Alex-Studio/actions/runs/40567364737) passed 35 unit tests, 14 browser tests, typecheck, lint, and production build.
 
-**This is not first-release acceptance or production approval.** The first-release criteria in §6 remain a separate gate. The current source contains AI-provider routes, local rate limiting, usage/cost metering, monthly warning logic, ZIP export, and edit/rollback components; the existence of these implementations does not by itself establish full release acceptance. Performance-threshold evidence, end-to-end acceptance of the complete generate → verify → repair → re-verify loop, and the full release-level security review remain separate gates. See [the 2026-10-29 full audit](docs/reviews/ALEX-STUDIO-AUDIT-2026-10-29.md) for the latest findings and their evidence status.
+**This is not first-release acceptance or production approval.** The first-release criteria in §6 remain a separate gate. The current source contains AI-provider routes, local rate limiting, usage/cost metering, monthly warning logic, ZIP export, and edit/rollback components; the existence of these implementations does not by itself establish full release acceptance. Performance-threshold evidence and end-to-end acceptance of the complete generate → verify → repair → re-verify loop remain separate gates. Operational safeguards for local files, API keys, and isolated execution remain in scope. See [the 2026-10-29 full audit](docs/reviews/ALEX-STUDIO-AUDIT-2026-10-29.md) for the latest findings and their evidence status.
 
 **Dependency security:** use the npm audit artifact and CI result for the exact commit being reviewed. Do not rely on the older advisory count above as a current report; dependency findings must be re-evaluated after lockfile changes.
 
-**Local-only security boundary:** the API rejects mutations unless the request is same-origin on localhost. There is no user authentication. Do not deploy this prototype publicly. CI results apply only to the exact tested commit and are not a production-readiness certification.
+**Local-only usage boundary:** this is a private, single-user tool intended to run on localhost. Public hosting, remote access, accounts, and multi-user support are outside the current scope. Local file-boundary checks, API-key handling, and isolated execution remain required. CI results apply only to the exact tested commit and are not a production-readiness certification.
