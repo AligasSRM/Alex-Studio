@@ -66,7 +66,7 @@ describe('Phase 0 filesystem failure and race hardening', () => {
     const originalRename = fs.renameSync.bind(fs);
     let swapped = false;
     jest.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
-      if (!swapped && String(to) === target && String(from).includes('.alex-tmp-')) {
+      if (!swapped && String(to).endsWith('/index.html') && String(from).includes('.alex-tmp-')) {
         originalRename(target, parked);
         fs.symlinkSync(outsideFile, target, 'file');
         swapped = true;

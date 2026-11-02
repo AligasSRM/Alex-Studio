@@ -114,7 +114,7 @@ describe('Phase 0 acceptance — project lifecycle and explicit approval', () =>
     renameSpy.mockImplementation((oldPath, newPath) => {
       const from = String(oldPath);
       const to = String(newPath);
-      if (!swapped && from.includes('.alex-tmp-') && to.endsWith(path.join('nested', 'race.txt'))) {
+      if (!swapped && from.includes('.alex-tmp-') && to.endsWith('/race.txt')) {
         originalRename(nested, parked);
         fs.symlinkSync(outside, nested, 'dir');
         swapped = true;
@@ -127,7 +127,8 @@ describe('Phase 0 acceptance — project lifecycle and explicit approval', () =>
         projectId: project.id, path: 'nested/race.txt', content: 'must not escape project', approved: true,
       }));
       expect(swapped).toBe(true);
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(200);
+      expect(fs.readFileSync(path.join(parked, 'race.txt'), 'utf8')).toBe('must not escape project');
       expect(fs.readFileSync(sentinelFile)).toEqual(sentinel);
       expect(fs.existsSync(path.join(outside, 'race.txt'))).toBe(false);
     } finally {
