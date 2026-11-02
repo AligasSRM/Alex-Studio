@@ -14,11 +14,6 @@ describe('secret material scanner', () => {
       'const aws_secret_access_key = "long-aws-secret-access-value";',
     ].join('\n');
 
-    console.log('secret-scanner-debug', {
-      openaiDirect: source.search(/\\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}\\b/) >= 0,
-      awsDirect: source.search(/\\b(?:AKIA|ASIA)[A-Z0-9]{16}\\b/) >= 0,
-      scannerKinds: findSecretKinds(source),
-    });
     expect(findSecretKinds(source)).toEqual(expect.arrayContaining([
       'openai-key', 'groq-key', 'aws-access-key', 'github-token',
       'stripe-key', 'google-api-key', 'bearer-token', 'credential-assignment',
