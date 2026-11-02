@@ -31,5 +31,5 @@ jobs:
         timeout-minutes: 8
 
       - name: Verify generated code remains blocked without Windows isolation
-        run: npm test -- tests/ai-command-runner.test.ts tests/ai-command-runner-timeout.test.ts tests/ai-command-runner.docker.test.ts tests/ai-iterate-sandbox.docker.test.ts tests/ai-build-server-preview.docker.test.ts
+        run: npm test -- tests/ai-command-runner.test.ts tests/ai-command-runner-timeout.test.ts tests/windows-command-runner-gate.test.ts tests/windows-browser-runner-gate.test.ts tests/windows-build-preview-gate.test.ts
         shell: bash
