@@ -43,12 +43,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Only a currently applied batch can be rolled back', status: manifest.status }, { status: 409 });
   }
 
-  const current: { path: string; content: string }[] = [];
+  const current: { path: string; content: string | null }[] = [];
   try {
     for (const snapshot of manifest.snapshots) {
       if (!fs.existsSync(target)) {
         if (snapshot.beforeContent === null) {
-          current.push({ path: snapshot.path, content: '' });
+          current.push({ path: snapshot.path, content: null });
           continue;
         }
         throw new Error('A batch file is missing or is not a regular file: ' + snapshot.path);
@@ -80,9 +80,12 @@ export async function POST(request: Request) {
 
   for (const snapshot of [...manifest.snapshots].reverse()) {
     try {
-      const target = resolveProjectPath(body.projectId, snapshot.path);
-      if (snapshot.beforeContent === null) deleteProjectFile(body.projectId, snapshot.path, snapshot.afterContent);
-      else writeProjectFile(body.projectId, snapshot.path, snapshot.beforeContent, snapshot.afterContent);
+      const currentState = current.find((item) => item.path === snapshot.path)?.content;
+      if (snapshot.beforeContent === null) {
+        if (currentState !== null) deleteProjectFile(body.projectId, snapshot.path, snapshot.afterContent);
+      } else if (currentState !== snapshot.beforeContent) {
+        writeProjectFile(body.projectId, snapshot.path, snapshot.beforeContent, snapshot.afterContent);
+      }
       restored.push(snapshot.path);
     } catch {
       failures.push(snapshot.path);
