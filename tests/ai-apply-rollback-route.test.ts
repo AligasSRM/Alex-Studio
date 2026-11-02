@@ -8,6 +8,7 @@ import { POST as applyPOST } from '../app/api/ai/apply/route';
 import { POST as rollbackPOST } from '../app/api/ai/apply/rollback/route';
 import { GET as historyGET } from '../app/api/ai/apply/history/route';
 import { readAIApplyBatch, saveAIApplyBatch } from '../lib/ai-apply-batches';
+import * as filesModule from '../lib/files';
 
 const projectIds: string[] = [];
 const original = '<h1>before</h1>\n';
@@ -46,6 +47,8 @@ async function applyBatch(projectId: string) {
 
 afterEach(() => {
   for (const id of projectIds.splice(0)) fs.rmSync(projectRoot(id), { recursive: true, force: true });
+
+
 });
 
 describe('AI apply history and post-apply rollback routes', () => {
@@ -126,4 +129,21 @@ describe('AI apply history and post-apply rollback routes', () => {
     }));
     expect(crossOrigin.status).toBe(403);
   });
+  it('preserves a newer user edit introduced after rollback preflight', async () => {
+    const project = setupProject();
+    const { batchId } = await applyBatch(project.id);
+    const newerEdit = '<h1>concurrent user edit</h1>\\n';
+    const realWrite = filesModule.writeProjectFile;
+    jest.spyOn(filesModule, 'writeProjectFile').mockImplementation((...args) => {
+      fs.writeFileSync(path.join(projectRoot(project.id), 'index.html'), newerEdit);
+      return realWrite(...args);
+    });
+    const response = await rollbackPOST(localRequest('http://localhost/api/ai/apply/rollback', {
+      projectId: project.id, batchId, approved: true,
+    }));
+    expect(response.status).toBe(500);
+    expect((await response.json()).status).toBe('rollback-failed');
+    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(newerEdit);
+  });
+
 });

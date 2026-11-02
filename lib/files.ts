@@ -158,7 +158,26 @@ function createBackupThroughPinnedDirectory(projectDescriptor: number, sourceDes
   }
 }
 
-export function writeProjectFile(id: string, projectPath: string, content: unknown) {
+function assertExpectedFileState(pinned: PinnedProjectPath, expected: string | null | undefined): void {
+  if (expected === undefined) return;
+  let descriptor: number | undefined;
+  try {
+    descriptor = fs.openSync(`/proc/self/fd/${pinned.parentDescriptor}/${pinned.fileName}`, FILE_FLAGS);
+    const stat = fs.fstatSync(descriptor);
+    if (!stat.isFile() || stat.size > 1048576) throw new Error('Target must be a regular text file');
+    const actual = fs.readFileSync(descriptor, 'utf8');
+    if (expected === null || actual !== expected) {
+      throw new Error('Project file changed during the operation; refusing to overwrite newer content');
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT' && expected === null) return;
+    throw error;
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+}
+
+export function writeProjectFile(id: string, projectPath: string, content: unknown, expectedCurrentContent?: string | null) {
   assertTextContent(content);
   resolveProjectPath(id, projectPath);
   const pinned = openPinnedProjectParent(id, projectPath);
@@ -167,6 +186,7 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
   let temporaryPath: string | undefined;
   let ownsTemporaryFile = false;
   try {
+    assertExpectedFileState(pinned, expectedCurrentContent);
     let existed = false;
     try {
       sourceDescriptor = fs.openSync(
@@ -201,6 +221,9 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
 
     // Rename within the pinned parent directory. A symlink replacement of the
     // path's original parent cannot redirect this operation outside the project.
+    // Re-check the caller's expected state immediately before the atomic rename.
+    // This narrows the stale-write window; it is not a cross-process compare-and-swap.
+    assertExpectedFileState(pinned, expectedCurrentContent);
     fs.renameSync(temporaryPath, `/proc/self/fd/${pinned.parentDescriptor}/${pinned.fileName}`);
     fs.fsyncSync(pinned.parentDescriptor);
     return { backup: existed };
@@ -213,6 +236,29 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
     throw error;
   } finally {
     if (sourceDescriptor !== undefined) fs.closeSync(sourceDescriptor);
+    pinned.close();
+  }
+}
+
+/** Remove a project file through a pinned parent directory after checking its expected bytes. */
+export function deleteProjectFile(id: string, projectPath: string, expectedCurrentContent: string) {
+  resolveProjectPath(id, projectPath);
+  const pinned = openPinnedProjectParent(id, projectPath);
+  let descriptor: number | undefined;
+  try {
+    descriptor = fs.openSync(`/proc/self/fd/${pinned.parentDescriptor}/${pinned.fileName}`, FILE_FLAGS);
+    const stat = fs.fstatSync(descriptor);
+    if (!stat.isFile() || stat.size > 1048576) throw new Error('Target must be a regular text file');
+    const actual = fs.readFileSync(descriptor, 'utf8');
+    if (actual !== expectedCurrentContent) {
+      throw new Error('Project file changed during the operation; refusing to delete newer content');
+    }
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    fs.unlinkSync(`/proc/self/fd/${pinned.parentDescriptor}/${pinned.fileName}`);
+    fs.fsyncSync(pinned.parentDescriptor);
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
     pinned.close();
   }
 }

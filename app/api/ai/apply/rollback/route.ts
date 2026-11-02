@@ -1,11 +1,10 @@
 export const runtime = 'nodejs';
 
-import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { assertLocalMutation, resolveProjectPath } from '@/lib/path-security';
+import { assertLocalMutation } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
-import { readProjectFile, writeProjectFile } from '@/lib/files';
+import { readProjectFile, writeProjectFile, deleteProjectFile } from '@/lib/files';
 import { readAIApplyBatch, saveAIApplyBatch } from '@/lib/ai-apply-batches';
 import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
 import { readJsonBody } from '@/lib/request-body';
@@ -44,22 +43,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Only a currently applied batch can be rolled back', status: manifest.status }, { status: 409 });
   }
 
-  const current: { path: string; content: string }[] = [];
+  const current: { path: string; content: string | null }[] = [];
   try {
     for (const snapshot of manifest.snapshots) {
-      const target = resolveProjectPath(body.projectId, snapshot.path);
-      if (!fs.existsSync(target)) {
-        if (snapshot.beforeContent === null) {
-          current.push({ path: snapshot.path, content: '' });
+      let content: string;
+      try {
+        content = readProjectFile(body.projectId, snapshot.path);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT' && snapshot.beforeContent === null) {
+          current.push({ path: snapshot.path, content: null });
           continue;
         }
         throw new Error('A batch file is missing or is not a regular file: ' + snapshot.path);
       }
-      const stat = fs.lstatSync(target);
-      if (!stat.isFile() || stat.isSymbolicLink()) {
-        throw new Error('A batch file is missing or is not a regular file: ' + snapshot.path);
-      }
-      const content = readProjectFile(body.projectId, snapshot.path);
       const matchesApplied = hash(content) === hash(snapshot.afterContent);
       const matchesAlreadyRestored = snapshot.beforeContent !== null && hash(content) === hash(snapshot.beforeContent);
       if (!matchesApplied && !matchesAlreadyRestored) {
@@ -82,9 +78,12 @@ export async function POST(request: Request) {
 
   for (const snapshot of [...manifest.snapshots].reverse()) {
     try {
-      const target = resolveProjectPath(body.projectId, snapshot.path);
-      if (snapshot.beforeContent === null) fs.rmSync(target, { force: true });
-      else writeProjectFile(body.projectId, snapshot.path, snapshot.beforeContent);
+      const currentState = current.find((item) => item.path === snapshot.path)?.content;
+      if (snapshot.beforeContent === null) {
+        if (currentState !== null) deleteProjectFile(body.projectId, snapshot.path, snapshot.afterContent);
+      } else if (currentState !== snapshot.beforeContent) {
+        writeProjectFile(body.projectId, snapshot.path, snapshot.beforeContent, snapshot.afterContent);
+      }
       restored.push(snapshot.path);
     } catch {
       failures.push(snapshot.path);
@@ -96,7 +95,7 @@ export async function POST(request: Request) {
     for (const snapshot of manifest.snapshots) {
       if (!restored.includes(snapshot.path)) continue;
       try {
-        writeProjectFile(body.projectId, snapshot.path, snapshot.afterContent);
+        writeProjectFile(body.projectId, snapshot.path, snapshot.afterContent, snapshot.beforeContent);
       } catch {
         compensationFailures.push(snapshot.path);
       }
