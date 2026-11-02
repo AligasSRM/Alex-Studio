@@ -122,7 +122,7 @@ describe('AI apply route transactional behavior', () => {
   });
   it('restores the original file when directory fsync fails after rename', async () => {
     const project = setupProject();
-    const changes = [{ path: 'index.html', content: '<h1>after fsync failure</h1>\\n', baseHash: hash(originalIndex) }];
+    const changes = [{ path: 'index.html', content: '<h1>after fsync failure</h1>\n', baseHash: hash(originalIndex) }];
     const realFsync = fs.fsyncSync;
     let injected = false;
     jest.spyOn(fs, 'fsyncSync').mockImplementation((fd: number) => {
