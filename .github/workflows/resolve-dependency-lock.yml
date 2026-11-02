@@ -33,7 +33,7 @@ jobs:
           const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
           const local = JSON.parse(fs.readFileSync('vendor/deepmerge/package.json', 'utf8'));
           lock.packages['vendor/deepmerge'] = { ...lock.packages['vendor/deepmerge'], name: local.name, version: local.version };
-          fs.writeFileSync('package-lock.json', JSON.stringify(lock, null, 2) + '\\n');
+          fs.writeFileSync('package-lock.json', JSON.stringify(lock, null, 2) + String.fromCharCode(10));
           NODE
       - name: Install exact locked dependencies
         run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
