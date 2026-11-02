@@ -1,11 +1,10 @@
 export const runtime = 'nodejs';
 
-import fs from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { assertLocalMutation, resolveProjectPath, assertTextContent } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
-import { readProjectFile, writeProjectFile } from '@/lib/files';
+import { readProjectFile, writeProjectFile, deleteProjectFile } from '@/lib/files';
 import { verifyVerificationProof } from '@/lib/ai-verification-proof';
 import { rollbackAppliedSnapshots } from '@/lib/ai-apply-rollback';
 import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
@@ -111,7 +110,7 @@ export async function POST(request: Request) {
   const applied: string[] = [];
   try {
     for (const change of changes) {
-      writeProjectFile(body.projectId, change.path, change.content);
+      writeProjectFile(body.projectId, change.path, change.content, snapshots.find((snapshot) => snapshot.path === change.path)?.content ?? null);
       applied.push(change.path);
     }
     const appliedAt = new Date().toISOString();
@@ -121,8 +120,10 @@ export async function POST(request: Request) {
   } catch (error) {
     const rollbackFailures = rollbackAppliedSnapshots(snapshots, applied, (snapshot) => {
       const target = resolveProjectPath(body.projectId as string, snapshot.path);
-      if (snapshot.content === null) fs.rmSync(target, { force: true });
-      else writeProjectFile(body.projectId as string, snapshot.path, snapshot.content);
+      const appliedContent = changes.find((change) => change.path === snapshot.path)?.content;
+      if (appliedContent === undefined) throw new Error('Missing applied snapshot for rollback');
+      if (snapshot.content === null) deleteProjectFile(body.projectId as string, snapshot.path, appliedContent);
+      else writeProjectFile(body.projectId as string, snapshot.path, snapshot.content, appliedContent);
     });
     const rollbackStatus = rollbackFailures.length ? 'failed' : 'succeeded';
     const failedAt = new Date().toISOString();
