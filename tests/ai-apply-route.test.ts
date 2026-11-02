@@ -120,6 +120,28 @@ describe('AI apply route transactional behavior', () => {
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(changes[0].content);
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'styles.css'), 'utf8')).toBe(originalStyles);
   });
+  it('restores the original file when directory fsync fails after rename', async () => {
+    const project = setupProject();
+    const changes = [{ path: 'index.html', content: '<h1>after fsync failure</h1>\\n', baseHash: hash(originalIndex) }];
+    const realFsync = fs.fsyncSync;
+    let injected = false;
+    jest.spyOn(fs, 'fsyncSync').mockImplementation((fd: number) => {
+      if (!injected && fs.fstatSync(fd).isDirectory()) {
+        injected = true;
+        throw new Error('injected directory fsync failure after rename');
+      }
+      return realFsync(fd);
+    });
+
+    const response = await POST(makeRequest(project.id, changes));
+    const body = await response.json();
+
+    expect(injected).toBe(true);
+    expect(response.status).toBe(500);
+    expect(body.rollback).toMatchObject({ status: 'COMPLETE', restoredPaths: ['index.html'] });
+    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(originalIndex);
+  });
+
   it('preserves a user edit made after snapshot validation but before the write', async () => {
     const project = setupProject();
     const changes = [{ path: 'index.html', content: '<h1>generated</h1>\\n', baseHash: hash(originalIndex) }];
