@@ -26,6 +26,15 @@ jobs:
       - name: Resolve package lock without running lifecycle scripts
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/
         timeout-minutes: 10
+      - name: Preserve vendored deepmerge package identity
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const local = JSON.parse(fs.readFileSync('vendor/deepmerge/package.json', 'utf8'));
+          lock.packages['vendor/deepmerge'] = { ...lock.packages['vendor/deepmerge'], name: local.name, version: local.version };
+          fs.writeFileSync('package-lock.json', JSON.stringify(lock, null, 2) + '\\n');
+          NODE
       - name: Install exact locked dependencies
         run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
         timeout-minutes: 10
