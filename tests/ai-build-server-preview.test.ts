@@ -39,7 +39,7 @@ describe('build/server preview preflight', () => {
     try {
       const result = await runBuildServerPreview(project({ build: 'node build.js', start: 'node server.js' }));
       expect(result).toMatchObject({ ok: false, available: false, status: 'UNAVAILABLE' });
-      expect(result.summary).toContain('offline npm cache');
+      expect(result.summary).toContain('Offline npm cache');
     } finally {
       if (previous === undefined) delete process.env.AI_RUNNER_NPM_CACHE;
       else process.env.AI_RUNNER_NPM_CACHE = previous;
