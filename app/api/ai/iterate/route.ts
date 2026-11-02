@@ -20,6 +20,7 @@ import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
 import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
 import { findSecretKinds, redactSecretMaterial } from '@/lib/secret-scanner';
+import { filterSandboxFiles } from '@/lib/ai-sandbox-files';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -236,7 +237,7 @@ export async function POST(request: Request) {
     for (const file of parseDraft(body.projectId, body.files, originals, true, secretPaths)) working.set(file.path, file.content);
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755);
     const writeFiles = () => {
-      for (const [filePath, content] of Array.from(working.entries())) {
+      for (const [filePath, content] of Array.from(filterSandboxFiles(working, secretPaths).entries())) {
         const target = path.resolve(root, ...filePath.split('/')); const relative = path.relative(root, target);
         if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Sandbox path escape denied');
         fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o755 });
