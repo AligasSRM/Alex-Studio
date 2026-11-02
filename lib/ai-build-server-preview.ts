@@ -26,10 +26,10 @@ export async function runBuildServerPreview(root: string): Promise<BuildPreviewR
   }
   const plan = inspectGeneratedProject(root);
   if (plan.preflightError) return unavailable('Build/server preview preflight failed', plan.preflightError);
-  if (plan.kind === 'static') return unavailable('Build and start scripts are required for server preview', 'No package.json was found.');
+  if (plan.kind === 'static') return unavailable('Required build and start scripts are missing for server preview', 'No package.json was found.');
   const scripts = plan.packageJson?.scripts as Record<string, unknown> | undefined;
   if (!scripts || typeof scripts.build !== 'string' || typeof scripts.start !== 'string') {
-    return unavailable('Build and start scripts are required for server preview', 'package.json must define both build and start scripts. No command was started.');
+    return unavailable('Required build and start scripts are missing for server preview', 'package.json must define both build and start scripts. No command was started.');
   }
   const cache = process.env.AI_RUNNER_NPM_CACHE;
   if (!cache || !fs.existsSync(cache) || !fs.statSync(cache).isDirectory()) {
@@ -37,6 +37,6 @@ export async function runBuildServerPreview(root: string): Promise<BuildPreviewR
   }
   return unavailable(
     'Windows-native isolated build/server preview is not implemented',
-    'All filesystem, manifest, lockfile, script, and cache preflight checks passed. A Windows-native isolation provider is required before execution. No generated command, Docker container, or server was started.',
+    'All filesystem, manifest, lockfile, script, and cache preflight checks passed. A Windows-native isolation provider is required before execution. No generated command or server was started.',
   );
 }
