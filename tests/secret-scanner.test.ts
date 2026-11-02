@@ -45,16 +45,16 @@ describe('secret material scanner', () => {
     ].join('\n');
     expect(findSecretKinds(source)).toEqual([]);
   });
-});
 
   it('detects unquoted assignments and database connection strings', () => {
     const source = [
       'API_KEY=abcdefghijklmnopqrstuvwxyz0123456789',
       'password: abcdefghijklmnopqrstuvwxyz0123456789',
+      'aws_secret_access_key=abcdefghijklmnopqrstuvwxyz0123456789',
       'DATABASE_URL=postgres://app:super-secret-password@db.example.test:5432/app',
       'const npm = "npm_abcdefghijklmnopqrstuvwxyz1234567890";',
       'const sendgrid = "SG.abcdefghijklmnop.abcdefghijklmnop";',
-    ].join('\\n');
+    ].join('\n');
     expect(findSecretKinds(source)).toEqual(expect.arrayContaining([
       'credential-assignment', 'database-url', 'npm-token', 'sendgrid-token',
     ]));
