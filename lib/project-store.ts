@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ensureWorkspaceRoot, projectRoot, validateProjectId, WORKSPACE_ROOT } from './path-security';
+import { WINDOWS_MUTATION_UNAVAILABLE } from './platform-mutation';
 
 export type ProjectRecord = { id: string; name: string; createdAt: string };
 
@@ -69,25 +70,6 @@ export function getProject(id: string): ProjectRecord | null {
   }
 }
 
-export function createProject(input: string): ProjectRecord {
-  const name = input.trim().replace(/\s+/g, ' ');
-  if (!name || name.length > 80 || /[\u0000-\u001f]/.test(name)) throw new Error('Name must be 1–80 printable characters');
-  const base = name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'project';
-  ensureWorkspaceRoot();
-  let id = base;
-  let n = 1;
-  while (fs.existsSync(path.join(WORKSPACE_ROOT, id))) {
-    n++;
-    id = base + '-' + n;
-  }
-  const root = projectRoot(id);
-  fs.mkdirSync(root, { recursive: false, mode: 0o700 });
-  const record = { id, name, createdAt: new Date().toISOString() };
-  fs.writeFileSync(meta(id), JSON.stringify(record, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-  const safeName = name.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-  const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + safeName + '</title><link rel="stylesheet" href="styles.css"></head><body><main><p>YOUR NEW PROJECT</p><h1>' + safeName + '</h1><p>Edit, review, and preview your project.</p><button id="hello">Try interaction</button><p id="message" aria-live="polite"></p></main><script src="script.js"></script></body></html>\n';
-  fs.writeFileSync(path.join(root, 'index.html'), html, { flag: 'wx', mode: 0o600 });
-  fs.writeFileSync(path.join(root, 'styles.css'), 'body{margin:0;min-height:100vh;display:grid;place-items:center;background:#101827;color:#e8eef8;font:16px system-ui;padding:24px}main{max-width:680px;padding:40px;border:1px solid #2b3b52;border-radius:24px;background:#172337}button{background:#76e2c0;border:0;border-radius:10px;padding:12px 18px}\n', { flag: 'wx', mode: 0o600 });
-  fs.writeFileSync(path.join(root, 'script.js'), "document.querySelector('#hello')?.addEventListener('click',()=>{const n=document.querySelector('#message');if(n)n.textContent='Your project is running.'});\n", { flag: 'wx', mode: 0o600 });
-  return record;
+export function createProject(_input: string): ProjectRecord {
+  throw new Error(WINDOWS_MUTATION_UNAVAILABLE);
 }

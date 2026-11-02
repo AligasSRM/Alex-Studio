@@ -3,7 +3,6 @@ import path from 'node:path';
 import * as filesModule from '../lib/files';
 import { POST } from '../app/api/ai/apply/route';
 import { issueVerificationProof } from '../lib/ai-verification-proof';
-import { createProject } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 
 const projectIds: string[] = [];
@@ -13,7 +12,7 @@ const originalStyles = 'body { color: black; }\n';
 function setupProject() {
   const project = createProject('AI Apply Route Test ' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
   projectIds.push(project.id);
-  fs.writeFileSync(path.join(projectRoot(project.id), 'index.html'), originalIndex);
+  fs.writeFileSync(path.join(root, 'index.html'), originalIndex);
   fs.writeFileSync(path.join(projectRoot(project.id), 'styles.css'), originalStyles);
   return project;
 }
@@ -206,16 +205,20 @@ describe('AI apply platform mutation gate', () => {
   });
 
   it('returns 503 before snapshots, audit, or file changes while Windows-native mutation is unavailable', async () => {
-    const project = createProject('AI Apply Gate ' + Date.now());
-    ids.push(project.id);
-    const file = path.join(projectRoot(project.id), 'index.html');
+    const id = 'ai-apply-gate-' + Date.now();
+    const root = projectRoot(id);
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify({ id, name: 'AI Apply Gate', createdAt: new Date().toISOString() }));
+    fs.writeFileSync(path.join(root, 'index.html'), '<h1>original</h1>\\n');
+    ids.push(id);
+    const file = path.join(root, 'index.html');
     const before = fs.readFileSync(file, 'utf8');
     const files = [{ path: 'index.html', content: '<h1>must not apply</h1>', baseHash: require('node:crypto').createHash('sha256').update(before).digest('hex') }];
-    const verificationProof = issueVerificationProof(project.id, files);
+    const verificationProof = issueVerificationProof(id, files);
     const response = await POST(new Request('http://localhost/api/ai/apply', {
       method: 'POST',
       headers: { 'content-type': 'application/json', host: 'localhost', origin: 'http://localhost' },
-      body: JSON.stringify({ projectId: project.id, approved: true, files, verificationProof }),
+      body: JSON.stringify({ projectId: id, approved: true, files, verificationProof }),
     }));
     expect(response.status).toBe(503);
     expect((await response.json()).error).toMatch(/^UNAVAILABLE:/);
