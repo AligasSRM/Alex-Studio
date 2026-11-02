@@ -119,7 +119,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, batchId, applied, count: applied.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     const rollbackFailures = rollbackAppliedSnapshots(snapshots, applied, (snapshot) => {
-      const target = resolveProjectPath(body.projectId as string, snapshot.path);
       const appliedContent = changes.find((change) => change.path === snapshot.path)?.content;
       if (appliedContent === undefined) throw new Error('Missing applied snapshot for rollback');
       if (snapshot.content === null) deleteProjectFile(body.projectId as string, snapshot.path, appliedContent);
