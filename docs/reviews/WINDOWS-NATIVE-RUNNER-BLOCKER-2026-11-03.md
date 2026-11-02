@@ -5,7 +5,7 @@
 
 ## Current safety behavior
 
-The generated npm command runner fails closed. For npm projects it reports `UNAVAILABLE` and starts no generated commands until a Windows-native isolation provider is implemented. A static project result only means npm command checks do not apply; it does not certify browser execution or end-to-end acceptance.
+The generated npm command runner, browser verification, build/server preview, and file write/delete operations fail closed. They report `UNAVAILABLE` until Windows-native isolation and handle-based file mutation protections are implemented. Read-only file access remains available subject to path checks. A static project result only means npm command checks do not apply; it does not certify browser execution or end-to-end acceptance.
 
 ## Why the former runner was removed
 
@@ -14,6 +14,7 @@ The former runner depended on an alternate-OS container runtime and did not esta
 ## Required implementation before this blocker can close
 
 - Select and threat-model a Windows-native isolation mechanism supported on the target Windows 10 editions/builds.
+- Implement handle-based Windows file mutation with verified reparse-point protection, atomic replacement, backup/rollback semantics, and concurrency control.
 - Verify it can run untrusted project commands with restricted filesystem/network access, bounded CPU/memory/processes, and reliable timeout termination.
 - Bind staging and result collection to a fixed, validated workspace; reject symlinks, junctions, reparse points, and path escapes.
 - Prove cleanup and process-tree termination after normal exit, timeout, crash, and host interruption.
