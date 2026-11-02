@@ -22,7 +22,7 @@ const PATTERNS: Array<{ kind: SecretKind; pattern: RegExp }> = [
   { kind: 'groq-key', pattern: /\bgsk_[A-Za-z0-9_-]{20,}\b/g },
   { kind: 'jwt', pattern: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
   { kind: 'bearer-token', pattern: /\bBearer\s+[A-Za-z0-9._~+/-]{20,}/gi },
-  { kind: 'credential-assignment', pattern: /\b(?:api[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|password|passwd)\b\s*[:=]\s*["'`][^"'`\r\n]{16,}["'`]/gi },
+  { kind: 'credential-assignment', pattern: /\b(?:api[_-]?key|client[_-]?secret|access[_-]?token|auth[_-]?token|password|passwd)\b\s*[:=]\s*["'\x60][^"'\x60\r\n]{16,}["'\x60]/gi },
 ];
 
 export function findSecretKinds(value: string): SecretKind[] {
@@ -39,7 +39,7 @@ export function redactSecretMaterial(value: string): string {
   let redacted = value;
   for (const { kind, pattern } of PATTERNS) {
     pattern.lastIndex = 0;
-    redacted = redacted.replace(pattern, `[REDACTED:${kind}]`);
+    redacted = redacted.replace(pattern, \`[REDACTED:\${kind}]\`);
   }
   return redacted;
 }
