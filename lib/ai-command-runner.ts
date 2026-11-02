@@ -165,6 +165,25 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
     };
   }
 
+  // A missing required script is a deterministic manifest defect. Detect it
+  // from package.json before lockfile/cache availability checks; no command runs.
+  const rawScripts = plan.packageJson?.scripts;
+  if (rawScripts && typeof rawScripts === 'object' && !Array.isArray(rawScripts)) {
+    const scripts = rawScripts as Record<string, unknown>;
+    const missing = [...REQUIRED_SCRIPTS].filter(name => typeof scripts[name] !== 'string');
+    if (missing.length) {
+      const output = 'Required scripts missing: ' + missing.join(', ');
+      return {
+        ok: false,
+        available: true,
+        status: 'FAIL',
+        summary: 'Required npm scripts are missing',
+        output,
+        commands: [...REQUIRED_SCRIPTS].map(name => evidence(name, true, 'NOT RUN', output, plan.lockfileSha256)),
+      };
+    }
+  }
+
   if (plan.preflightError) {
     const commands = plan.scripts.map(item => evidence(item.name, item.required, 'NOT RUN', plan.preflightError!, plan.lockfileSha256));
     return { ok: false, available: false, status: 'UNAVAILABLE', summary: 'npm command checks unavailable during manifest/lockfile preflight', output: plan.preflightError, commands };
