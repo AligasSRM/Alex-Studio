@@ -90,7 +90,7 @@ function openPinnedProjectParent(projectId: string, projectPath: string): Pinned
   let parentDescriptor: number | undefined;
   try {
     projectDescriptor = openDirectoryAt(workspaceDescriptor, projectId, false);
-    parentDescriptor = fs.openSync(`/proc/self/fd/${projectDescriptor}`, DIRECTORY_FLAGS);
+    parentDescriptor = fs.openSync(`/proc/self/fd/${projectDescriptor}/.`, DIRECTORY_FLAGS);
     for (const part of parts.slice(0, -1)) {
       const next = openDirectoryAt(parentDescriptor, part, true);
       fs.closeSync(parentDescriptor);
