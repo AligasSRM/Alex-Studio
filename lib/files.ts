@@ -34,7 +34,15 @@ function assertPathWithinProject(root: string, target: string): void {
     if (!stat) break;
     if (probe !== target && !stat.isDirectory()) throw new Error('Parent path must be a directory');
   }
-  const existing = fs.existsSync(target) ? target : path.dirname(target);
+  // Resolve the nearest existing ancestor: new nested files may have multiple
+  // not-yet-created parent directories during the first containment check.
+  let existing = target;
+  while (!fs.existsSync(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) throw new Error('No existing ancestor for project path');
+    existing = parent;
+  }
+  assertRegularNonLink(existing);
   const realExisting = fs.realpathSync.native(existing);
   const resolvedRelative = path.relative(realRoot, realExisting);
   if (resolvedRelative === '..' || resolvedRelative.startsWith('..' + path.sep) || path.isAbsolute(resolvedRelative)) {
