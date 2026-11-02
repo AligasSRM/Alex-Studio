@@ -6,16 +6,17 @@ on:
     branches:
       - fix/dependency-audit-*
 permissions:
-  contents: read
+  contents: write
+  actions: write
 jobs:
   lockfile:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: false
+          persist-credentials: true
       - name: Setup Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
@@ -23,9 +24,54 @@ jobs:
       - name: Resolve package lock without running lifecycle scripts
         run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/
         timeout-minutes: 10
-      - name: Upload generated lockfile for review
+      - name: Install exact locked dependencies
+        run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
+        timeout-minutes: 10
+      - name: Enforce dependency vulnerability gate
+        run: |
+          npm audit --json > /tmp/npm-audit-report.json || audit_status=$?
+          node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('/tmp/npm-audit-report.json', 'utf8'));
+          const counts = report.metadata?.vulnerabilities ?? {};
+          console.log('npm audit vulnerability counts:', counts);
+          const blocking = ['critical', 'high', 'moderate'].filter(level => (counts[level] ?? 0) > 0);
+          if (blocking.length) {
+            console.error('Dependency audit gate failed:', blocking);
+            process.exit(1);
+          }
+          NODE
+      - name: Run unit tests
+        run: npm test -- --runInBand
+        timeout-minutes: 10
+      - name: Type check
+        run: npm run typecheck
+        timeout-minutes: 5
+      - name: Lint
+        run: npm run lint
+        timeout-minutes: 5
+      - name: Production build
+        run: npm run build
+        timeout-minutes: 10
+      - name: Commit resolved lockfile to this PR branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- package-lock.json; then
+            git add package-lock.json
+            git commit -m "fix(deps): lock patched glob and minimatch versions"
+            git push origin "HEAD:${GITHUB_HEAD_REF}"
+          fi
+      - name: Dispatch standard CI against updated branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run ci.yml --ref "${GITHUB_HEAD_REF}"
+      - name: Upload audit report
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: dependency-lockfile-candidate
-          path: package-lock.json
+          name: dependency-audit-report-candidate
+          path: /tmp/npm-audit-report.json
           retention-days: 2
