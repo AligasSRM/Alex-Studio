@@ -30,15 +30,15 @@ const PLACEHOLDER_VALUE = /^(?:your[_ -]?(?:api[_ -]?)?key[_ -]?here|placeholder
 export function findSecretKinds(value: string): SecretKind[] {
   const found: SecretKind[] = [];
   for (const { kind, pattern } of PATTERNS) {
-    if (kind !== 'credential-assignment') {
-      if (value.search(pattern) !== -1) found.push(kind);
-      continue;
-    }
     const globalPattern = new RegExp(pattern.source, pattern.flags + 'g');
-    const hasRealCredential = [...value.matchAll(globalPattern)].some(
-      (match) => !PLACEHOLDER_VALUE.test((match[1] || '').trim())
-    );
-    if (hasRealCredential) found.push(kind);
+    let match: RegExpExecArray | null;
+    let detected = false;
+    while ((match = globalPattern.exec(value)) !== null) {
+      if (kind === 'credential-assignment' && PLACEHOLDER_VALUE.test((match[1] || '').trim())) continue;
+      detected = true;
+      break;
+    }
+    if (detected) found.push(kind);
   }
   return found;
 }
