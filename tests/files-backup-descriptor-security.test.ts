@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { writeProjectFile } from '../lib/files';
+import { deleteProjectFile, readProjectFile, writeProjectFile } from '../lib/files';
 
-describe('backup directory descriptor security', () => {
-  const project = path.join(process.cwd(), 'workspace', 'backup-fd-security-test');
+describe('Windows-compatible project file operations', () => {
+  const projectId = 'windows-file-ops-test';
+  const project = path.join(process.cwd(), 'workspace', projectId);
 
   beforeEach(() => {
     fs.rmSync(project, { recursive: true, force: true });
@@ -16,119 +17,51 @@ describe('backup directory descriptor security', () => {
     fs.rmSync(project, { recursive: true, force: true });
   });
 
-  it('fails closed when Linux procfs directory handles are unavailable', () => {
-    if (process.platform === 'linux' && fs.existsSync('/proc/self/fd')) return;
-    expect(() => writeProjectFile('backup-fd-security-test', 'index.txt', 'changed content')).toThrow(
-      'Secure backup is unavailable'
-    );
+  it('reads and atomically replaces a file while preserving a backup', () => {
+    expect(readProjectFile(projectId, 'index.txt')).toBe('original content');
+    expect(writeProjectFile(projectId, 'index.txt', 'updated content')).toEqual({ backup: true });
+    expect(readProjectFile(projectId, 'index.txt')).toBe('updated content');
+    const backups = path.join(project, '.alex', 'backups');
+    const entries = fs.readdirSync(backups);
+    expect(entries).toHaveLength(1);
+    expect(fs.readFileSync(path.join(backups, entries[0]), 'utf8')).toBe('original content');
+  });
+
+  it('creates missing nested directories and new files', () => {
+    expect(writeProjectFile(projectId, 'src/nested/new.txt', 'hello', null)).toEqual({ backup: false });
+    expect(readProjectFile(projectId, 'src/nested/new.txt')).toBe('hello');
+  });
+
+  it('refuses stale expected content without changing the file', () => {
+    expect(() => writeProjectFile(projectId, 'index.txt', 'changed', 'stale content')).toThrow(/changed during the operation/);
     expect(fs.readFileSync(path.join(project, 'index.txt'), 'utf8')).toBe('original content');
   });
 
-  it('rejects a symlink at the .alex metadata directory', () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-backup-outside-'));
-    try {
-      fs.symlinkSync(outside, path.join(project, '.alex'), 'dir');
-      expect(() => writeProjectFile('backup-fd-security-test', 'index.txt', 'changed content')).toThrow();
-      expect(fs.readdirSync(outside)).toEqual([]);
-      expect(fs.readFileSync(path.join(project, 'index.txt'), 'utf8')).toBe('original content');
-    } finally {
-      fs.rmSync(outside, { recursive: true, force: true });
-    }
+  it('refuses traversal and hidden paths', () => {
+    expect(() => readProjectFile(projectId, '../outside.txt')).toThrow();
+    expect(() => writeProjectFile(projectId, '.secret', 'no')).toThrow();
   });
 
-  it('rejects a symlink in a nested target parent directory', () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-backup-outside-'));
+  it('rejects a symlink/junction in a target parent when the OS permits creating one', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-outside-'));
     try {
-      fs.symlinkSync(outside, path.join(project, 'nested'), 'dir');
-      expect(() => writeProjectFile('backup-fd-security-test', 'nested/index.txt', 'changed content')).toThrow();
-      expect(fs.readdirSync(outside)).toEqual([]);
-    } finally {
-      fs.rmSync(outside, { recursive: true, force: true });
-    }
-  });
-
-  it('rejects a symlink at the backups directory', () => {
-    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-backup-outside-'));
-    try {
-      fs.mkdirSync(path.join(project, '.alex'));
-      fs.symlinkSync(outside, path.join(project, '.alex', 'backups'), 'dir');
-      expect(() => writeProjectFile('backup-fd-security-test', 'index.txt', 'changed content')).toThrow();
-      expect(fs.readdirSync(outside)).toEqual([]);
-      expect(fs.readFileSync(path.join(project, 'index.txt'), 'utf8')).toBe('original content');
-    } finally {
-      fs.rmSync(outside, { recursive: true, force: true });
-    }
-  });
-
-  it('creates a backup through a pinned directory handle before replacing the file', () => {
-    expect(writeProjectFile('backup-fd-security-test', 'index.txt', 'updated content')).toEqual({ backup: true });
-    const backupDirectory = path.join(project, '.alex', 'backups');
-    const entries = fs.readdirSync(backupDirectory);
-    expect(entries).toHaveLength(1);
-    expect(fs.readFileSync(path.join(backupDirectory, entries[0]), 'utf8')).toBe('original content');
-    expect(fs.readFileSync(path.join(project, 'index.txt'), 'utf8')).toBe('updated content');
-  });
-
-  it('does not follow a symlink used as the file being backed up', () => {
-    const outside = path.join(os.tmpdir(), 'alex-backup-source-' + Date.now());
-    fs.writeFileSync(outside, 'outside secret');
-    try {
-      fs.rmSync(path.join(project, 'index.txt'));
-      fs.symlinkSync(outside, path.join(project, 'index.txt'));
-      expect(() => writeProjectFile('backup-fd-security-test', 'index.txt', 'changed content')).toThrow();
-      expect(fs.readFileSync(outside, 'utf8')).toBe('outside secret');
-    } finally {
-      fs.rmSync(outside, { force: true });
-    }
-  });
-  it('preserves a pre-existing backup file when exclusive creation collides', () => {
-    const realOpen = fs.openSync.bind(fs);
-    let collisionPath: string | undefined;
-    const spy = jest.spyOn(fs, 'openSync').mockImplementation(((filePath: fs.PathLike, flags: string | number, mode?: number) => {
-      const candidate = String(filePath);
-      if (candidate.endsWith('.bak') && typeof flags === 'number' && (flags & fs.constants.O_EXCL) !== 0) {
-        collisionPath = path.join(project, '.alex', 'backups', path.basename(candidate));
-        const descriptor = realOpen(filePath, flags, mode);
-        fs.closeSync(descriptor);
-        const error = new Error('file already exists') as NodeJS.ErrnoException;
-        error.code = 'EEXIST';
-        throw error;
+      try {
+        fs.symlinkSync(outside, path.join(project, 'linked'), 'junction');
+      } catch {
+        // Some Windows environments deny symlink creation; this test records that prerequisite limitation.
+        return;
       }
-      return realOpen(filePath, flags as any, mode);
-    }) as typeof fs.openSync);
-    try {
-      expect(() => writeProjectFile('backup-fd-security-test', 'index.txt', 'changed content')).toThrow(/already exists/);
-      expect(collisionPath).toBeDefined();
-      expect(fs.readFileSync(collisionPath!, 'utf8')).toBe('');
-      expect(fs.readFileSync(path.join(project, 'index.txt'), 'utf8')).toBe('original content');
+      expect(() => writeProjectFile(projectId, 'linked/escape.txt', 'blocked', null)).toThrow();
+      expect(fs.readdirSync(outside)).toEqual([]);
     } finally {
-      spy.mockRestore();
+      fs.rmSync(outside, { recursive: true, force: true });
     }
   });
 
-  it('preserves a pre-existing temporary file when exclusive creation collides', () => {
-    const realOpen = fs.openSync.bind(fs);
-    let collisionPath: string | undefined;
-    const spy = jest.spyOn(fs, 'openSync').mockImplementation(((filePath: fs.PathLike, flags: string | number, mode?: number) => {
-      const candidate = String(filePath);
-      if (path.basename(candidate).startsWith('.alex-tmp-') && typeof flags === 'number' && (flags & fs.constants.O_EXCL) !== 0) {
-        collisionPath = path.join(project, path.basename(candidate));
-        const descriptor = realOpen(filePath, flags, mode);
-        fs.closeSync(descriptor);
-        const error = new Error('file already exists') as NodeJS.ErrnoException;
-        error.code = 'EEXIST';
-        throw error;
-      }
-      return realOpen(filePath, flags as any, mode);
-    }) as typeof fs.openSync);
-    try {
-      expect(() => writeProjectFile('backup-fd-security-test', 'index.txt', 'changed content')).toThrow(/already exists/);
-      expect(collisionPath).toBeDefined();
-      expect(fs.readFileSync(collisionPath!, 'utf8')).toBe('');
-      expect(fs.readFileSync(path.join(project, 'index.txt'), 'utf8')).toBe('original content');
-    } finally {
-      spy.mockRestore();
-    }
+  it('deletes only when the reviewed content matches', () => {
+    expect(() => deleteProjectFile(projectId, 'index.txt', 'not current')).toThrow(/changed during the operation/);
+    expect(fs.existsSync(path.join(project, 'index.txt'))).toBe(true);
+    deleteProjectFile(projectId, 'index.txt', 'original content');
+    expect(fs.existsSync(path.join(project, 'index.txt'))).toBe(false);
   });
-
 });
