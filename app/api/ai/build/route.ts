@@ -11,6 +11,7 @@ import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
 import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
+import { findSecretKinds, redactSecretMaterial } from '@/lib/secret-scanner';
 
 const MAX_BODY_BYTES = 24 * 1024;
 const MAX_PROMPT_CHARS = 12_000;
@@ -22,7 +23,7 @@ type ProposedFile = { path: string; content: string; baseHash: string | null };
 function hash(content: string) {
   return createHash('sha256').update(content, 'utf8').digest('hex');
 }
-function parseBuild(output: string, projectId: string, originals: Map<string, string>) {
+function parseBuild(output: string, projectId: string, originals: Map<string, string>, secretPaths: Set<string>) {
   const text = output.trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/, '');
   const value = JSON.parse(text) as { summary?: unknown; plan?: unknown; requirements?: unknown; files?: unknown };
   if (typeof value.summary !== 'string' || !value.summary.trim() ||
@@ -110,7 +111,7 @@ export async function POST(request: Request) {
     'Do not include shell commands, package install scripts, or instructions to execute generated code. Do not modify lockfiles.',
   ].join('\n');
   const user = JSON.stringify({
-    request: input.prompt,
+    request: redactSecretMaterial(input.prompt),
     currentProjectFiles: contextFiles,
     responseRequirements: { planSteps: '1–12', requirements: '1–20 observable acceptance requirements', files: '1–10', fullFileContents: true },
   });
@@ -193,11 +194,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'AI usage could not be recorded; draft withheld' }, { status: 500 });
     }
     let build;
-    try { build = parseBuild(result.output_text, input.projectId, originals); }
+    try { build = parseBuild(result.output_text, input.projectId, originals, secretPaths); }
     catch (error) {
       return NextResponse.json({ error: error instanceof Error ? error.message : 'AI returned invalid project files' }, { status: 502 });
     }
-    return NextResponse.json({ build, usage: { inputTokens, outputTokens, estimatedCostUsd, ...accounting } }, {
+    return NextResponse.json({ build, usage: { inputTokens, outputTokens, estimatedCostUsd, ...accounting }, omittedSensitiveFiles }, {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
