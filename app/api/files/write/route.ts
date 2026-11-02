@@ -32,6 +32,7 @@ export async function POST(request: Request) {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Write failed' }, { status: 400 });
+    const message = error instanceof Error ? error.message : 'Write failed';
+    return NextResponse.json({ error: message }, { status: message.startsWith('UNAVAILABLE:') ? 503 : 400 });
   }
 }

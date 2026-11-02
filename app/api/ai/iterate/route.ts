@@ -3,8 +3,7 @@ export const runtime = 'nodejs';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { assertLocalMutation, resolveProjectPath } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
@@ -14,7 +13,7 @@ import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { analyzeGeneratedProject } from '@/lib/ai-acceptance';
 import { evaluateRequirements, parseBrowserSnapshot, type RequirementEvidence } from '@/lib/ai-requirement-evidence';
 import { issueVerificationProof } from '@/lib/ai-verification-proof';
-import { APPROVED_RUNNER_IMAGE, isPinnedRunnerImage, removeAndVerifyContainer, runProjectCommands, inspectGeneratedProject, type CommandRun } from '@/lib/ai-command-runner';
+import { runProjectCommands, inspectGeneratedProject, type CommandRun } from '@/lib/ai-command-runner';
 import { runBuildServerPreview } from '@/lib/ai-build-server-preview';
 import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
@@ -26,7 +25,6 @@ const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
 const MAX_BODY_BYTES = 3 * 1024 * 1024;
 const SENSITIVE_PATH = /(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*|node_modules|\.git|\.alex)(\/|$)/i;
-const IMAGE = APPROVED_RUNNER_IMAGE;
 const hash = (s: string) => createHash('sha256').update(s, 'utf8').digest('hex');
 type FileDraft = { path: string; content: string; baseHash: string | null };
 type Result = { ok: boolean; available: boolean; summary: string; output: string; commandChecks?: CommandRun; pageSnapshot?: { title: string; body: string; errors: string[] } | null; requirementEvidence?: RequirementEvidence[] };
@@ -53,22 +51,6 @@ async function verifyProject(root: string, requestedRequirements: unknown): Prom
     commandChecks: commands,
   };
 }
-
-const runner = [
-  "const { chromium } = require('playwright');",
-  "(async () => {",
-  " const errors = []; const browser = await chromium.launch({ headless: true });",
-  " try { const page = await browser.newPage();",
-  " page.on('pageerror', e => errors.push('pageerror: ' + e.message));",
-  " page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });",
-  " page.on('requestfailed', r => errors.push('request failed: ' + r.url()));",
-  " await page.goto('file:///workspace/index.html', { waitUntil: 'load', timeout: 10000 });",
-  " const body = (await page.locator('body').innerText().catch(() => '')).trim();",
-  " if (!body) errors.push('The page body is empty');",
-  " process.stdout.write(JSON.stringify({ ok: !errors.length, title: await page.title().catch(() => ''), body: body.slice(0, 12000), errors }) + '\\n');",
-  " if (errors.length) process.exitCode = 1; } finally { await browser.close(); }",
-  "})().catch(e => { process.stderr.write(String(e.stack || e)); process.exitCode = 1; });",
-].join('\n');
 
 function safePath(projectId: string, value: unknown) {
   if (typeof value !== 'string') throw new Error('Invalid AI file path');
@@ -98,76 +80,13 @@ function parseDraft(projectId: string, input: unknown, current: Map<string, stri
     return { path: filePath, content: item.content, baseHash: expected };
   });
 }
-export function runSandbox(root: string): Promise<Result> {
-  return new Promise((resolve) => {
-    if (!isPinnedRunnerImage(IMAGE)) {
-      resolve({ ok: false, available: false, summary: 'Approved Docker runner image is not configured', output: 'Browser verification refused an image outside the explicit allowlist.' });
-      return;
-    }
-    const modules = path.join(process.cwd(), 'node_modules');
-    if (!fs.existsSync(path.join(modules, 'playwright'))) {
-      resolve({ ok: false, available: false, summary: 'Playwright is not installed', output: 'Install dependencies before sandbox verification.' }); return;
-    }
-    const containerName = 'alex-studio-browser-' + randomUUID().slice(0, 12);
-    const args = ['run', '--rm', '--init', '--name', containerName, '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
-      '--memory', '768m', '--cpus', '1', '--pids-limit', '96', '--user', '10001:10001', '--shm-size', '128m',
-      '--tmpfs', '/tmp:rw,nosuid,size=64m', '--mount', 'type=bind,src=' + root + ',dst=/workspace,readonly',
-      '--mount', 'type=bind,src=' + modules + ',dst=/app/node_modules,readonly', '--env', 'NODE_PATH=/app/node_modules', '--env', 'HOME=/tmp', '--env', 'PLAYWRIGHT_BROWSERS_PATH=/ms-playwright',
-      IMAGE, 'node', '-e', runner];
-    const child = spawn('docker', args, { stdio: ['ignore', 'pipe', 'pipe'], env: { PATH: process.env.PATH || '/usr/bin:/bin', NODE_ENV: process.env.NODE_ENV || 'production' } });
-    let output = ''; let settled = false; let timedOut = false;
-    let timeoutFallback: ReturnType<typeof setTimeout> | undefined;
-    const finish = (result: Result) => {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        if (timeoutFallback) clearTimeout(timeoutFallback);
-        resolve(result);
-      }
-    };
-    const collect = (chunk: Buffer) => { output = (output + chunk.toString('utf8')).slice(-12000); };
-    const cleanupResult = () => removeAndVerifyContainer(containerName);
-    child.stdout.on('data', collect); child.stderr.on('data', collect);
-    // Do not inspect/remove the container until the Docker CLI has exited. Otherwise a
-    // timeout can race with "docker run" creating the named container after cleanup
-    // already reported that no container existed.
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGKILL');
-      // Bound the request if the process never emits close, but do not claim cleanup
-      // is verified while the container-creating CLI has not been observed exiting.
-      timeoutFallback = setTimeout(() => {
-        const cleanup = cleanupResult();
-        finish({ ok: false, available: false, summary: 'Sandbox timed out; Docker CLI close was not observed and container cleanup is unverified',
-          output: (output + '\nDocker CLI close was not observed.\n' + cleanup.output).slice(-16000) });
-      }, 5000);
-    }, 20000);
-    child.on('error', e => {
-      if (settled) {
-        if (timedOut) cleanupResult();
-        return;
-      }
-      const cleanup = cleanupResult();
-      finish({ ok: false, available: false, summary: cleanup.verified ? 'Docker unavailable' : 'Docker unavailable and container cleanup unverified', output: (e.message + '\n' + cleanup.output).slice(-16000) });
-    });
-    child.on('close', code => {
-      if (settled) {
-        if (timedOut) cleanupResult();
-        return;
-      }
-      if (timeoutFallback) clearTimeout(timeoutFallback);
-      const cleanup = cleanupResult();
-      const unavailable = /cannot connect to the docker daemon|unable to find image|pull access denied|error during connect/i.test(output);
-      if (!cleanup.verified) {
-        finish({ ok: false, available: false, summary: timedOut ? 'Sandbox timed out; container cleanup unverified' : 'Browser runner cleanup could not be verified', output: (output + '\n' + cleanup.output).slice(-16000) });
-        return;
-      }
-      if (timedOut) {
-        finish({ ok: false, available: true, summary: 'Sandbox timed out; container removal verified', output: (output + '\n' + cleanup.output).slice(-16000) });
-        return;
-      }
-      finish({ ok: code === 0, available: !unavailable, summary: code === 0 ? 'Isolated browser test passed; container cleanup verified' : unavailable ? 'Docker sandbox unavailable' : 'Isolated browser test failed; container cleanup verified', pageSnapshot: parseBrowserSnapshot(output), output: (output + '\n' + cleanup.output).slice(-16000) });
-    });
+export function runSandbox(_root: string): Promise<Result> {
+  return Promise.resolve({
+    ok: false,
+    available: false,
+    summary: 'Windows-native isolated browser runner is not implemented',
+    output: 'Browser verification is unavailable until a Windows-native isolation provider is implemented. No generated browser code was started; direct host execution is prohibited.',
+    pageSnapshot: null,
   });
 }
 async function getRepair(apiKey: string | undefined, model: string, provider: 'openai' | 'groq' | 'ollama', projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>, secretPaths: Set<string>) {

@@ -16,9 +16,12 @@ concurrency:
 
 jobs:
   verify:
-    name: Tests, types, lint, build and browser acceptance
-    runs-on: ubuntu-latest
+    name: Windows-host tests, types, lint and build
+    runs-on: windows-latest
     timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -26,7 +29,7 @@ jobs:
           persist-credentials: false
 
       - name: Record exact tested commit
-        run: echo "Testing commit $GITHUB_SHA"
+        run: echo "Testing commit $GITHUB_SHA on Windows CI (not Windows 10 device acceptance)"
 
       - name: Set up Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -101,10 +104,12 @@ jobs:
       # Generate a current dependency vulnerability report from the resolved install.
       - name: Audit dependency vulnerabilities
         run: |
-          npm audit --json > /tmp/npm-audit-report.json || audit_status=$?
+          AUDIT_REPORT_PATH="$(cygpath -u "$RUNNER_TEMP")/npm-audit-report.json"
+          export AUDIT_REPORT_PATH
+          npm audit --json > "$AUDIT_REPORT_PATH" || audit_status=$?
           AUDIT_STATUS="${audit_status:-0}" node <<'NODE'
           const fs = require('node:fs');
-          const report = JSON.parse(fs.readFileSync('/tmp/npm-audit-report.json', 'utf8'));
+          const report = JSON.parse(fs.readFileSync(process.env.AUDIT_REPORT_PATH, 'utf8'));
           const counts = report.metadata?.vulnerabilities ?? {};
           const lines = [
             '## npm audit report',
@@ -156,12 +161,12 @@ jobs:
         if: always()
         with:
           name: npm-audit-report
-          path: /tmp/npm-audit-report.json
+          path: ${{ runner.temp }}/npm-audit-report.json
           if-no-files-found: warn
           retention-days: 7
 
       - name: Install Playwright Chromium Headless Shell
-        run: npx playwright install --with-deps --only-shell chromium
+        run: npx playwright install --only-shell chromium
         timeout-minutes: 8
 
       - name: Verify installed Playwright Chromium
@@ -182,8 +187,8 @@ jobs:
       - name: Run browser acceptance tests
         run: npm run test:e2e
 
-      - name: Create verified phase 2 source archive
-        run: bash scripts/create-source-archive.sh "$RUNNER_TEMP/Alex-Studio-Phase-2-Source.zip"
+      - name: Create source archive on Windows host
+        run: bash scripts/create-source-archive.sh "$(cygpath -u "$RUNNER_TEMP")/Alex-Studio-Phase-2-Source.zip"
 
       - name: Upload verified phase 2 source archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -193,5 +198,4 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      # Passing this workflow does not certify the isolated generated-code runner,
-      # host storage quotas, container cleanup, or dependency provenance.
+      # Passing this workflow does not certify Windows 10 device compatibility, Android physical-device acceptance, or the Windows-native generated-code isolation provider.
