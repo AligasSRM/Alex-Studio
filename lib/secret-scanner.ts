@@ -28,16 +28,11 @@ const PATTERNS: Array<{ kind: SecretKind; pattern: RegExp }> = [
 const PLACEHOLDER_VALUE = /^(?:your[_ -]?(?:api[_ -]?)?key[_ -]?here|placeholder|example|dummy|changeme|change[_ -]?me|test|redacted|replace[_ -]?me)$/i;
 
 export function findSecretKinds(value: string): SecretKind[] {
-  const found = new Set<SecretKind>();
+  const found: SecretKind[] = [];
   for (const { kind, pattern } of PATTERNS) {
-    const globalPattern = new RegExp(pattern.source, pattern.flags + 'g');
-    for (const match of value.matchAll(globalPattern)) {
-      if (kind === 'credential-assignment' && PLACEHOLDER_VALUE.test((match[1] || '').trim())) continue;
-      found.add(kind);
-      break;
-    }
+    if (value.search(pattern) !== -1) found.push(kind);
   }
-  return [...found];
+  return found;
 }
 
 /** Redact secret-like values without returning or logging the matched material. */
