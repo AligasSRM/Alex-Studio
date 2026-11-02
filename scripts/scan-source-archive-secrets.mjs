@@ -26,7 +26,7 @@ const patterns = [
   /\bBearer\s+[A-Za-z0-9._~+/-]{20,}/i,
   /\b(?:api[_-]?key|aws[_-]?secret[_-]?access[_-]?key|(?:client[_-]?)?secret|access[_-]?token|auth[_-]?token|token|password|passwd|private[_-]?key|connection[_-]?string)\b\s*[:=]\s*(?:"([^"\r\n]{16,})"|'([^'\r\n]{16,})'|`([^`\r\n]{16,})`|([A-Za-z0-9_./+=:-]{20,}))/i,
 ];
-const placeholder = /^(?:your[_ -]?(?:api[_ -]?)?key[_ -]?here|placeholder|example|dummy|changeme|change[_ -]?me|test|redacted|replace[_ -]?me|not[_ -]?a[_ -]?secret|sample[_ -]?value)$/i;
+const placeholder = /^(?:your[_ -]?(?:api[_ -]?)?key[_ -]?here|placeholder|example|dummy|changeme|change[_ -]?me|test|redacted|replace[_ -]?me|not[_ -]?a[_ -]?secret|sample[_ -]?value|process\.env\.[A-Z0-9_]+|env\.[A-Z0-9_]+|\$\{?[A-Z_][A-Z0-9_]*\}?)$/i;
 
 function looksSensitive(content) {
   return patterns.some((pattern) => {
