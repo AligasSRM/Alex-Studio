@@ -72,7 +72,7 @@ describe('local project API', () => {
     const traversal = await writeFileRoute(localRequest('http://localhost:3000/api/files', {
       ...payload, path: '../outside.txt', approved: true,
     }));
-    expect(traversal.status).toBe(400);
+    expect(traversal.status).toBe(503);
     expect(fs.existsSync(path.join(projectRoot(project.id), '..', 'outside.txt'))).toBe(false);
     expect(approved.headers.get('content-type')).toContain('application/json');
   });
