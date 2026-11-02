@@ -87,6 +87,9 @@ function parseDraft(projectId: string, input: unknown, current: Map<string, stri
     const filePath = safePath(projectId, item.path);
     if (typeof item.content !== 'string' || item.content.includes('\0') || Buffer.byteLength(item.content, 'utf8') > 262144) throw new Error('Invalid or oversized file');
     if (seen.has(filePath)) throw new Error('Duplicate path');
+    if (secretPaths.has(filePath)) throw new Error('AI attempted to modify a file containing secret-like material');
+    const secretKinds = findSecretKinds(item.content);
+    if (secretKinds.length) throw new Error('AI generated secret-like material (' + secretKinds.join(', ') + '); repair withheld');
     seen.add(filePath);
     const old = current.get(filePath);
     const expected = old === undefined ? null : hash(old);
@@ -227,6 +230,7 @@ export async function POST(request: Request) {
       const content = readProjectFile(body.projectId, entry.path); total += Buffer.byteLength(content, 'utf8');
       if (total > 5 * 1024 * 1024) throw new Error('Project exceeds 5 MiB sandbox limit');
       originals.set(entry.path, content); working.set(entry.path, content);
+      if (findSecretKinds(content).length) secretPaths.add(entry.path);
     }
     for (const file of parseDraft(body.projectId, body.files, originals, true)) working.set(file.path, file.content);
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755);
@@ -247,7 +251,7 @@ export async function POST(request: Request) {
     for (let round = 1; !diagnostic.ok && round <= MAX_ROUNDS; round++) {
       const context: { path: string; content: string }[] = []; let bytes = 0;
       for (const [filePath, content] of Array.from(working.entries())) {
-        if (SENSITIVE_PATH.test(filePath)) continue;
+        if (SENSITIVE_PATH.test(filePath) || secretPaths.has(filePath)) continue;
         const excerpt = content.slice(0, 8000); bytes += Buffer.byteLength(excerpt, 'utf8');
         if (bytes > 48 * 1024) break; context.push({ path: filePath, content: excerpt });
       }
