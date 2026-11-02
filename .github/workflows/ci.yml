@@ -103,9 +103,9 @@ jobs:
 
       # Generate a current dependency vulnerability report from the resolved install.
       - name: Audit dependency vulnerabilities
-        env:
-          AUDIT_REPORT_PATH: ${{ runner.temp }}/npm-audit-report.json
         run: |
+          AUDIT_REPORT_PATH="$(cygpath -u "$RUNNER_TEMP")/npm-audit-report.json"
+          export AUDIT_REPORT_PATH
           npm audit --json > "$AUDIT_REPORT_PATH" || audit_status=$?
           AUDIT_STATUS="${audit_status:-0}" node <<'NODE'
           const fs = require('node:fs');
@@ -188,7 +188,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Create source archive on Windows host
-        run: bash scripts/create-source-archive.sh "$RUNNER_TEMP/Alex-Studio-Phase-2-Source.zip"
+        run: bash scripts/create-source-archive.sh "$(cygpath -u "$RUNNER_TEMP")/Alex-Studio-Phase-2-Source.zip"
 
       - name: Upload verified phase 2 source archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
