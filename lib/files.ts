@@ -125,6 +125,7 @@ function createBackupThroughPinnedDirectory(projectDescriptor: number, sourceDes
   let backupDescriptor: number | undefined;
   let backupFileDescriptor: number | undefined;
   let backupPath: string | undefined;
+  let ownsBackupFile = false;
   try {
     metadataDescriptor = openDirectoryAt(projectDescriptor, '.alex', true);
     backupDescriptor = openDirectoryAt(metadataDescriptor, 'backups', true);
@@ -139,10 +140,14 @@ function createBackupThroughPinnedDirectory(projectDescriptor: number, sourceDes
       fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
       0o600
     );
+    ownsBackupFile = true;
     fs.writeFileSync(backupFileDescriptor, original);
     fs.fsyncSync(backupFileDescriptor);
   } catch (error) {
-    if (backupPath) {
+    // Only remove a backup that this invocation successfully created. If
+    // O_EXCL fails because the name already exists, that file belongs to
+    // another operation and must never be unlinked by this cleanup path.
+    if (ownsBackupFile && backupPath) {
       try { fs.unlinkSync(backupPath); } catch {}
     }
     throw error;
@@ -160,6 +165,7 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
   let sourceDescriptor: number | undefined;
   let temporaryDescriptor: number | undefined;
   let temporaryPath: string | undefined;
+  let ownsTemporaryFile = false;
   try {
     let existed = false;
     try {
@@ -187,6 +193,7 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
       fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
       0o600
     );
+    ownsTemporaryFile = true;
     fs.writeFileSync(temporaryDescriptor, content, 'utf8');
     fs.fsyncSync(temporaryDescriptor);
     fs.closeSync(temporaryDescriptor);
@@ -199,7 +206,8 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
     return { backup: existed };
   } catch (error) {
     if (temporaryDescriptor !== undefined) fs.closeSync(temporaryDescriptor);
-    if (temporaryPath) {
+    // A failed O_EXCL open does not transfer ownership of the colliding path.
+    if (ownsTemporaryFile && temporaryPath) {
       try { fs.unlinkSync(temporaryPath); } catch {}
     }
     throw error;
