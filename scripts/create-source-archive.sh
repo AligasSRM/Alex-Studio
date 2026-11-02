@@ -31,4 +31,7 @@ if printf '%s\n' "$archive_paths" | grep -Eiq "$sensitive_name_pattern"; then
   exit 1
 fi
 
+# Scan extracted text content, not only filenames, before accepting the archive.
+node scripts/scan-source-archive-secrets.mjs "$output"
+
 echo "Created and validated source archive: $output"
