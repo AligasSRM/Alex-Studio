@@ -171,7 +171,8 @@ export function runSandbox(root: string): Promise<Result> {
 }
 async function getRepair(apiKey: string | undefined, model: string, provider: 'openai' | 'groq' | 'ollama', projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>, secretPaths: Set<string>) {
   const instructions = 'Repair the supplied static HTML/CSS/JS project using the isolated browser diagnostics. Return only JSON: {"summary":"...","files":[{"path":"relative/path","content":"complete file content"}]}. Maximum 10 files, each under 256 KiB. Use canonical relative paths only. Never change hidden paths, secrets, node_modules, .git, .alex or lockfiles. Do not include host shell commands. Do not claim tests passed unless diagnostics prove it.';
-  const safeDiagnostics = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'string' ? redactSecretMaterial(value) : value)) as Result;\n  const input = JSON.stringify({ request: redactSecretMaterial(prompt), diagnostics: safeDiagnostics, files });
+  const safeDiagnostics = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'string' ? redactSecretMaterial(value) : value)) as Result;
+  const input = JSON.stringify({ request: redactSecretMaterial(prompt), diagnostics: safeDiagnostics, files });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), provider === 'ollama' ? 120_000 : 30_000);
   let response: Response;
@@ -232,7 +233,7 @@ export async function POST(request: Request) {
       originals.set(entry.path, content); working.set(entry.path, content);
       if (findSecretKinds(content).length) secretPaths.add(entry.path);
     }
-    for (const file of parseDraft(body.projectId, body.files, originals, true)) working.set(file.path, file.content);
+    for (const file of parseDraft(body.projectId, body.files, originals, true, secretPaths)) working.set(file.path, file.content);
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755);
     const writeFiles = () => {
       for (const [filePath, content] of Array.from(working.entries())) {
