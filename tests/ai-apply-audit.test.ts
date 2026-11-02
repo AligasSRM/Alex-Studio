@@ -1,15 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createProject } from '../lib/project-store';
+import { WORKSPACE_ROOT } from '../lib/path-security';
 import { projectRoot } from '../lib/path-security';
 import { recordAIApplyAudit } from '../lib/ai-apply-audit';
 
 const ids: string[] = [];
 
 function makeProject() {
-  const project = createProject('AI Apply Audit ' + Date.now());
-  ids.push(project.id);
-  return project.id;
+  const id = 'ai-apply-audit-' + Date.now().toString(36) + '-' + ids.length;
+  const root = path.join(WORKSPACE_ROOT, id);
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify({ id, name: 'AI Apply Audit', createdAt: new Date().toISOString() }));
+  ids.push(id);
+  return id;
 }
 
 afterEach(() => {
