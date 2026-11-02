@@ -48,6 +48,9 @@ function parseBuild(output: string, projectId: string, originals: Map<string, st
     if (isProtectedAIGeneratedPath(normalized)) {
       throw new Error('AI attempted to modify a protected path');
     }
+    if (secretPaths.has(normalized)) throw new Error('AI attempted to modify a file containing secret-like material');
+    const secretKinds = findSecretKinds(file.content);
+    if (secretKinds.length) throw new Error('AI generated secret-like material (' + secretKinds.join(', ') + '); draft withheld');
     seen.add(normalized);
     const previous = originals.get(normalized);
     return { path: normalized, content: file.content, baseHash: previous === undefined ? null : hash(previous) };
@@ -81,16 +84,26 @@ export async function POST(request: Request) {
   }
 
   const originals = new Map<string, string>();
+  const secretPaths = new Set<string>();
+  const omittedSensitiveFiles: string[] = [];
   let contextBytes = 0;
   const contextFiles: { path: string; content: string }[] = [];
   try {
     for (const entry of listProjectFiles(input.projectId).filter((item) => item.type === 'file').slice(0, 20)) {
-      if (/(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*)(\/|$)/i.test(entry.path)) continue;
+      if (/(^|\/)(\.env[^/]*|credentials[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*)(\/|$)/i.test(entry.path)) {
+        omittedSensitiveFiles.push(entry.path);
+        continue;
+      }
       const content = readProjectFile(input.projectId, entry.path);
+      originals.set(entry.path, content);
+      if (findSecretKinds(content).length) {
+        secretPaths.add(entry.path);
+        omittedSensitiveFiles.push(entry.path);
+        continue;
+      }
       const excerpt = content.slice(0, 8000);
       const bytes = Buffer.byteLength(excerpt, 'utf8');
       if (contextBytes + bytes > MAX_CONTEXT_BYTES) break;
-      originals.set(entry.path, content);
       contextFiles.push({ path: entry.path, content: excerpt });
       contextBytes += bytes;
     }
