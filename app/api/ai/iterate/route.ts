@@ -19,6 +19,7 @@ import { runBuildServerPreview } from '@/lib/ai-build-server-preview';
 import { readJsonBody } from '@/lib/request-body';
 import { extractAIResponseText } from '@/lib/ai-response';
 import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
+import { findSecretKinds, redactSecretMaterial } from '@/lib/secret-scanner';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -77,7 +78,7 @@ function safePath(projectId: string, value: unknown) {
   }
   return normalized;
 }
-function parseDraft(projectId: string, input: unknown, current: Map<string, string>, checkHash: boolean): FileDraft[] {
+function parseDraft(projectId: string, input: unknown, current: Map<string, string>, checkHash: boolean, secretPaths: Set<string> = new Set()): FileDraft[] {
   if (!Array.isArray(input) || input.length < 1 || input.length > MAX_FILES) throw new Error('Invalid file batch');
   const seen = new Set<string>();
   return input.map((raw) => {
@@ -86,6 +87,9 @@ function parseDraft(projectId: string, input: unknown, current: Map<string, stri
     const filePath = safePath(projectId, item.path);
     if (typeof item.content !== 'string' || item.content.includes('\0') || Buffer.byteLength(item.content, 'utf8') > 262144) throw new Error('Invalid or oversized file');
     if (seen.has(filePath)) throw new Error('Duplicate path');
+    if (secretPaths.has(filePath)) throw new Error('AI attempted to modify a file containing secret-like material');
+    const secretKinds = findSecretKinds(item.content);
+    if (secretKinds.length) throw new Error('AI generated secret-like material (' + secretKinds.join(', ') + '); repair withheld');
     seen.add(filePath);
     const old = current.get(filePath);
     const expected = old === undefined ? null : hash(old);
@@ -165,9 +169,10 @@ export function runSandbox(root: string): Promise<Result> {
     });
   });
 }
-async function getRepair(apiKey: string | undefined, model: string, provider: 'openai' | 'groq' | 'ollama', projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>) {
+async function getRepair(apiKey: string | undefined, model: string, provider: 'openai' | 'groq' | 'ollama', projectId: string, prompt: string, files: { path: string; content: string }[], result: Result, current: Map<string, string>, secretPaths: Set<string>) {
   const instructions = 'Repair the supplied static HTML/CSS/JS project using the isolated browser diagnostics. Return only JSON: {"summary":"...","files":[{"path":"relative/path","content":"complete file content"}]}. Maximum 10 files, each under 256 KiB. Use canonical relative paths only. Never change hidden paths, secrets, node_modules, .git, .alex or lockfiles. Do not include host shell commands. Do not claim tests passed unless diagnostics prove it.';
-  const input = JSON.stringify({ request: prompt, diagnostics: result, files });
+  const safeDiagnostics = JSON.parse(JSON.stringify(result, (_key, value) => typeof value === 'string' ? redactSecretMaterial(value) : value)) as Result;
+  const input = JSON.stringify({ request: redactSecretMaterial(prompt), diagnostics: safeDiagnostics, files });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), provider === 'ollama' ? 120_000 : 30_000);
   let response: Response;
@@ -191,7 +196,7 @@ async function getRepair(apiKey: string | undefined, model: string, provider: 'o
   if (typeof outputText !== 'string') throw new Error('Invalid AI repair response');
   const parsed = JSON.parse(outputText.trim().replace(/^\x60{3}(?:json)?\s*/i, '').replace(/\s*\x60{3}$/, '')) as { summary?: unknown; files?: unknown };
   if (typeof parsed.summary !== 'string') throw new Error('AI repair omitted summary');
-  const filesOut = parseDraft(projectId, parsed.files, current, false);
+  const filesOut = parseDraft(projectId, parsed.files, current, false, secretPaths);
   const inputTokens = Number.isInteger(provider === 'ollama' ? data.prompt_eval_count : data.usage?.input_tokens) ? (provider === 'ollama' ? data.prompt_eval_count : data.usage?.input_tokens) as number : null;
   const outputTokens = Number.isInteger(provider === 'ollama' ? data.eval_count : data.usage?.output_tokens) ? (provider === 'ollama' ? data.eval_count : data.usage?.output_tokens) as number : null;
   const estimatedCostUsd = provider === 'ollama' ? 0 : provider === 'groq' ? null : estimateAICostUsd(inputTokens, outputTokens);
@@ -220,14 +225,15 @@ export async function POST(request: Request) {
   if (provider !== 'ollama' && !apiKey) return NextResponse.json({ error: provider === 'groq' ? 'Groq is selected but GROQ_API_KEY is not configured.' : 'AI provider is not configured on this server' }, { status: 503 });
   let root = '';
   try {
-    const originals = new Map<string, string>(); const working = new Map<string, string>(); let total = 0;
+    const originals = new Map<string, string>(); const working = new Map<string, string>(); const secretPaths = new Set<string>(); let total = 0;
     for (const entry of listProjectFiles(body.projectId).filter(x => x.type === 'file')) {
       if (SENSITIVE_PATH.test(entry.path)) continue;
       const content = readProjectFile(body.projectId, entry.path); total += Buffer.byteLength(content, 'utf8');
       if (total > 5 * 1024 * 1024) throw new Error('Project exceeds 5 MiB sandbox limit');
       originals.set(entry.path, content); working.set(entry.path, content);
+      if (findSecretKinds(content).length) secretPaths.add(entry.path);
     }
-    for (const file of parseDraft(body.projectId, body.files, originals, true)) working.set(file.path, file.content);
+    for (const file of parseDraft(body.projectId, body.files, originals, true, secretPaths)) working.set(file.path, file.content);
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755);
     const writeFiles = () => {
       for (const [filePath, content] of Array.from(working.entries())) {
@@ -246,12 +252,12 @@ export async function POST(request: Request) {
     for (let round = 1; !diagnostic.ok && round <= MAX_ROUNDS; round++) {
       const context: { path: string; content: string }[] = []; let bytes = 0;
       for (const [filePath, content] of Array.from(working.entries())) {
-        if (SENSITIVE_PATH.test(filePath)) continue;
+        if (SENSITIVE_PATH.test(filePath) || secretPaths.has(filePath)) continue;
         const excerpt = content.slice(0, 8000); bytes += Buffer.byteLength(excerpt, 'utf8');
         if (bytes > 48 * 1024) break; context.push({ path: filePath, content: excerpt });
       }
       let next;
-      try { next = await getRepair(apiKey, model, provider, body.projectId, body.prompt, context, diagnostic, working); }
+      try { next = await getRepair(apiKey, model, provider, body.projectId, body.prompt, context, diagnostic, working, secretPaths); }
       catch (e) { repairs.push({ round, summary: e instanceof Error ? e.message : 'AI repair failed', diagnostic }); break; }
       for (const file of next.files) working.set(file.path, file.content);
       fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755); writeFiles();
