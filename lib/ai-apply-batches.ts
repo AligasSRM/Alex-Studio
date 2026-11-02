@@ -95,6 +95,48 @@ export function saveAIApplyBatch(projectId: string, manifest: AIApplyBatchManife
   }
 }
 
+/**
+ * Acquire an exclusive per-batch rollback lock.
+ * A lock left by a crashed process is deliberately fail-closed and requires manual inspection.
+ */
+export function acquireAIApplyBatchLock(projectId: string, batchId: string): () => void {
+  const manifestFile = manifestPath(projectId, batchId);
+  const lockFile = manifestFile.slice(0, -'.json'.length) + '.lock';
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL |
+    (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
+  const descriptor = fs.openSync(lockFile, flags, 0o600);
+  let released = false;
+  try {
+    fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }) + '\n', 'utf8');
+    fs.fsyncSync(descriptor);
+  } catch (error) {
+    try {
+      const held = fs.fstatSync(descriptor);
+      const current = fs.lstatSync(lockFile);
+      if (current.isFile() && !current.isSymbolicLink() && current.dev === held.dev && current.ino === held.ino) {
+        fs.unlinkSync(lockFile);
+      }
+    } catch {
+      // Do not remove a path whose ownership cannot be established.
+    }
+    fs.closeSync(descriptor);
+    throw error;
+  }
+  return () => {
+    if (released) return;
+    released = true;
+    try {
+      const held = fs.fstatSync(descriptor);
+      const current = fs.lstatSync(lockFile);
+      if (current.isFile() && !current.isSymbolicLink() && current.dev === held.dev && current.ino === held.ino) {
+        fs.unlinkSync(lockFile);
+      }
+    } finally {
+      fs.closeSync(descriptor);
+    }
+  };
+}
+
 export function readAIApplyBatch(projectId: string, batchId: string): AIApplyBatchManifest | null {
   const file = manifestPath(projectId, batchId);
   let stat: fs.Stats;

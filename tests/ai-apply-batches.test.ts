@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createProject } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
-import { listAIApplyBatches, readAIApplyBatch, saveAIApplyBatch, type AIApplyBatchManifest } from '../lib/ai-apply-batches';
+import { acquireAIApplyBatchLock, listAIApplyBatches, readAIApplyBatch, saveAIApplyBatch, type AIApplyBatchManifest } from '../lib/ai-apply-batches';
 
 const projectIds: string[] = [];
 
@@ -80,4 +80,29 @@ describe('AI apply batch manifest storage', () => {
     fs.symlinkSync(outside, path.join(metadata, 'ai-apply-batches'));
     expect(() => listAIApplyBatches(project.id)).toThrow(/must be a real directory/i);
   });
+  it('allows only one exclusive lock for a batch and releases ownership safely', () => {
+    const project = setupProject();
+    const batch = manifest();
+    saveAIApplyBatch(project.id, batch);
+    const release = acquireAIApplyBatchLock(project.id, batch.batchId);
+    const lockFile = path.join(projectRoot(project.id), '.alex', 'ai-apply-batches', batch.batchId + '.lock');
+    expect(fs.statSync(lockFile).mode & 0o777).toBe(0o600);
+    expect(() => acquireAIApplyBatchLock(project.id, batch.batchId)).toThrow(expect.objectContaining({ code: 'EEXIST' }));
+    release();
+    expect(() => {
+      const releaseAgain = acquireAIApplyBatchLock(project.id, batch.batchId);
+      releaseAgain();
+    }).not.toThrow();
+  });
+
+  it('fails closed when a previous process leaves a stale lock', () => {
+    const project = setupProject();
+    const batch = manifest();
+    saveAIApplyBatch(project.id, batch);
+    const lockFile = path.join(projectRoot(project.id), '.alex', 'ai-apply-batches', batch.batchId + '.lock');
+    fs.writeFileSync(lockFile, 'stale lock', { mode: 0o600 });
+    expect(() => acquireAIApplyBatchLock(project.id, batch.batchId)).toThrow(expect.objectContaining({ code: 'EEXIST' }));
+    expect(fs.readFileSync(lockFile, 'utf8')).toBe('stale lock');
+  });
+
 });
