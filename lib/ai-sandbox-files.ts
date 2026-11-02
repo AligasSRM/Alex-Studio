@@ -1,7 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SENSITIVE_SEGMENT = /^(?:credentials?[^/]*|id_rsa[^/]*|id_ed25519[^/]*|secrets?[^/]*|node_modules|\.git|\.alex)$/i;
+function isSensitiveSegment(segment: string): boolean {
+  const name = segment.toLowerCase();
+  return segment.startsWith('.') ||
+    name.startsWith('credentials') ||
+    name.startsWith('secret') ||
+    name.startsWith('id_rsa') ||
+    name.startsWith('id_ed25519') ||
+    name === 'node_modules';
+}
 
 /**
  * Materialize only non-sensitive project files into a fresh isolated runner
@@ -24,9 +32,7 @@ export function writeSandboxFiles(
     if (!relative || relative === '..' || relative.startsWith('..' + path.sep) || path.isAbsolute(relative)) {
       throw new Error('Sandbox path escape denied');
     }
-    if (segments.some((segment) => segment.startsWith('.') || SENSITIVE_SEGMENT.test(segment)) || secretPaths.has(filePath)) {
-      continue;
-    }
+    if (segments.some(isSensitiveSegment) || secretPaths.has(filePath)) continue;
     fs.mkdirSync(path.dirname(target), { recursive: true, mode: 0o755 });
     fs.writeFileSync(target, content, { encoding: 'utf8', flag: 'w', mode: 0o644 });
   }
