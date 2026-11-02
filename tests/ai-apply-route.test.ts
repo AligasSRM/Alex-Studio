@@ -3,6 +3,7 @@ import path from 'node:path';
 import * as filesModule from '../lib/files';
 import { POST } from '../app/api/ai/apply/route';
 import { issueVerificationProof } from '../lib/ai-verification-proof';
+import { createProject } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 
 const projectIds: string[] = [];
@@ -12,7 +13,7 @@ const originalStyles = 'body { color: black; }\n';
 function setupProject() {
   const project = createProject('AI Apply Route Test ' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
   projectIds.push(project.id);
-  fs.writeFileSync(path.join(root, 'index.html'), originalIndex);
+  fs.writeFileSync(path.join(projectRoot(project.id), 'index.html'), originalIndex);
   fs.writeFileSync(path.join(projectRoot(project.id), 'styles.css'), originalStyles);
   return project;
 }
@@ -191,13 +192,6 @@ describe.skip('AI apply route transactional behavior (requires Windows-native mu
 });
 
 
-import fs from 'node:fs';
-import path from 'node:path';
-import { POST } from '../app/api/ai/apply/route';
-import { createProject } from '../lib/project-store';
-import { projectRoot } from '../lib/path-security';
-import { issueVerificationProof } from '../lib/ai-verification-proof';
-
 describe('AI apply platform mutation gate', () => {
   const ids: string[] = [];
   afterEach(() => {
@@ -223,6 +217,6 @@ describe('AI apply platform mutation gate', () => {
     expect(response.status).toBe(503);
     expect((await response.json()).error).toMatch(/^UNAVAILABLE:/);
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
-    expect(fs.existsSync(path.join(projectRoot(project.id), '.alex'))).toBe(false);
+    expect(fs.existsSync(path.join(root, '.alex'))).toBe(false);
   });
 });
