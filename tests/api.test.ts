@@ -58,7 +58,7 @@ describe('local project API', () => {
     expect(listProjects().some((item) => item.id === project.id)).toBe(false);
   });
 
-  it('refuses file writes without explicit approval and saves after approval', async () => {
+  it('refuses file writes without explicit approval and returns unavailable after approval', async () => {
     const project = createFixtureProject('Approval Test Project');
     const payload = { projectId: project.id, path: 'index.html', content: '<h1>Approved content</h1>' };
     const denied = await writeFileRoute(localRequest('http://localhost:3000/api/files', payload));
