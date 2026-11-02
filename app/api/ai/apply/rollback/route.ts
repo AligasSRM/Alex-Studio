@@ -1,11 +1,10 @@
 export const runtime = 'nodejs';
 
-import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
-import { assertLocalMutation, resolveProjectPath } from '@/lib/path-security';
+import { assertLocalMutation } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
-import { readProjectFile, writeProjectFile } from '@/lib/files';
+import { readProjectFile, writeProjectFile, deleteProjectFile } from '@/lib/files';
 import { readAIApplyBatch, saveAIApplyBatch } from '@/lib/ai-apply-batches';
 import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
 import { readJsonBody } from '@/lib/request-body';
@@ -47,7 +46,6 @@ export async function POST(request: Request) {
   const current: { path: string; content: string }[] = [];
   try {
     for (const snapshot of manifest.snapshots) {
-      const target = resolveProjectPath(body.projectId, snapshot.path);
       if (!fs.existsSync(target)) {
         if (snapshot.beforeContent === null) {
           current.push({ path: snapshot.path, content: '' });
@@ -83,8 +81,8 @@ export async function POST(request: Request) {
   for (const snapshot of [...manifest.snapshots].reverse()) {
     try {
       const target = resolveProjectPath(body.projectId, snapshot.path);
-      if (snapshot.beforeContent === null) fs.rmSync(target, { force: true });
-      else writeProjectFile(body.projectId, snapshot.path, snapshot.beforeContent);
+      if (snapshot.beforeContent === null) deleteProjectFile(body.projectId, snapshot.path, snapshot.afterContent);
+      else writeProjectFile(body.projectId, snapshot.path, snapshot.beforeContent, snapshot.afterContent);
       restored.push(snapshot.path);
     } catch {
       failures.push(snapshot.path);
@@ -96,7 +94,7 @@ export async function POST(request: Request) {
     for (const snapshot of manifest.snapshots) {
       if (!restored.includes(snapshot.path)) continue;
       try {
-        writeProjectFile(body.projectId, snapshot.path, snapshot.afterContent);
+        writeProjectFile(body.projectId, snapshot.path, snapshot.afterContent, snapshot.beforeContent);
       } catch {
         compensationFailures.push(snapshot.path);
       }
