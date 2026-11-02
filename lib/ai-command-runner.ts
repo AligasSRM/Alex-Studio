@@ -146,6 +146,36 @@ function evidence(name: string, required: boolean, status: CommandStatus, output
  * provider is implemented and verified, npm execution is deliberately fail-closed.
  */
 export async function runProjectCommands(root: string): Promise<CommandRun> {
+  // Classify an explicitly malformed npm manifest before lockfile availability.
+  // This is read-only and never invokes a generated command.
+  try {
+    const packagePath = path.join(root, 'package.json');
+    if (fs.existsSync(packagePath)) {
+      const parsed: unknown = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const manifest = parsed as Record<string, unknown>;
+        const rawScripts = manifest.scripts;
+        if (rawScripts && typeof rawScripts === 'object' && !Array.isArray(rawScripts)) {
+          const scripts = rawScripts as Record<string, unknown>;
+          const missing = [...REQUIRED_SCRIPTS].filter(name => typeof scripts[name] !== 'string');
+          if (missing.length) {
+            const output = 'Required scripts missing: ' + missing.join(', ');
+            return {
+              ok: false,
+              available: true,
+              status: 'FAIL',
+              summary: 'Required npm scripts are missing',
+              output,
+              commands: [...REQUIRED_SCRIPTS].map(name => evidence(name, true, 'NOT RUN', output, null)),
+            };
+          }
+        }
+      }
+    }
+  } catch {
+    // The detailed parser below reports malformed manifests as UNAVAILABLE.
+  }
+
   let plan: ManifestPlan;
   try {
     plan = inspectGeneratedProject(root);
