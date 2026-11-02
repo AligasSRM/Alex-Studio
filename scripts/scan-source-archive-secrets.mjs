@@ -53,7 +53,8 @@ for (const entry of entries) {
   if (entry.endsWith('/')) continue;
   let bytes;
   try {
-    bytes = execFileSync('unzip', ['-p', archive, entry], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
+    const escapedEntry = entry.replace(/[\\[\\]?*]/g, (character) => '\\\\' + character);
+    bytes = execFileSync('unzip', ['-p', archive, escapedEntry], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
   } catch {
     console.error('Secret scan failed closed: could not read an archive entry.');
     process.exit(1);
