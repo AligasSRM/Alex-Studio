@@ -143,8 +143,22 @@ export async function POST(request: Request) {
       ...rollbackAppliedSnapshots(snapshots, applied, (snapshot) => {
       const appliedContent = changes.find((change) => change.path === snapshot.path)?.content;
       if (appliedContent === undefined) throw new Error('Missing applied snapshot for rollback');
-      if (snapshot.content === null) deleteProjectFile(body.projectId as string, snapshot.path, appliedContent);
-      else writeProjectFile(body.projectId as string, snapshot.path, snapshot.content, appliedContent);
+      try {
+        if (snapshot.content === null) deleteProjectFile(body.projectId as string, snapshot.path, appliedContent);
+        else writeProjectFile(body.projectId as string, snapshot.path, snapshot.content, appliedContent);
+      } catch (restoreError) {
+        // unlink/rename may have changed the path before directory fsync failed.
+        // Treat the compensation as complete only when the on-disk bytes match
+        // the exact pre-apply snapshot; unknown states remain failures.
+        try {
+          const currentContent = readProjectFile(body.projectId as string, snapshot.path);
+          if (snapshot.content !== null && currentContent === snapshot.content) return;
+        } catch (reconcileError) {
+          if (snapshot.content === null && (reconcileError as NodeJS.ErrnoException).code === 'ENOENT') return;
+          throw reconcileError;
+        }
+        throw restoreError;
+      }
     }),
       ...reconciliationFailures,
     ];
