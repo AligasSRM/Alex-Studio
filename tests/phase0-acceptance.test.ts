@@ -114,7 +114,7 @@ describe('Phase 0 acceptance — project lifecycle and explicit approval', () =>
     renameSpy.mockImplementation((oldPath, newPath) => {
       const from = String(oldPath);
       const to = String(newPath);
-      if (!swapped && from.includes('.alex-tmp-') && to.endsWith(path.join('nested', 'race.txt'))) {
+      if (!swapped && from.includes('.alex-tmp-') && to.endsWith('/race.txt')) {
         originalRename(nested, parked);
         fs.symlinkSync(outside, nested, 'dir');
         swapped = true;
