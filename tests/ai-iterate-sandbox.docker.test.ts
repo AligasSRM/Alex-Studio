@@ -3,22 +3,17 @@ import os from 'node:os';
 import path from 'node:path';
 import { runSandbox } from '../app/api/ai/iterate/route';
 
-const enabled = process.env.RUN_DOCKER_INTEGRATION === '1';
-
-(enabled ? describe : describe.skip)('AI iterate browser sandbox real-Docker integration', () => {
-  it('uses the approved image and verifies container cleanup after the browser smoke test', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-iterate-browser-test-'));
+describe('Windows isolated browser runner gate', () => {
+  it('fails closed without starting generated browser code until Windows isolation exists', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-windows-browser-gate-'));
     try {
-      fs.chmodSync(root, 0o755);
-      const indexPath = path.join(root, 'index.html');
-      fs.writeFileSync(indexPath, '<!doctype html><html><head><title>Sandbox Test</title></head><body><main>Browser runner acceptance</main></body></html>\n', { encoding: 'utf8', mode: 0o644 });
-      fs.chmodSync(indexPath, 0o644);
+      fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><title>test</title>');
       const result = await runSandbox(root);
-      if (!result.ok || !result.available) throw new Error('Browser sandbox failed: ' + JSON.stringify(result));
-      expect(result.summary).toContain('container cleanup verified');
-      expect(result.output).toContain('container absence verified: true');
+      expect(result).toMatchObject({ ok: false, available: false, pageSnapshot: null });
+      expect(result.summary).toContain('Windows-native isolated browser runner');
+      expect(result.output).toContain('No generated browser code was started');
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
-  }, 120_000);
+  });
 });
