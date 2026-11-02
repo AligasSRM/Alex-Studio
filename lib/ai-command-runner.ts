@@ -141,7 +141,7 @@ function evidence(name: string, required: boolean, status: CommandStatus, output
 }
 
 /**
- * Generated code must never run directly on the Windows host. Docker/Linux was
+ * Generated code must never run directly on the Windows host. The former runner was
  * removed from the approved platform scope; until a Windows-native isolation
  * provider is implemented and verified, npm execution is deliberately fail-closed.
  */
@@ -184,7 +184,7 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
     };
   }
 
-  const output = 'UNAVAILABLE: the Windows-native isolated execution provider is not implemented. No generated command was started. Direct host execution and Docker/Linux fallback are prohibited by the locked platform scope.';
+  const output = 'UNAVAILABLE: the Windows-native isolated execution provider is not implemented. No generated command was started. Direct host execution or a non-Windows fallback is prohibited by the locked platform scope.';
   return {
     ok: false,
     available: false,
