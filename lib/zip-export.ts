@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { deflateRawSync } from 'node:zlib';
+import { findSecretKinds } from './secret-scanner';
 
 const MAX_FILES = 10000;
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024;
@@ -68,9 +69,11 @@ export function createProjectZip(projectDirectory: string): Buffer {
     if (!relativeReal || relativeReal.startsWith('..') || path.isAbsolute(relativeReal)) {
       throw new Error('Project file escaped the project directory');
     }
+    const data = fs.readFileSync(file.absolute);
+    // Skip secret-bearing text files even when the filename looks harmless.
+    if (findSecretKinds(data.toString('utf8')).length) continue;
     totalBytes += stat.size;
     if (totalBytes > MAX_TOTAL_BYTES) throw new Error('Project exceeds the 50 MiB export limit');
-    const data = fs.readFileSync(file.absolute);
     const stamp = dosDateTime(stat.mtime);
     entries.push({
       name: file.name.replace(/\\/g, '/'),

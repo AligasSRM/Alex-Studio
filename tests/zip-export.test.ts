@@ -83,6 +83,28 @@ describe('project ZIP export', () => {
     }
   });
 
+  it('omits secret-bearing source files even when their filenames are not sensitive', () => {
+    fs.mkdirSync(path.join(root, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'index.html'), 'safe-project-content');
+    fs.writeFileSync(
+      path.join(root, 'src', 'runtime-config.ts'),
+      'export const providerKey = "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789";'
+    );
+    const entries = readZipEntries(createProjectZip(root));
+    expect(entries.get('index.html')).toBe('safe-project-content');
+    expect(entries.has('src/runtime-config.ts')).toBe(false);
+    expect(Array.from(entries.values()).some((content) => content.includes('sk-proj-'))).toBe(false);
+  });
+
+  it('omits secret-like ASCII material embedded in binary files', () => {
+    fs.mkdirSync(path.join(root, 'assets'), { recursive: true });
+    const token = 'gsk_abcdefghijklmnopqrstuvwxyz0123456789';
+    fs.writeFileSync(path.join(root, 'assets', 'blob.dat'), Buffer.concat([Buffer.from([0, 1, 2]), Buffer.from(token), Buffer.from([0, 255])]));
+    const entries = readZipEntries(createProjectZip(root));
+    expect(entries.has('assets/blob.dat')).toBe(false);
+    expect(Array.from(entries.values()).some((content) => content.includes(token))).toBe(false);
+  });
+
   it('does not export files reached through nested symbolic links', () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-outside-'));
     fs.writeFileSync(path.join(outside, 'private.txt'), 'outside-private-content');

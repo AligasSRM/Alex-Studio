@@ -6,6 +6,7 @@ import { assertLocalMutation } from '@/lib/path-security';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { estimateAICostUsd, recordAIUsage } from '@/lib/ai-usage';
 import { extractAIResponseText } from '@/lib/ai-response';
+import { redactSecretMaterial } from '@/lib/secret-scanner';
 
 const MAX_BODY_BYTES = 24 * 1024;
 const MAX_PROMPT_CHARS = 20_000;
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
       method: 'POST',
       signal: controller.signal,
       headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, input: input.prompt, max_output_tokens: 4000 }),
+      body: JSON.stringify({ model, input: redactSecretMaterial(input.prompt), max_output_tokens: 4000 }),
     });
     if (!response.ok) {
       return NextResponse.json({ error: response.status === 429 ? 'AI provider is busy; try again later' : 'AI provider request failed' }, {
@@ -99,7 +100,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'AI usage could not be recorded; response withheld' }, { status: 500 });
     }
     return NextResponse.json({
-      output: outputText,
+      output: redactSecretMaterial(outputText),
       usage: { inputTokens, outputTokens, estimatedCostUsd, ...accounting },
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
