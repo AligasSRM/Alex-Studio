@@ -40,20 +40,7 @@ afterEach(() => {
   for (const id of projectIds.splice(0)) {
     fs.rmSync(projectRoot(id), { recursive: true, force: true });
   }
-  it('preserves a user edit made after snapshot validation but before the write', async () => {
-    const project = setupProject();
-    const changes = [{ path: 'index.html', content: '<h1>generated</h1>\\n', baseHash: hash(originalIndex) }];
-    const newerEdit = '<h1>newer user edit</h1>\\n';
-    const realWrite = filesModule.writeProjectFile;
-    jest.spyOn(filesModule, 'writeProjectFile').mockImplementation((...args) => {
-      fs.writeFileSync(path.join(projectRoot(project.id), 'index.html'), newerEdit);
-      return realWrite(...args);
-    });
 
-    const response = await POST(makeRequest(project.id, changes));
-    expect(response.status).toBe(500);
-    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(newerEdit);
-  });
 
 });
 
@@ -133,4 +120,18 @@ describe('AI apply route transactional behavior', () => {
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(changes[0].content);
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'styles.css'), 'utf8')).toBe(originalStyles);
   });
+  it('preserves a user edit made after snapshot validation but before the write', async () => {
+    const project = setupProject();
+    const changes = [{ path: 'index.html', content: '<h1>generated</h1>\\n', baseHash: hash(originalIndex) }];
+    const newerEdit = '<h1>newer user edit</h1>\\n';
+    const realWrite = filesModule.writeProjectFile;
+    jest.spyOn(filesModule, 'writeProjectFile').mockImplementation((...args) => {
+      fs.writeFileSync(path.join(projectRoot(project.id), 'index.html'), newerEdit);
+      return realWrite(...args);
+    });
+    const response = await POST(makeRequest(project.id, changes));
+    expect(response.status).toBe(500);
+    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(newerEdit);
+  });
+
 });
