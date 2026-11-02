@@ -1,4 +1,4 @@
-name: Full AI lifecycle proof
+name: Windows platform safety gate
 on:
   workflow_dispatch:
 
@@ -6,20 +6,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: alex-studio-full-ai-lifecycle-proof
+  group: alex-studio-windows-platform-safety-gate
   cancel-in-progress: false
 
 jobs:
-  lifecycle-proof:
-    name: Real AI generation, requirement proof, repair, Docker verification and apply
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      AI_PROVIDER: groq
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      GROQ_MODEL: ${{ vars.GROQ_MODEL || 'openai/gpt-oss-20b' }}
-      RUN_FULL_AI_LIFECYCLE: '1'
-      AI_RUNNER_DOCKER_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea
+  safety-gate:
+    name: Windows-host runner fail-closed tests
+    runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,23 +25,11 @@ jobs:
         with:
           node-version: 20
 
-      - name: Fail clearly if the live AI secret is missing
-        if: ${{ env.GROQ_API_KEY == '' }}
-        run: |
-          echo 'GROQ_API_KEY repository secret is required for the live full-lifecycle proof.'
-          exit 1
-
       - name: Install locked dependencies
         run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
+        shell: bash
         timeout-minutes: 8
 
-      - name: Verify Docker daemon
-        run: docker info
-
-      - name: Pull the approved digest-pinned browser runner
-        run: docker pull "$AI_RUNNER_DOCKER_IMAGE"
-        timeout-minutes: 5
-
-      - name: Run full real-provider lifecycle integration test
-        run: npm test -- tests/ai-lifecycle.live.integration.test.ts
-        timeout-minutes: 9
+      - name: Verify generated code remains blocked without Windows isolation
+        run: npm test -- tests/ai-command-runner.test.ts tests/ai-command-runner-timeout.test.ts tests/ai-command-runner.docker.test.ts tests/ai-iterate-sandbox.docker.test.ts tests/ai-build-server-preview.docker.test.ts
+        shell: bash
