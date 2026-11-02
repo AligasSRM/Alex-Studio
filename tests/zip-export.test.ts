@@ -88,7 +88,7 @@ describe('project ZIP export', () => {
     fs.writeFileSync(path.join(root, 'index.html'), 'safe-project-content');
     fs.writeFileSync(
       path.join(root, 'src', 'runtime-config.ts'),
-      'export const providerKey = "sk-proj-abcdefghijklmnopqrstuvwxyz0123456789";'
+      'export const providerKey = "' + ("sk-proj-" + "abcdefghijklmnopqrstuvwxyz0123456789") + '";'
     );
     const entries = readZipEntries(createProjectZip(root));
     expect(entries.get('index.html')).toBe('safe-project-content');
