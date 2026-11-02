@@ -81,4 +81,54 @@ describe('backup directory descriptor security', () => {
       fs.rmSync(outside, { force: true });
     }
   });
+  it('preserves a pre-existing backup file when exclusive creation collides', () => {
+    const realOpen = fs.openSync.bind(fs);
+    const realWrite = fs.writeFileSync.bind(fs);
+    let collisionPath: string | undefined;
+    const spy = jest.spyOn(fs, 'openSync').mockImplementation(((filePath: fs.PathLike, flags: string | number, mode?: number) => {
+      const candidate = String(filePath);
+      if (candidate.includes('/backups/') && typeof flags === 'number' && (flags & fs.constants.O_EXCL) !== 0) {
+        collisionPath = candidate;
+        realWrite(candidate, 'owned by another operation', { encoding: 'utf8', flag: 'wx' });
+        const error = new Error('file already exists') as NodeJS.ErrnoException;
+        error.code = 'EEXIST';
+        throw error;
+      }
+      return realOpen(filePath, flags as any, mode);
+    }) as typeof fs.openSync);
+    try {
+      expect(() => writeProjectFile('backup-fd-security-test', 'index.txt', 'changed content')).toThrow(/already exists/);
+      expect(collisionPath).toBeDefined();
+      expect(fs.readFileSync(collisionPath!, 'utf8')).toBe('owned by another operation');
+      expect(fs.readFileSync(path.join(project, 'index.txt'), 'utf8')).toBe('original content');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('preserves a pre-existing temporary file when exclusive creation collides', () => {
+    const realOpen = fs.openSync.bind(fs);
+    const realWrite = fs.writeFileSync.bind(fs);
+    let collisionPath: string | undefined;
+    const spy = jest.spyOn(fs, 'openSync').mockImplementation(((filePath: fs.PathLike, flags: string | number, mode?: number) => {
+      const candidate = String(filePath);
+      if (candidate.includes('.alex-tmp-') && typeof flags === 'number' && (flags & fs.constants.O_EXCL) !== 0) {
+        collisionPath = candidate;
+        realWrite(candidate, 'owned by another operation', { encoding: 'utf8', flag: 'wx' });
+        const error = new Error('file already exists') as NodeJS.ErrnoException;
+        error.code = 'EEXIST';
+        throw error;
+      }
+      return realOpen(filePath, flags as any, mode);
+    }) as typeof fs.openSync);
+    try {
+      expect(() => writeProjectFile('backup-fd-security-test', 'index.txt', 'changed content')).toThrow(/already exists/);
+      expect(collisionPath).toBeDefined();
+      expect(fs.readFileSync(collisionPath!, 'utf8')).toBe('owned by another operation');
+      expect(fs.readFileSync(path.join(project, 'index.txt'), 'utf8')).toBe('original content');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
 });
