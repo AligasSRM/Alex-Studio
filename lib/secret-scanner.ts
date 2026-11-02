@@ -36,7 +36,7 @@ const PATTERNS: Array<{ kind: SecretKind; pattern: RegExp }> = [
   { kind: 'bearer-token', pattern: /\bBearer\s+[A-Za-z0-9._~+/-]{20,}/i },
   {
     kind: 'credential-assignment',
-    pattern: /\b(?:api[_-]?key|(?:client[_-]?)?secret|access[_-]?token|auth[_-]?token|token|password|passwd|private[_-]?key|connection[_-]?string)\b\s*[:=]\s*(?:"([^"\r\n]{16,})"|'([^'\r\n]{16,})'|`([^`\r\n]{16,})`|([A-Za-z0-9_./+=:-]{20,}))/i,
+    pattern: /\b(?:api[_-]?key|aws[_-]?secret[_-]?access[_-]?key|(?:client[_-]?)?secret|access[_-]?token|auth[_-]?token|token|password|passwd|private[_-]?key|connection[_-]?string)\b\s*[:=]\s*(?:"([^"\r\n]{16,})"|'([^'\r\n]{16,})'|`([^`\r\n]{16,})`|([A-Za-z0-9_./+=:-]{20,}))/i,
   },
 ];
 
