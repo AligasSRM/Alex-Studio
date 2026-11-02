@@ -120,6 +120,61 @@ describe('AI apply route transactional behavior', () => {
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(changes[0].content);
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'styles.css'), 'utf8')).toBe(originalStyles);
   });
+  it('restores the original file when directory fsync fails after rename', async () => {
+    const project = setupProject();
+    const changes = [{ path: 'index.html', content: '<h1>after fsync failure</h1>\n', baseHash: hash(originalIndex) }];
+    const realFsync = fs.fsyncSync;
+    let injected = false;
+    jest.spyOn(fs, 'fsyncSync').mockImplementation((fd: number) => {
+      if (!injected && fs.fstatSync(fd).isDirectory()) {
+        injected = true;
+        throw new Error('injected directory fsync failure after rename');
+      }
+      return realFsync(fd);
+    });
+
+    const response = await POST(makeRequest(project.id, changes));
+    const body = await response.json();
+
+    expect(injected).toBe(true);
+    expect(response.status).toBe(500);
+    expect(body.rollback).toMatchObject({ status: 'COMPLETE', restoredPaths: ['index.html'] });
+    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(originalIndex);
+  });
+
+  it('reconciles a created file deleted before rollback directory fsync failed', async () => {
+    const project = setupProject();
+    const createdPath = path.join(projectRoot(project.id), 'created.txt');
+    const changes = [
+      { path: 'created.txt', content: 'new file content\\n', baseHash: null },
+      { path: 'styles.css', content: 'body { color: blue; }\\n', baseHash: hash(originalStyles) },
+    ];
+    const realWrite = filesModule.writeProjectFile;
+    let writes = 0;
+    jest.spyOn(filesModule, 'writeProjectFile').mockImplementation((...args) => {
+      writes++;
+      if (writes === 2) throw new Error('injected second-file write failure');
+      return realWrite(...args);
+    });
+    const realFsync = fs.fsyncSync;
+    let directoryFsyncs = 0;
+    jest.spyOn(fs, 'fsyncSync').mockImplementation((fd: number) => {
+      if (fs.fstatSync(fd).isDirectory()) {
+        directoryFsyncs++;
+        if (directoryFsyncs === 2) throw new Error('injected rollback unlink directory fsync failure');
+      }
+      return realFsync(fd);
+    });
+
+    const response = await POST(makeRequest(project.id, changes));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.rollback).toMatchObject({ status: 'COMPLETE', restoredPaths: ['created.txt'] });
+    expect(fs.existsSync(createdPath)).toBe(false);
+    expect(fs.readFileSync(path.join(projectRoot(project.id), 'styles.css'), 'utf8')).toBe(originalStyles);
+  });
+
   it('preserves a user edit made after snapshot validation but before the write', async () => {
     const project = setupProject();
     const changes = [{ path: 'index.html', content: '<h1>generated</h1>\\n', baseHash: hash(originalIndex) }];
