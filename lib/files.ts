@@ -5,6 +5,7 @@ import { projectRoot, resolveProjectPath, assertTextContent } from './path-secur
 
 export type FileNode = { name: string; path: string; type: 'file' | 'folder'; size?: number };
 const MAX_TEXT_BYTES = 1024 * 1024;
+const WINDOWS_MUTATION_UNAVAILABLE = 'UNAVAILABLE: secure Windows-native handle-based file mutation is not implemented; refusing writes and deletes until reparse-point and TOCTOU protections are verified.';
 
 function assertRegularNonLink(target: string, allowMissing = false): fs.Stats | null {
   try {
@@ -154,6 +155,8 @@ function createBackup(root: string, target: string, backupName: string): void {
 }
 
 export function writeProjectFile(id: string, projectPath: string, content: unknown, expectedCurrentContent?: string | null) {
+  void id; void projectPath; void content; void expectedCurrentContent;
+  throw new Error(WINDOWS_MUTATION_UNAVAILABLE);
   assertTextContent(content);
   const { root, target, parent } = checkedTarget(id, projectPath);
   ensureParents(root, parent);
@@ -211,6 +214,8 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
 }
 
 export function deleteProjectFile(id: string, projectPath: string, expectedCurrentContent: string) {
+  void id; void projectPath; void expectedCurrentContent;
+  throw new Error(WINDOWS_MUTATION_UNAVAILABLE);
   const { root, target } = checkedTarget(id, projectPath);
   assertPathWithinProject(root, target);
   const actual = readCheckedFile(target);
