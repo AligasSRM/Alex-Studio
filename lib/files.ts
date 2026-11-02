@@ -30,16 +30,22 @@ function listProjectFiles(id: string): FileNode[] {
 export { listProjectFiles };
 
 export function readProjectFile(id: string, projectPath: string) {
-  const file = resolveProjectPath(id, projectPath);
-  const descriptor = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+  resolveProjectPath(id, projectPath);
+  const pinned = openPinnedProjectParent(id, projectPath);
+  let descriptor: number | undefined;
   try {
+    descriptor = fs.openSync(
+      `/proc/self/fd/${pinned.parentDescriptor}/${pinned.fileName}`,
+      FILE_FLAGS
+    );
     const stat = fs.fstatSync(descriptor);
     if (!stat.isFile() || stat.size > 1048576) throw new Error('Unsupported text file');
     const content = fs.readFileSync(descriptor, 'utf8');
     assertTextContent(content);
     return content;
   } finally {
-    fs.closeSync(descriptor);
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    pinned.close();
   }
 }
 
