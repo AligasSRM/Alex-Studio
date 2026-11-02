@@ -39,7 +39,7 @@ export function redactSecretMaterial(value: string): string {
   let redacted = value;
   for (const { kind, pattern } of PATTERNS) {
     pattern.lastIndex = 0;
-    redacted = redacted.replace(pattern, \`[REDACTED:\${kind}]\`);
+    redacted = redacted.replace(pattern, '[REDACTED:' + kind + ']');
   }
   return redacted;
 }
