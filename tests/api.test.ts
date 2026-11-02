@@ -3,6 +3,8 @@ import path from 'node:path';
 import { POST as createProjectRoute } from '../app/api/projects/route';
 import { GET as getFilesRoute, POST as writeFileRoute } from '../app/api/files/route';
 import { GET as previewRoute } from '../app/api/preview/route';
+import { POST as writeSpecificFileRoute } from '../app/api/files/write/route';
+import { POST as applyFileRoute } from '../app/api/files/apply/route';
 import { getProject, listProjects } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 
@@ -12,9 +14,9 @@ function createFixtureProject(name: string) {
   const root = projectRoot(id);
   fs.mkdirSync(root, { recursive: true });
   const record = { id, name, createdAt: new Date().toISOString() };
-  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify(record, null, 2) + '\\n');
-  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><body><h1>' + name + '</h1><button>Try interaction</button><p>Your project is running.</p></body></html>\\n');
-  fs.writeFileSync(path.join(root, 'styles.css'), 'body{font-family:system-ui}\\n');
+  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify(record, null, 2) + '\n');
+  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><body><h1>' + name + '</h1><button>Try interaction</button><p>Your project is running.</p></body></html>\n');
+  fs.writeFileSync(path.join(root, 'styles.css'), 'body{font-family:system-ui}\n');
   fs.writeFileSync(path.join(root, 'script.js'), '');
   createdIds.push(id);
   return record;
@@ -75,6 +77,18 @@ describe('local project API', () => {
     expect(traversal.status).toBe(503);
     expect(fs.existsSync(path.join(projectRoot(project.id), '..', 'outside.txt'))).toBe(false);
     expect(approved.headers.get('content-type')).toContain('application/json');
+  });
+
+  it('returns the same 503 gate for the dedicated write and apply endpoints', async () => {
+    const project = createFixtureProject('Dedicated Mutation Endpoint Test');
+    const payload = { projectId: project.id, path: 'index.html', content: '<h1>must remain unchanged</h1>', approved: true };
+    const write = await writeSpecificFileRoute(localRequest('http://localhost:3000/api/files/write', payload));
+    const apply = await applyFileRoute(localRequest('http://localhost:3000/api/files/apply', payload));
+    expect(write.status).toBe(503);
+    expect(apply.status).toBe(503);
+    expect((await write.json()).error).toMatch(/^UNAVAILABLE:/);
+    expect((await apply.json()).error).toMatch(/^UNAVAILABLE:/);
+    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).not.toBe(payload.content);
   });
 
   it('rejects file listing, reads, and writes for unknown project IDs', async () => {
