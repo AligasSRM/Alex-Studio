@@ -1,5 +1,6 @@
 export const runtime = 'nodejs';
 
+import fs from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { assertLocalMutation, resolveProjectPath, assertTextContent } from '@/lib/path-security';
