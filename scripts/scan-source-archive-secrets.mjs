@@ -40,29 +40,28 @@ function looksSensitive(content) {
   });
 }
 
-let entries;
+let archiveEntries;
 try {
-  entries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 })
-    .split(/\r?\n/).filter(Boolean);
+  const output = execFileSync(
+    'python3',
+    ['-c', [
+      'import base64, json, sys, zipfile',
+      'with zipfile.ZipFile(sys.argv[1]) as archive:',
+      '  entries = [[item.filename, base64.b64encode(archive.read(item)).decode("ascii")] for item in archive.infolist() if not item.is_dir()]',
+      '  print(json.dumps(entries))',
+    ].join('\\n'), archive],
+    { encoding: 'utf8', maxBuffer: 128 * 1024 * 1024 },
+  );
+  archiveEntries = JSON.parse(output);
 } catch {
-  console.error('Secret scan failed closed: could not list archive entries.');
+  console.error('Secret scan failed closed: could not list or read archive entries.');
   process.exit(1);
 }
 
-for (const entry of entries) {
-  if (entry.endsWith('/')) continue;
-  let bytes;
-  try {
-    const escapedEntry = entry
-      .replaceAll('[', '\\\\[')
-      .replaceAll(']', '\\\\]')
-      .replaceAll('*', '\\\\*')
-      .replaceAll('?', '\\\\?');
-    bytes = execFileSync('unzip', ['-p', archive, escapedEntry], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 });
-  } catch {
-    console.error('Secret scan failed closed: could not read an archive entry.');
-    process.exit(1);
-  }
+const entries = archiveEntries.map(([name]) => name);
+
+for (const [entry, encoded] of archiveEntries) {
+  const bytes = Buffer.from(encoded, 'base64');
   if (bytes.includes(0)) continue; // Binary payloads are outside this text-pattern scanner's coverage.
   const content = bytes.toString('utf8');
   if (looksSensitive(content)) {
