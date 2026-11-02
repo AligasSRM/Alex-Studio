@@ -36,6 +36,17 @@ describe('backup directory descriptor security', () => {
     }
   });
 
+  it('rejects a symlink in a nested target parent directory', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-backup-outside-'));
+    try {
+      fs.symlinkSync(outside, path.join(project, 'nested'), 'dir');
+      expect(() => writeProjectFile('backup-fd-security-test', 'nested/index.txt', 'changed content')).toThrow();
+      expect(fs.readdirSync(outside)).toEqual([]);
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
   it('rejects a symlink at the backups directory', () => {
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-backup-outside-'));
     try {
