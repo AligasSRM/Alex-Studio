@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { assertLocalMutation } from '@/lib/path-security';
 import { getProject } from '@/lib/project-store';
 import { readProjectFile, writeProjectFile, deleteProjectFile } from '@/lib/files';
-import { readAIApplyBatch, saveAIApplyBatch } from '@/lib/ai-apply-batches';
+import { acquireAIApplyBatchLock, readAIApplyBatch, saveAIApplyBatch } from '@/lib/ai-apply-batches';
 import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
 import { readJsonBody } from '@/lib/request-body';
 
@@ -32,6 +32,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Project not found' }, { status: 404 });
   }
 
+  let releaseBatchLock: (() => void) | undefined;
+  try {
+    releaseBatchLock = acquireAIApplyBatchLock(body.projectId, body.batchId);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') {
+      return NextResponse.json({ error: 'Rollback is already running for this batch, or a previous process left a lock requiring manual inspection' }, { status: 409 });
+    }
+    return NextResponse.json({ error: 'Could not acquire the exclusive rollback lock' }, { status: 500 });
+  }
+  try {
   let manifest;
   try {
     manifest = readAIApplyBatch(body.projectId, body.batchId);
@@ -140,4 +151,7 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, batchId: manifest.batchId, status: 'rolled-back', restoredPaths: restored }, {
     headers: { 'Cache-Control': 'no-store' },
   });
+  } finally {
+    releaseBatchLock?.();
+  }
 }
