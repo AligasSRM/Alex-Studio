@@ -8,7 +8,7 @@ describe('secret material scanner', () => {
       'const aws = "AKIA1234567890ABCDEF";',
       'const github = "github_pat_abcdefghijklmnopqrstuvwxyz0123456789";',
       'const stripe = "sk_live_abcdefghijklmnop123456";',
-      'const google = "AIza123456789012345678901234567890123456";',
+      'const google = "AIza12345678901234567890123456789012345";',
       'const bearer = "Bearer abcdefghijklmnopqrstuvwxyz012345";',
       'const password = "a-very-long-private-password-value";',
     ].join('\n');
