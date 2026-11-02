@@ -35,6 +35,8 @@
   },
   "overrides": {
     "postcss": "8.5.32",
-    "dompurify": "3.4.17"
+    "dompurify": "3.4.17",
+    "glob": "14.0.2",
+    "minimatch": "11.0.1"
   }
 }
