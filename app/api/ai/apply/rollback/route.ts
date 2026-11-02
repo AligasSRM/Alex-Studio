@@ -46,18 +46,16 @@ export async function POST(request: Request) {
   const current: { path: string; content: string | null }[] = [];
   try {
     for (const snapshot of manifest.snapshots) {
-      if (!fs.existsSync(target)) {
-        if (snapshot.beforeContent === null) {
+      let content: string;
+      try {
+        content = readProjectFile(body.projectId, snapshot.path);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT' && snapshot.beforeContent === null) {
           current.push({ path: snapshot.path, content: null });
           continue;
         }
         throw new Error('A batch file is missing or is not a regular file: ' + snapshot.path);
       }
-      const stat = fs.lstatSync(target);
-      if (!stat.isFile() || stat.isSymbolicLink()) {
-        throw new Error('A batch file is missing or is not a regular file: ' + snapshot.path);
-      }
-      const content = readProjectFile(body.projectId, snapshot.path);
       const matchesApplied = hash(content) === hash(snapshot.afterContent);
       const matchesAlreadyRestored = snapshot.beforeContent !== null && hash(content) === hash(snapshot.beforeContent);
       if (!matchesApplied && !matchesAlreadyRestored) {
