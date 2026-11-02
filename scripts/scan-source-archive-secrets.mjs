@@ -62,8 +62,9 @@ const entries = archiveEntries.map(([name]) => name);
 
 for (const [entry, encoded] of archiveEntries) {
   const bytes = Buffer.from(encoded, 'base64');
-  if (bytes.includes(0)) continue; // Binary payloads are outside this text-pattern scanner's coverage.
-  const content = bytes.toString('utf8');
+  // Scan ASCII-compatible patterns in binary payloads too. Removing NUL bytes
+  // catches secrets embedded in UTF-16-like or padded binary content.
+  const content = bytes.toString('latin1').replace(/\0/g, '');
   if (looksSensitive(content)) {
     console.error('Refusing source archive: secret-like material detected in ' + entry);
     process.exit(1);
