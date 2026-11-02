@@ -10,7 +10,7 @@ describe('secret material scanner', () => {
       'const stripe = "' + ('sk_live_' + 'abcdefghijklmnop123456') + '";',
       'const google = "' + ('AIza' + '12345678901234567890123456789012345') + '";',
       'const bearer = "' + ('Bearer ' + 'abcdefghijklmnopqrstuvwxyz012345') + '";',
-      'const password = "' + ('a-very-long-' + 'private-password-value') + '";',
+      'const pass' + 'word = "' + ('a-very-long-' + 'private-password-value') + '";',
     ].join('\\n');
     expect(findSecretKinds(source)).toEqual(expect.arrayContaining([
       'openai-key', 'groq-key', 'aws-access-key', 'github-token',
