@@ -71,7 +71,7 @@ export function createProjectZip(projectDirectory: string): Buffer {
     }
     const data = fs.readFileSync(file.absolute);
     // Skip secret-bearing text files even when the filename looks harmless.
-    if (!data.includes(0) && findSecretKinds(data.toString('utf8')).length) continue;
+    if (findSecretKinds(data.toString('utf8')).length) continue;
     totalBytes += stat.size;
     if (totalBytes > MAX_TOTAL_BYTES) throw new Error('Project exceeds the 50 MiB export limit');
     const stamp = dosDateTime(stat.mtime);
