@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { projectRoot, resolveProjectPath, assertTextContent } from './path-security';
+import { projectRoot, resolveProjectPath, assertTextContent, WORKSPACE_ROOT } from './path-security';
 
 export type FileNode = { name: string; path: string; type: 'file' | 'folder'; size?: number };
 
@@ -43,52 +43,91 @@ export function readProjectFile(id: string, projectPath: string) {
   }
 }
 
-function openRealDirectory(parentDescriptor: number, name: string): number {
-  const parentPath = `/proc/self/fd/${parentDescriptor}`;
-  const target = path.join(parentPath, name);
-  const flags = fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW;
+const DIRECTORY_FLAGS = fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW;
+const FILE_FLAGS = fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK;
 
+/** Open a child directory relative to a pinned directory descriptor, optionally creating it. */
+function openDirectoryAt(parentDescriptor: number, name: string, create: boolean): number {
+  const target = `/proc/self/fd/${parentDescriptor}/${name}`;
   try {
-    return fs.openSync(target, flags);
+    return fs.openSync(target, DIRECTORY_FLAGS);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    if (!create || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     try {
       fs.mkdirSync(target, { mode: 0o700 });
     } catch (mkdirError) {
       if ((mkdirError as NodeJS.ErrnoException).code !== 'EEXIST') throw mkdirError;
     }
-    // Re-open with O_NOFOLLOW. The descriptor pins the directory even if its name is
-    // subsequently replaced or renamed by another local process.
-    return fs.openSync(target, flags);
+    // O_NOFOLLOW is applied on the final component after any competing creation.
+    return fs.openSync(target, DIRECTORY_FLAGS);
   }
 }
 
-function createBackupThroughPinnedDirectory(projectId: string, sourceFile: string, backupName: string): void {
+type PinnedProjectPath = {
+  projectDescriptor: number;
+  parentDescriptor: number;
+  fileName: string;
+  close(): void;
+};
+
+/**
+ * Resolve and pin the project root and every parent directory. All subsequent
+ * reads, backups, temporary writes and renames use these descriptors rather
+ * than re-resolving attacker-replaceable path strings.
+ */
+function openPinnedProjectParent(projectId: string, projectPath: string): PinnedProjectPath {
+  projectRoot(projectId); // validate project id and current workspace/project state
+  const parts = projectPath.replace(/\\/g, '/').split('/');
+  if (parts.length < 1 || parts.some((part) => !part || part === '.' || part === '..' || part.startsWith('.'))) {
+    throw new Error('Invalid project path');
+  }
   if (process.platform !== 'linux' || !fs.existsSync('/proc/self/fd')) {
-    throw new Error('Secure backup is unavailable: Linux procfs directory handles are required');
+    throw new Error('Secure file writes are unavailable: Linux procfs directory handles are required');
   }
 
-  const root = projectRoot(projectId);
-  const rootDescriptor = fs.openSync(root, fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW);
+  const workspaceDescriptor = fs.openSync(WORKSPACE_ROOT, DIRECTORY_FLAGS);
+  let projectDescriptor: number | undefined;
+  let parentDescriptor: number | undefined;
+  try {
+    projectDescriptor = openDirectoryAt(workspaceDescriptor, projectId, false);
+    parentDescriptor = fs.openSync(`/proc/self/fd/${projectDescriptor}`, DIRECTORY_FLAGS);
+    for (const part of parts.slice(0, -1)) {
+      const next = openDirectoryAt(parentDescriptor, part, true);
+      fs.closeSync(parentDescriptor);
+      parentDescriptor = next;
+    }
+    return {
+      projectDescriptor,
+      parentDescriptor,
+      fileName: parts[parts.length - 1],
+      close() {
+        if (parentDescriptor !== undefined) fs.closeSync(parentDescriptor);
+        if (projectDescriptor !== undefined) fs.closeSync(projectDescriptor);
+      },
+    };
+  } catch (error) {
+    if (parentDescriptor !== undefined) fs.closeSync(parentDescriptor);
+    if (projectDescriptor !== undefined) fs.closeSync(projectDescriptor);
+    throw error;
+  } finally {
+    fs.closeSync(workspaceDescriptor);
+  }
+}
+
+function createBackupThroughPinnedDirectory(projectDescriptor: number, sourceDescriptor: number, backupName: string): void {
   let metadataDescriptor: number | undefined;
   let backupDescriptor: number | undefined;
-  let sourceDescriptor: number | undefined;
   let backupFileDescriptor: number | undefined;
-
+  let backupPath: string | undefined;
   try {
-    metadataDescriptor = openRealDirectory(rootDescriptor, '.alex');
-    backupDescriptor = openRealDirectory(metadataDescriptor, 'backups');
-
-    // Open the source without following a final-component symlink, then copy from
-    // the pinned file descriptor rather than resolving the source path a second time.
-    sourceDescriptor = fs.openSync(sourceFile, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+    metadataDescriptor = openDirectoryAt(projectDescriptor, '.alex', true);
+    backupDescriptor = openDirectoryAt(metadataDescriptor, 'backups', true);
     const sourceStat = fs.fstatSync(sourceDescriptor);
     if (!sourceStat.isFile() || sourceStat.size > 1048576) {
       throw new Error('Backup source must be a regular file no larger than 1 MiB');
     }
     const original = fs.readFileSync(sourceDescriptor);
-
-    const backupPath = `/proc/self/fd/${backupDescriptor}/${backupName}`;
+    backupPath = `/proc/self/fd/${backupDescriptor}/${backupName}`;
     backupFileDescriptor = fs.openSync(
       backupPath,
       fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
@@ -96,44 +135,70 @@ function createBackupThroughPinnedDirectory(projectId: string, sourceFile: strin
     );
     fs.writeFileSync(backupFileDescriptor, original);
     fs.fsyncSync(backupFileDescriptor);
+  } catch (error) {
+    if (backupPath) {
+      try { fs.unlinkSync(backupPath); } catch {}
+    }
+    throw error;
   } finally {
     if (backupFileDescriptor !== undefined) fs.closeSync(backupFileDescriptor);
-    if (sourceDescriptor !== undefined) fs.closeSync(sourceDescriptor);
     if (backupDescriptor !== undefined) fs.closeSync(backupDescriptor);
     if (metadataDescriptor !== undefined) fs.closeSync(metadataDescriptor);
-    fs.closeSync(rootDescriptor);
   }
 }
 
 export function writeProjectFile(id: string, projectPath: string, content: unknown) {
   assertTextContent(content);
-  const file = resolveProjectPath(id, projectPath);
-  const directory = path.dirname(file);
-  fs.mkdirSync(directory, { recursive: true });
   resolveProjectPath(id, projectPath);
-
-  let existed = false;
+  const pinned = openPinnedProjectParent(id, projectPath);
+  let sourceDescriptor: number | undefined;
+  let temporaryDescriptor: number | undefined;
+  let temporaryPath: string | undefined;
   try {
-    const stat = fs.lstatSync(file);
-    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('Target must be a regular file');
-    existed = true;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-  }
+    let existed = false;
+    try {
+      sourceDescriptor = fs.openSync(
+        `/proc/self/fd/${pinned.parentDescriptor}/${pinned.fileName}`,
+        FILE_FLAGS
+      );
+      const stat = fs.fstatSync(sourceDescriptor);
+      if (!stat.isFile()) throw new Error('Target must be a regular file');
+      if (stat.size > 1048576) throw new Error('Backup source exceeds 1 MiB');
+      existed = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
 
-  if (existed) {
-    const safeName = path.basename(projectPath).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const backupName = safeName + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) + '.bak';
-    createBackupThroughPinnedDirectory(id, file, backupName);
-  }
+    if (existed && sourceDescriptor !== undefined) {
+      const safeName = pinned.fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const backupName = safeName + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7) + '.bak';
+      createBackupThroughPinnedDirectory(pinned.projectDescriptor, sourceDescriptor, backupName);
+    }
 
-  const temporaryFile = path.join(directory, '.alex-tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7));
-  fs.writeFileSync(temporaryFile, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
-  try {
-    fs.renameSync(temporaryFile, file);
+    temporaryPath = `/proc/self/fd/${pinned.parentDescriptor}/.alex-tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    temporaryDescriptor = fs.openSync(
+      temporaryPath,
+      fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
+      0o600
+    );
+    fs.writeFileSync(temporaryDescriptor, content, 'utf8');
+    fs.fsyncSync(temporaryDescriptor);
+    fs.closeSync(temporaryDescriptor);
+    temporaryDescriptor = undefined;
+
+    // Rename within the pinned parent directory. A symlink replacement of the
+    // path's original parent cannot redirect this operation outside the project.
+    fs.renameSync(temporaryPath, `/proc/self/fd/${pinned.parentDescriptor}/${pinned.fileName}`);
+    fs.fsyncSync(pinned.parentDescriptor);
+    return { backup: existed };
   } catch (error) {
-    fs.rmSync(temporaryFile, { force: true });
+    if (temporaryDescriptor !== undefined) fs.closeSync(temporaryDescriptor);
+    if (temporaryPath) {
+      try { fs.unlinkSync(temporaryPath); } catch {}
+    }
     throw error;
+  } finally {
+    if (sourceDescriptor !== undefined) fs.closeSync(sourceDescriptor);
+    pinned.close();
   }
-  return { backup: existed };
 }
