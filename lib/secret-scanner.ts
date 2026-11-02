@@ -29,7 +29,7 @@ export function findSecretKinds(value: string): SecretKind[] {
   const found = new Set<SecretKind>();
   for (const { kind, pattern } of PATTERNS) {
     pattern.lastIndex = 0;
-    if (pattern.test(value)) found.add(kind);
+    if (value.match(pattern)) found.add(kind);
   }
   return [...found];
 }
