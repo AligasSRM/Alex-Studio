@@ -85,6 +85,8 @@ describe('AI apply batch manifest storage', () => {
     const batch = manifest();
     saveAIApplyBatch(project.id, batch);
     const release = acquireAIApplyBatchLock(project.id, batch.batchId);
+    const lockFile = path.join(projectRoot(project.id), '.alex', 'ai-apply-batches', batch.batchId + '.lock');
+    expect(fs.statSync(lockFile).mode & 0o777).toBe(0o600);
     expect(() => acquireAIApplyBatchLock(project.id, batch.batchId)).toThrow(expect.objectContaining({ code: 'EEXIST' }));
     release();
     expect(() => {
