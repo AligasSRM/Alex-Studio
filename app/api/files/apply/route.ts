@@ -5,6 +5,7 @@ import { assertLocalMutation, assertLocalRequest } from '@/lib/path-security';
 import { readProjectFile, writeProjectFile } from '@/lib/files';
 import { getProject } from '@/lib/project-store';
 import { readJsonBody } from '@/lib/request-body';
+import { isMutationUnavailable } from '@/lib/platform-mutation';
 
 const MAX_WRITE_BODY_BYTES = 1_100_000;
 
@@ -54,6 +55,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Apply failed';
-    return NextResponse.json({ error: message }, { status: message.startsWith('UNAVAILABLE:') ? 503 : 400 });
+    return NextResponse.json({ error: message }, { status: isMutationUnavailable(error) ? 503 : 400 });
   }
 }

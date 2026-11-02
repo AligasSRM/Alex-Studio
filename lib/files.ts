@@ -2,13 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { projectRoot, resolveProjectPath, assertTextContent } from './path-security';
+import { assertWindowsMutationAvailable } from './platform-mutation';
 
 export type FileNode = { name: string; path: string; type: 'file' | 'folder'; size?: number };
 const MAX_TEXT_BYTES = 1024 * 1024;
-const WINDOWS_MUTATION_UNAVAILABLE = 'UNAVAILABLE: secure Windows-native handle-based file mutation is not implemented; refusing writes and deletes until reparse-point and TOCTOU protections are verified.';
-function assertWindowsMutationAvailable(): void {
-  throw new Error(WINDOWS_MUTATION_UNAVAILABLE);
-}
 
 function assertRegularNonLink(target: string, allowMissing = false): fs.Stats | null {
   try {

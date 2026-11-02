@@ -12,6 +12,7 @@ import { recordAIApplyAudit } from '@/lib/ai-apply-audit';
 import { saveAIApplyBatch } from '@/lib/ai-apply-batches';
 import { readJsonBody } from '@/lib/request-body';
 import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
+import { WINDOWS_MUTATION_UNAVAILABLE } from '@/lib/platform-mutation';
 
 const MAX_APPLY_BODY_BYTES = 3 * 1024 * 1024;
 
@@ -22,6 +23,7 @@ function hash(content: string) {
 
 export async function POST(request: Request) {
   if (!assertLocalMutation(request)) return NextResponse.json({ error: 'Local same-origin requests only' }, { status: 403 });
+  return NextResponse.json({ error: WINDOWS_MUTATION_UNAVAILABLE }, { status: 503, headers: { 'Cache-Control': 'no-store' } });
   const parsed = await readJsonBody(request, MAX_APPLY_BODY_BYTES);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: parsed.status });
   const body = parsed.value as { projectId?: unknown; approved?: unknown; files?: unknown; verificationProof?: unknown } | null;

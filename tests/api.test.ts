@@ -7,6 +7,18 @@ import { getProject, listProjects } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 
 const createdIds: string[] = [];
+function createFixtureProject(name: string) {
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Math.random().toString(36).slice(2, 7);
+  const root = projectRoot(id);
+  fs.mkdirSync(root, { recursive: true });
+  const record = { id, name, createdAt: new Date().toISOString() };
+  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify(record, null, 2) + '\\n');
+  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><body><h1>' + name + '</h1><button>Try interaction</button><p>Your project is running.</p></body></html>\\n');
+  fs.writeFileSync(path.join(root, 'styles.css'), 'body{font-family:system-ui}\\n');
+  fs.writeFileSync(path.join(root, 'script.js'), '');
+  createdIds.push(id);
+  return record;
+}
 function localRequest(url: string, body: unknown) {
   return new Request(url, {
     method: 'POST',
@@ -25,23 +37,17 @@ afterEach(() => {
 });
 
 describe('local project API', () => {
-  it('creates a project with starter files', async () => {
+  it('fails closed on project creation until Windows-native mutation protection exists', async () => {
+    const before = fs.existsSync(path.join(process.cwd(), 'workspace')) ? fs.readdirSync(path.join(process.cwd(), 'workspace')) : [];
     const response = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'API Test Project' }));
-    if (response.status !== 201) throw new Error('Project creation failed: ' + await response.clone().text());
-    expect(response.status).toBe(201);
-    const data = await response.json();
-    const id = data.project.id as string;
-    createdIds.push(id);
-    expect(fs.existsSync(path.join(projectRoot(id), 'index.html'))).toBe(true);
-    expect(fs.existsSync(path.join(projectRoot(id), 'styles.css'))).toBe(true);
-    expect(fs.existsSync(path.join(projectRoot(id), 'script.js'))).toBe(true);
+    expect(response.status).toBe(503);
+    expect((await response.json()).error).toMatch(/^UNAVAILABLE:/);
+    const after = fs.existsSync(path.join(process.cwd(), 'workspace')) ? fs.readdirSync(path.join(process.cwd(), 'workspace')) : [];
+    expect(after).toEqual(before);
   });
 
   it('rejects symlinked project metadata when reading project details', async () => {
-    const created = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'Metadata Symlink Test' }));
-    if (created.status !== 201) throw new Error('Project creation failed: ' + await created.clone().text());
-    const { project } = await created.json();
-    createdIds.push(project.id);
+    const project = createFixtureProject('Metadata Symlink Test');
     const root = projectRoot(project.id);
     const metadata = path.join(root, '.alex-project.json');
     const linkedMetadata = path.join(root, 'linked-metadata.json');
@@ -53,20 +59,15 @@ describe('local project API', () => {
   });
 
   it('refuses file writes without explicit approval and saves after approval', async () => {
-    const created = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'Approval Test Project' }));
-    if (created.status !== 201) throw new Error('Project creation failed: ' + await created.clone().text());
-    const { project } = await created.json();
-    createdIds.push(project.id);
+    const project = createFixtureProject('Approval Test Project');
     const payload = { projectId: project.id, path: 'index.html', content: '<h1>Approved content</h1>' };
     const denied = await writeFileRoute(localRequest('http://localhost:3000/api/files', payload));
     expect(denied.status).toBe(409);
     const approved = await writeFileRoute(localRequest('http://localhost:3000/api/files', { ...payload, approved: true }));
-    expect(approved.status).toBe(200);
-    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).toBe(payload.content);
-    const backupDir = path.join(projectRoot(project.id), '.alex', 'backups');
-    const backups = fs.readdirSync(backupDir);
-    expect(backups).toHaveLength(1);
-    expect(fs.readFileSync(path.join(backupDir, backups[0]), 'utf8')).toContain('Approval Test Project');
+    expect(approved.status).toBe(503);
+    expect((await approved.json()).error).toMatch(/^UNAVAILABLE:/);
+    expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).not.toBe(payload.content);
+    expect(fs.existsSync(path.join(projectRoot(project.id), '.alex', 'backups'))).toBe(false);
 
     const traversal = await writeFileRoute(localRequest('http://localhost:3000/api/files', {
       ...payload, path: '../outside.txt', approved: true,
@@ -95,9 +96,7 @@ describe('local project API', () => {
   });
 
   it('serves the current project HTML in a restricted preview response', async () => {
-    const created = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'Preview Test Project' }));
-    const { project } = await created.json();
-    createdIds.push(project.id);
+    const project = createFixtureProject('Preview Test Project');
     const response = await previewRoute(new Request('http://localhost:3000/api/preview?projectId=' + encodeURIComponent(project.id), { headers: { host: 'localhost:3000' } }));
     expect(response.status).toBe(200);
     expect(response.headers.get('content-security-policy')).toContain("default-src 'none'");

@@ -5,6 +5,7 @@ import { assertLocalMutation, assertLocalRequest } from '@/lib/path-security';
 import { readProjectFile, writeProjectFile, listProjectFiles } from '@/lib/files';
 import { getProject } from '@/lib/project-store';
 import { readJsonBody } from '@/lib/request-body';
+import { isMutationUnavailable } from '@/lib/platform-mutation';
 
 const MAX_WRITE_BODY_BYTES = 1_100_000;
 
@@ -59,6 +60,6 @@ export async function POST(request: Request) {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Write failed' }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Write failed' }, { status: isMutationUnavailable(error) ? 503 : 400 });
   }
 }
