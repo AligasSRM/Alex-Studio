@@ -98,6 +98,21 @@ export async function POST(request: Request) {
       restored.push(snapshot.path);
     } catch {
       failures.push(snapshot.path);
+      // A write/unlink may have changed the directory entry before a later
+      // fsync failed. Reconcile the on-disk state so compensation can restore
+      // the post-apply bytes instead of silently leaving a partial rollback.
+      try {
+        let currentAfterFailure: string | null;
+        try {
+          currentAfterFailure = readProjectFile(body.projectId, snapshot.path);
+        } catch (reconcileError) {
+          if ((reconcileError as NodeJS.ErrnoException).code === 'ENOENT') currentAfterFailure = null;
+          else throw reconcileError;
+        }
+        if (currentAfterFailure === snapshot.beforeContent) restored.push(snapshot.path);
+      } catch {
+        // State could not be established safely; leave the path for manual recovery.
+      }
     }
   }
 
