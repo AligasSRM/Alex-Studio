@@ -11,6 +11,7 @@ describe('secret material scanner', () => {
       'const google = "AIza12345678901234567890123456789012345";',
       'const bearer = "Bearer abcdefghijklmnopqrstuvwxyz012345";',
       'const password = "a-very-long-private-password-value";',
+      'const aws_secret_access_key = "long-aws-secret-access-value";',
     ].join('\n');
 
     expect(findSecretKinds(source)).toEqual(expect.arrayContaining([
