@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [main, integration/security-hardening-2026-11-02]
   push:
-    branches: [main, integration/security-hardening-2026-11-02, feature/alex-studio-implementation-2026-10-27, test/phase-0-acceptance-suite, fix/security-review-apply-gate-2026-10-27]
+    branches: [main, integration/security-hardening-2026-11-02, fix/project-create-fail-closed-ci-coverage-2026-11-03, feature/alex-studio-implementation-2026-10-27, test/phase-0-acceptance-suite, fix/security-review-apply-gate-2026-10-27]
   workflow_dispatch:
 
 # Keep the workflow token read-only. This CI does not need to push commits or open PRs.
