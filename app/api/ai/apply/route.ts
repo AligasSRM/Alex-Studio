@@ -109,22 +109,45 @@ export async function POST(request: Request) {
   }
 
   const applied: string[] = [];
+  let attemptedChange: Change | undefined;
   try {
     for (const change of changes) {
+      attemptedChange = change;
       writeProjectFile(body.projectId, change.path, change.content, snapshots.find((snapshot) => snapshot.path === change.path)?.content ?? null);
       applied.push(change.path);
+      attemptedChange = undefined;
     }
     const appliedAt = new Date().toISOString();
     saveAIApplyBatch(body.projectId, { ...batchManifest, updatedAt: appliedAt, status: 'applied' });
     recordAIApplyAudit(body.projectId, { ...auditEvent, timestamp: appliedAt, outcome: 'applied', rollbackStatus: 'not-needed' });
     return NextResponse.json({ ok: true, batchId, applied, count: applied.length }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    const rollbackFailures = rollbackAppliedSnapshots(snapshots, applied, (snapshot) => {
+    const reconciliationFailures: string[] = [];
+    if (attemptedChange) {
+      const attemptedSnapshot = snapshots.find((snapshot) => snapshot.path === attemptedChange?.path);
+      try {
+        const currentContent = readProjectFile(body.projectId, attemptedChange.path);
+        if (currentContent === attemptedChange.content && currentContent !== attemptedSnapshot?.content) {
+          applied.push(attemptedChange.path);
+        } else if (currentContent !== attemptedSnapshot?.content) {
+          reconciliationFailures.push(attemptedChange.path);
+        }
+      } catch (reconciliationError) {
+        if (!(attemptedSnapshot?.content === null &&
+              (reconciliationError as NodeJS.ErrnoException).code === 'ENOENT')) {
+          reconciliationFailures.push(attemptedChange.path);
+        }
+      }
+    }
+    const rollbackFailures = [
+      ...rollbackAppliedSnapshots(snapshots, applied, (snapshot) => {
       const appliedContent = changes.find((change) => change.path === snapshot.path)?.content;
       if (appliedContent === undefined) throw new Error('Missing applied snapshot for rollback');
       if (snapshot.content === null) deleteProjectFile(body.projectId as string, snapshot.path, appliedContent);
       else writeProjectFile(body.projectId as string, snapshot.path, snapshot.content, appliedContent);
-    });
+    }),
+      ...reconciliationFailures,
+    ];
     const rollbackStatus = rollbackFailures.length ? 'failed' : 'succeeded';
     const failedAt = new Date().toISOString();
     try {
