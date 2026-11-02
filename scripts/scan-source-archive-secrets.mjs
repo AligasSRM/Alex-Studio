@@ -49,7 +49,7 @@ try {
       'with zipfile.ZipFile(sys.argv[1]) as archive:',
       '  entries = [[item.filename, base64.b64encode(archive.read(item)).decode("ascii")] for item in archive.infolist() if not item.is_dir()]',
       '  print(json.dumps(entries))',
-    ].join('\\n'), archive],
+    ].join('\n'), archive],
     { encoding: 'utf8', maxBuffer: 128 * 1024 * 1024 },
   );
   archiveEntries = JSON.parse(output);
