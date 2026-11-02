@@ -29,7 +29,7 @@ describe('source archive secret scanner', () => {
 
   test('rejects a secret-like token embedded in a NUL-containing binary entry', () => {
     const archivePath = path.join(tempDir, 'binary-secret.zip');
-    const token = Buffer.from('AKIA1234567890ABCDEF', 'ascii');
+    const token = Buffer.from(['AKIA', '12345678', '90ABCDEF'].join(''), 'ascii');
     const binary = Buffer.concat([Buffer.from([0, 1, 2, 0]), token, Buffer.from([0, 255])]);
     makeArchive([['assets/payload.bin', binary]], archivePath);
 
