@@ -20,6 +20,7 @@ rm -f "$output"
 git archive --format=zip --output="$output" HEAD -- . ':(exclude)workspace/**'
 
 unzip -tq "$output"
+# Validate the actual ZIP entries as well as tracked Git filenames.
 archive_paths="$(unzip -Z1 "$output")"
 if printf '%s\n' "$archive_paths" | grep -Eiq '(^|/)(\.git|\.next|node_modules|workspace|\.alex)(/|$)|(^|/)\.env([^/]*)?$|\.(pem|key|p12|pfx)$'; then
   echo "::error::Source archive contains a forbidden path."
