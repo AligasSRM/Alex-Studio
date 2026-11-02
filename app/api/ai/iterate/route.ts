@@ -85,7 +85,7 @@ export function runSandbox(_root: string): Promise<Result> {
     ok: false,
     available: false,
     summary: 'Windows-native isolated browser runner is not implemented',
-    output: 'Browser verification is unavailable. The former Docker/Linux runner was removed from the approved platform scope. No generated browser code was started; direct host execution is prohibited.',
+    output: 'Browser verification is unavailable until a Windows-native isolation provider is implemented. No generated browser code was started; direct host execution is prohibited.',
     pageSnapshot: null,
   });
 }
