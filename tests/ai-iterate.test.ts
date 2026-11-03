@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { POST as iteratePost } from '../app/api/ai/iterate/route';
-import { POST as createProjectPost } from '../app/api/projects/route';
 import { projectRoot } from '../lib/path-security';
 import { readProjectFile } from '../lib/files';
 import { resetRateLimitsForTests } from '../lib/rate-limit';
@@ -15,11 +14,17 @@ function localPost(url: string, body: unknown) {
     body: JSON.stringify(body),
   });
 }
-async function project() {
-  const response = await createProjectPost(localPost('http://localhost:3000/api/projects', { name: 'AI Iterate Test ' + Date.now() }));
-  const data = await response.json() as { project: { id: string } };
-  ids.push(data.project.id);
-  return data.project.id;
+function project() {
+  const name = 'AI Iterate Test';
+  const id = 'ai-iterate-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  const root = projectRoot(id);
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(root + '/.alex-project.json', JSON.stringify({ id, name, createdAt: new Date().toISOString() }) + '\\n');
+  fs.writeFileSync(root + '/index.html', '<!doctype html><html><head><title>Fixture</title></head><body><h1>Fixture</h1></body></html>\\n');
+  fs.writeFileSync(root + '/styles.css', 'body{font-family:system-ui}\\n');
+  fs.writeFileSync(root + '/script.js', '');
+  ids.push(id);
+  return id;
 }
 const hash = (value: string) => createHash('sha256').update(value, 'utf8').digest('hex');
 afterEach(() => {
