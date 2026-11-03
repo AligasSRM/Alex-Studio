@@ -43,7 +43,7 @@ afterEach(() => {
   }
 });
 
-describe('full AI lifecycle proof (real provider and real Docker; explicitly gated)', () => {
+describe('full AI lifecycle proof (real provider; explicitly gated)', () => {
   lifecycleTest('generates a draft, proves requirements, repairs a broken draft, and applies only the verified files', async () => {
     const provider = process.env.AI_PROVIDER === 'groq' ? 'groq' : 'openai';
     const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
