@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { ensureWorkspaceRoot, projectRoot, validateProjectId, WORKSPACE_ROOT } from './path-security';
-import { WINDOWS_MUTATION_UNAVAILABLE } from './platform-mutation';
 
 export type ProjectRecord = { id: string; name: string; createdAt: string };
 
@@ -70,6 +70,23 @@ export function getProject(id: string): ProjectRecord | null {
   }
 }
 
-export function createProject(_input: string): ProjectRecord {
-  throw new Error(WINDOWS_MUTATION_UNAVAILABLE);
+export function createProject(input: string): ProjectRecord {
+  ensureWorkspaceRoot();
+  const name = typeof input === 'string' ? input.trim() : '';
+  if (!name || name.length > 80) throw new Error('Project name must contain 1–80 characters');
+  const slug = name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 36) || 'project';
+  const id = validateProjectId(slug + '-' + randomUUID().slice(0, 8));
+  const root = projectRoot(id);
+  fs.mkdirSync(root, { recursive: false });
+  const record: ProjectRecord = { id, name, createdAt: new Date().toISOString() };
+  try {
+    fs.writeFileSync(meta(id), JSON.stringify(record, null, 2) + '\\n', { flag: 'wx' });
+    fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html>\\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + name.replace(/[&<>"]/g, '') + '</title></head><body><main><h1>' + name.replace(/[&<>"]/g, '') + '</h1></main></body></html>\\n', { flag: 'wx' });
+    fs.writeFileSync(path.join(root, 'styles.css'), 'body { font-family: system-ui, sans-serif; margin: 2rem; }\\n', { flag: 'wx' });
+    fs.writeFileSync(path.join(root, 'script.js'), '', { flag: 'wx' });
+    return record;
+  } catch (error) {
+    fs.rmSync(root, { recursive: true, force: true });
+    throw error;
+  }
 }
