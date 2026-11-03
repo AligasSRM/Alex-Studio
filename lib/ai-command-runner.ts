@@ -127,7 +127,7 @@ function evidence(name: string, required: boolean, status: CommandStatus, output
   return {
     name,
     command: 'npm run ' + name,
-    cwd: '<Windows-isolated-workspace-unavailable>',
+    cwd: '<local-android-command-runner-unavailable>',
     required,
     status,
     startedAt: null,
@@ -233,12 +233,12 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
     };
   }
 
-  const output = 'UNAVAILABLE: the Windows-native isolated execution provider is not implemented. No generated command was started. Direct host execution or a non-Windows fallback is prohibited by the locked platform scope.';
+  const output = 'UNAVAILABLE: the local Android project-command runner is not implemented. No generated command was started.';
   return {
     ok: false,
     available: false,
     status: 'UNAVAILABLE',
-    summary: 'Windows-native isolated execution provider is not implemented',
+    summary: 'Local Android project-command runner is not implemented',
     output,
     commands: plan.scripts.map(item => evidence(item.name, item.required, 'UNAVAILABLE', output, plan.lockfileSha256)),
   };
