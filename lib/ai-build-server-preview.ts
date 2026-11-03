@@ -33,7 +33,7 @@ export async function runBuildServerPreview(root: string): Promise<BuildPreviewR
   }
   const cache = process.env.AI_RUNNER_NPM_CACHE;
   if (!cache || !fs.existsSync(cache) || !fs.statSync(cache).isDirectory()) {
-    return unavailable('Offline npm cache is unavailable', 'A configured offline npm cache directory is required. No Docker, build, or server command was started.');
+    return unavailable('Offline npm cache is unavailable', 'A configured offline npm cache directory is required. No generated build or server command was started.');
   }
   return unavailable(
     'Windows-native isolated build/server preview is not implemented',
