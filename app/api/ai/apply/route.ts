@@ -77,14 +77,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not validate current project files' }, { status: 409 });
   }
 
-  // Preserve request, authorization, proof, path, and optimistic-hash validation,
-  // but stop before snapshots, audit writes, batches, or file mutations until
-  // the reviewed Windows-native mutation provider is available.
-  return NextResponse.json(
-    { error: 'UNAVAILABLE: Windows-native secure file mutation is not implemented' },
-    { status: 503, headers: { 'Cache-Control': 'no-store' } },
-  );
-
   const batchId = randomUUID();
   const createdAt = new Date().toISOString();
   const auditEvent = {
