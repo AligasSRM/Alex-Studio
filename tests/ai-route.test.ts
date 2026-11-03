@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { POST } from '../app/api/ai/generate/route';
-import { POST as createProjectRoute } from '../app/api/projects/route';
 import { projectRoot } from '../lib/path-security';
 import { checkRateLimit, resetRateLimitsForTests } from '../lib/rate-limit';
 import { estimateAICostUsd } from '../lib/ai-usage';
@@ -11,11 +10,17 @@ const env = { key: process.env.OPENAI_API_KEY, model: process.env.OPENAI_MODEL, 
 function localPost(url: string, body: string) {
   return new Request(url, { method: 'POST', headers: { host: 'localhost:3000', origin: 'http://localhost:3000', 'content-type': 'application/json' }, body });
 }
-async function makeProject() {
-  const response = await createProjectRoute(localPost('http://localhost:3000/api/projects', JSON.stringify({ name: 'AI Route Test ' + Date.now() })));
-  const data = await response.json() as { project: { id: string } };
-  createdIds.push(data.project.id);
-  return data.project.id;
+function makeProject() {
+  const name = 'AI Route Test';
+  const id = 'ai-route-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  const root = projectRoot(id);
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify({ id, name, createdAt: new Date().toISOString() }) + '\\n');
+  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><head><title>Fixture</title></head><body><h1>Fixture</h1></body></html>\\n');
+  fs.writeFileSync(path.join(root, 'styles.css'), 'body{font-family:system-ui}\\n');
+  fs.writeFileSync(path.join(root, 'script.js'), '');
+  createdIds.push(id);
+  return id;
 }
 afterEach(() => {
   jest.restoreAllMocks();
