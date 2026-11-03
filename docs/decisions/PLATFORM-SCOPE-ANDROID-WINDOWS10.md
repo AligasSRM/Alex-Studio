@@ -1,50 +1,49 @@
-# Alex Studio — Locked Platform Scope
+# Alex Studio — قرار النطاق المعتمد
 
-- **Decision status:** Permanently locked by the project owner
-- **Decision date:** 2026-11-02
-- **Scope:** Platform scope only; this record does not certify compatibility or implementation.
+- **الحالة:** قرار نهائي ومجمّد.
+- **تاريخ القرار:** 2026-11-04.
+- **نوع المنتج:** أداة تطوير شخصية محلية لمستخدم واحد.
+- **منصة المنتج الوحيدة:** Android.
 
-## 1. The only approved platforms
+## 1. طبيعة المشروع
 
-Alex Studio is limited to exactly these two platforms:
+Alex Studio مساحة تطوير شخصية يستخدمها مالك المشروع وحده لإنشاء المشاريع وتعديلها بمساعدة الذكاء الاصطناعي. ليست خدمة عامة، ولا منتجاً متعدد المستخدمين، ولا منصة SaaS.
 
-1. **Windows 10** — the sole computer host for the Alex Studio server, project-file management, backups, execution, testing, and verification.
-2. **Android** — the companion/control application used to connect to the Windows 10 host, submit ideas or specifications, review plans and diffs, and provide explicit approvals.
+لا حاجة إلى:
+- تسجيل أو إدارة عدة مستخدمين.
+- أدوار أو صلاحيات مؤسساتية.
+- بوابات مصادقة لخدمة عامة.
+- بنية استضافة عامة أو وصول إنترنت من أجهزة غير موثوقة.
+- متطلبات امتثال أو حوكمة مخصصة لخدمة عامة.
 
-No other operating system or device platform is in scope. This decision is locked and must not be broadened or replaced without a new explicit decision from the project owner.
+## 2. الأقسام الثمانية الوحيدة
 
-## 2. Windows 10 implementation requirement
+1. إدارة المشاريع: إنشاء، عرض، تعديل، حذف.
+2. إدارة الملفات: إنشاء، قراءة، تعديل، حذف.
+3. توليد AI: تحويل الفكرة أو المواصفات إلى خطة ومسودة ملفات.
+4. التخطيط والمراجعة: عرض الخطة والملفات والفروقات قبل التطبيق.
+5. Apply: تطبيق التعديلات بعد موافقة صريحة منفصلة.
+6. Build وPreview: بناء المشروع وتشغيل المعاينة.
+7. Diagnose & Repair: تشخيص الأخطاء وإصلاحها وإعادة الاختبار.
+8. Rollback والتسليم: استرجاع التغييرات عند الفشل وتسليم المشروع.
 
-- Windows 10 is the only computer operating-system target.
-- All file-management behavior must use Windows-compatible APIs, path handling, permissions, locking, atomic replacement, and recovery semantics.
-- Runtime assumptions tied to other operating systems must be removed from application code, scripts, workflows, tests, setup instructions, and project documentation.
-- The application must not depend on an alternate operating-system layer or external runtime to provide its core file-management or execution behavior.
-- Windows 10 version/build and required security prerequisites must be detected and reported accurately. Compatibility must not be claimed until verified on the target machine.
-- If safe isolation or a required security prerequisite is unavailable or cannot be verified, execution and verification must fail closed as `UNAVAILABLE`; generated code must never fall back to unrestricted host execution.
+لا تُضاف أقسام أو ميزات خارج هذه القائمة دون قرار جديد صريح من مالك المشروع.
 
-## 3. Android role and safety boundary
+## 3. دورة العمل
 
-- Android is the companion/control client; it is not the trusted execution host for generated project code.
-- The Windows 10 host remains responsible for project storage, backups, execution, testing, and evidence collection.
-- No project changes may be applied without explicit user approval bound to the exact reviewed plan and file contents.
-- Pairing, authentication, transport security, supported Android versions, and minimum device requirements must be validated before implementation is considered accepted.
-- This decision does not authorize public hosting, internet exposure, or a cloud relay.
+فهم الطلب ← تخطيط ← توليد ← مراجعة ← موافقة ← تطبيق ← اختبار ← تشخيص ← إصلاح ← إعادة اختبار ← تسليم موثّق.
 
-## 4. Required acceptance evidence
+اعتماد الخطة لا يساوي اعتماد التطبيق. يجب أن تكون موافقة Apply إجراءً منفصلاً وواضحاً.
 
-Before claiming platform support, record separate evidence for:
+## 4. قواعد تشغيل محلية مختصرة
 
-- Windows 10 version/build and hardware prerequisite checks.
-- Android installation and physical-device control-flow testing.
-- Server startup, secure pairing/connection, interruption recovery, and session revocation.
-- Windows-native file integrity, path traversal and reparse-point/symlink defenses, locking, atomic replacement, and rollback behavior.
-- Isolation runtime availability, timeout handling, process termination, cleanup, and fail-closed behavior.
-- The complete generated-project workflow and its actual test results.
+- التطبيق محلي وشخصي على Android.
+- لا توجد منصة Windows أو Linux ضمن منصات المنتج.
+- لا يُطلب بناء منظومة أمن عامة أو متعددة المستخدمين.
+- تبقى فقط فحوص بسيطة تمنع الكتابة خارج مجلد المشروع أو استبدال ملف أحدث بالخطأ.
+- تبقى النسخ الاحتياطية وRollback لأنها جزء من الوظيفة الأساسية وسلامة ملفات المالك.
+- لا يُسمح لعملية توليد AI أن تطبّق الملفات تلقائياً دون موافقة المستخدم.
 
-Each check must retain its real status (`PASS`, `FAIL`, `NOT RUN`, `UNAVAILABLE`, or `UNVERIFIED`). CI success alone is not proof of end-to-end platform acceptance.
+## 5. ما لا تثبته هذه الوثيقة
 
-## 5. Change control
-
-This is the canonical record of the approved platform scope. The approved scope is **Windows 10 + Android only**. Do not re-open the platform decision or add other platform targets without a new explicit decision from the project owner.
-
-**Important:** This document records the locked scope. It does not claim that Windows 10 or Android compatibility has been implemented, physically tested, or accepted for release.
+هذه الوثيقة تثبّت نطاق العمل فقط. لا تعني أن جميع الوظائف مكتملة أو مختبرة على جهاز Android فعلي. يجب توثيق نجاح كل قسم بنتائج اختبار حقيقية.
