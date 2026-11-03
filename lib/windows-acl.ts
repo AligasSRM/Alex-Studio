@@ -36,7 +36,7 @@ export function secureWindowsPrivatePath(target: string, kind: WindowsPrivatePat
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  execFileSync('icacls.exe', [target, '/inheritancelevel', 'r'], {
+  execFileSync('icacls.exe', [target, '/inheritance:r'], {
     encoding: 'utf8',
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
