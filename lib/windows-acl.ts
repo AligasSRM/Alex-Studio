@@ -31,10 +31,18 @@ export function secureWindowsPrivatePath(target: string, kind: WindowsPrivatePat
 
   const sid = currentUserSid();
   const rights = kind === 'directory' ? '(OI)(CI)F' : 'F';
+  execFileSync('icacls.exe', [target, '/reset'], {
+    encoding: 'utf8',
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  execFileSync('icacls.exe', [target, '/inheritancelevel', 'r'], {
+    encoding: 'utf8',
+    windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   execFileSync('icacls.exe', [
     target,
-    '/reset',
-    '/inheritancelevel:r',
     '/grant:r',
     '*' + sid + ':' + rights,
     '*S-1-5-18:' + rights,
