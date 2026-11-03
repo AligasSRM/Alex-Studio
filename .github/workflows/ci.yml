@@ -39,7 +39,7 @@ jobs:
       # Validate dependency sources and lockfile integrity metadata before running install scripts.
       - name: Verify dependency lockfile provenance
         run: |
-          @'
+          $nodeScript = @'
           const fs = require('node:fs');
           const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
           if (lock.lockfileVersion !== 3) throw new Error(`Unexpected lockfileVersion: ${lock.lockfileVersion}`);
@@ -60,7 +60,8 @@ jobs:
             process.exit(1);
           }
           console.log(`Validated ${packages.length} locked packages against the npm registry allowlist and SHA-512 integrity metadata.`);
-          '@ | node
+          '@
+          $nodeScript | node
 
       # Reproducible install from the committed lockfile using the official npm registry.
       - name: Install dependencies
@@ -71,7 +72,7 @@ jobs:
       # Fail closed if the expected patch is absent or the dependency changes without review.
       - name: Verify deepmerge security mitigation
         run: |
-          @'
+          $nodeScript = @'
           const fs = require('node:fs');
           const path = require('node:path');
           const entry = require.resolve('deepmerge');
@@ -96,7 +97,8 @@ jobs:
             throw new Error('Reviewed deepmerge __proto__ mitigation is missing; refusing to continue.');
           }
           console.log('Verified vendored deepmerge 4.3.2 and the reviewed __proto__ mitigation.');
-          '@ | node
+          '@
+          $nodeScript | node
 
       - name: Verify npm cache integrity
         run: npm cache verify
@@ -109,7 +111,7 @@ jobs:
           $auditStatus = $LASTEXITCODE
           [System.IO.File]::WriteAllText($env:AUDIT_REPORT_PATH, ($auditOutput -join [Environment]::NewLine), [System.Text.UTF8Encoding]::new($false))
           $env:AUDIT_STATUS = [string]$auditStatus
-          @'
+          $nodeScript = @'
           const fs = require('node:fs');
           const report = JSON.parse(fs.readFileSync(process.env.AUDIT_REPORT_PATH, 'utf8'));
           const counts = report.metadata?.vulnerabilities ?? {};
@@ -156,7 +158,8 @@ jobs:
           } else if ((counts.low ?? 0) > 0) {
             console.warn('Known low-severity findings remain; review the documented deepmerge mitigation and residual risk.');
           }
-          '@ | node
+          '@
+          $nodeScript | node
 
       - name: Upload dependency audit JSON
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
