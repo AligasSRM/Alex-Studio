@@ -57,8 +57,8 @@ export function saveEditorHistory(projectId: string, filePath: string, history: 
   const temporary = path.join(path.dirname(destination), '.' + randomUUID() + '.tmp');
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL;
   const descriptor = fs.openSync(temporary, flags);
-  secureWindowsPrivatePath(temporary, 'file');
   try {
+    secureWindowsPrivatePath(temporary, 'file');
     if (!fs.fstatSync(descriptor).isFile()) throw new Error('Editor history must be a regular file');
     fs.writeFileSync(descriptor, serialized, 'utf8');
     fs.fsyncSync(descriptor);
