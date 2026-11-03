@@ -183,7 +183,7 @@ export async function POST(request: Request) {
       try { next = await getRepair(apiKey, model, provider, body.projectId, body.prompt, context, diagnostic, working, secretPaths); }
       catch (e) { repairs.push({ round, summary: e instanceof Error ? e.message : 'AI repair failed', diagnostic }); break; }
       for (const file of next.files) working.set(file.path, file.content);
-      fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); fs.chmodSync(root, 0o755); writeFiles();
+      fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); secureWindowsPrivatePath(root, 'directory'); writeFiles();
       diagnostic = await verifyProject(root, body.requirements);
       commandChecks = diagnostic.commandChecks!;
       repairs.push({ round, summary: next.summary, diagnostic });
