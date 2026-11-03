@@ -45,8 +45,8 @@ export function recordAIApplyAudit(projectId: string, event: AIApplyAuditEvent) 
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
   const descriptor = fs.openSync(file, fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_WRONLY);
-  secureWindowsPrivatePath(file, 'file');
   try {
+    secureWindowsPrivatePath(file, 'file');
     const stat = fs.fstatSync(descriptor);
     if (!stat.isFile()) throw new Error('AI apply audit ledger must be a regular file');
     fs.writeSync(descriptor, JSON.stringify(event) + '\n', undefined, 'utf8');
