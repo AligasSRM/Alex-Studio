@@ -19,9 +19,9 @@ function project() {
   const id = 'ai-iterate-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   const root = projectRoot(id);
   fs.mkdirSync(root, { recursive: true });
-  fs.writeFileSync(root + '/.alex-project.json', JSON.stringify({ id, name, createdAt: new Date().toISOString() }) + '\\n');
-  fs.writeFileSync(root + '/index.html', '<!doctype html><html><head><title>Fixture</title></head><body><h1>Fixture</h1></body></html>\\n');
-  fs.writeFileSync(root + '/styles.css', 'body{font-family:system-ui}\\n');
+  fs.writeFileSync(root + '/.alex-project.json', JSON.stringify({ id, name, createdAt: new Date().toISOString() }) + '\n');
+  fs.writeFileSync(root + '/index.html', '<!doctype html><html><head><title>Fixture</title></head><body><h1>Fixture</h1></body></html>\n');
+  fs.writeFileSync(root + '/styles.css', 'body{font-family:system-ui}\n');
   fs.writeFileSync(root + '/script.js', '');
   ids.push(id);
   return id;
