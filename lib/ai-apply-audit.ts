@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { projectRoot } from './path-security';
-import { secureWindowsPrivatePath } from './windows-acl';
 
 export type AIApplyAuditEvent = {
   batchId: string;
@@ -22,9 +21,7 @@ function auditFile(projectId: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     fs.mkdirSync(directory, { recursive: false });
-    secureWindowsPrivatePath(directory, 'directory');
   }
-  secureWindowsPrivatePath(directory, 'directory');
   return path.join(directory, 'ai-apply-audit.jsonl');
 }
 
@@ -40,13 +37,11 @@ export function recordAIApplyAudit(projectId: string, event: AIApplyAuditEvent) 
   try {
     const existing = fs.lstatSync(file);
     if (existing.isSymbolicLink() || !existing.isFile()) throw new Error('AI apply audit ledger must be a regular file');
-    secureWindowsPrivatePath(file, 'file');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
   const descriptor = fs.openSync(file, fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_WRONLY);
   try {
-    secureWindowsPrivatePath(file, 'file');
     const stat = fs.fstatSync(descriptor);
     if (!stat.isFile()) throw new Error('AI apply audit ledger must be a regular file');
     fs.writeSync(descriptor, JSON.stringify(event) + '\n', undefined, 'utf8');
