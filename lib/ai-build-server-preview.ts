@@ -36,7 +36,7 @@ export async function runBuildServerPreview(root: string): Promise<BuildPreviewR
     return unavailable('Offline npm cache is unavailable', 'A configured offline npm cache directory is required. No generated build or server command was started.');
   }
   return unavailable(
-    'Windows-native isolated build/server preview is not implemented',
-    'All filesystem, manifest, lockfile, script, and cache preflight checks passed. A Windows-native isolation provider is required before execution. No generated command or server was started.',
+    'Local Android build/server preview is not implemented',
+    'All filesystem, manifest, lockfile, script, and cache preflight checks passed. The local Android build/server runner is not implemented. No generated command or server was started.',
   );
 }
