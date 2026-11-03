@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { projectRoot } from './path-security';
-import { secureWindowsPrivatePath } from './windows-acl';
 
 export type AIApplyBatchStatus = 'started' | 'applied' | 'rolling-back' | 'rolled-back' | 'rollback-failed';
 export type AIApplyBatchSnapshot = { path: string; beforeContent: string | null; afterContent: string };
@@ -34,7 +33,6 @@ function batchesDirectory(projectId: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     fs.mkdirSync(metadataRoot, { recursive: false });
-    secureWindowsPrivatePath(metadataRoot, 'directory');
   }
   const directory = path.join(metadataRoot, 'ai-apply-batches');
   try {
@@ -43,10 +41,7 @@ function batchesDirectory(projectId: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     fs.mkdirSync(directory, { recursive: false });
-    secureWindowsPrivatePath(directory, 'directory');
   }
-  secureWindowsPrivatePath(metadataRoot, 'directory');
-  secureWindowsPrivatePath(directory, 'directory');
   return directory;
 }
 
@@ -82,7 +77,6 @@ export function saveAIApplyBatch(projectId: string, manifest: AIApplyBatchManife
   try {
     const stat = fs.fstatSync(descriptor);
     if (!stat.isFile()) throw new Error('AI apply batch manifest must be a regular file');
-    secureWindowsPrivatePath(temporary, 'file');
     fs.writeFileSync(descriptor, serialized, 'utf8');
     fs.fsyncSync(descriptor);
   } finally {
@@ -90,7 +84,6 @@ export function saveAIApplyBatch(projectId: string, manifest: AIApplyBatchManife
   }
   try {
     fs.renameSync(temporary, destination);
-    secureWindowsPrivatePath(destination, 'file');
   } catch (error) {
     fs.rmSync(temporary, { force: true });
     throw error;
@@ -108,7 +101,6 @@ export function acquireAIApplyBatchLock(projectId: string, batchId: string): () 
   const descriptor = fs.openSync(lockFile, flags);
   let released = false;
   try {
-    secureWindowsPrivatePath(lockFile, 'file');
     fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }) + '\n', 'utf8');
     fs.fsyncSync(descriptor);
   } catch (error) {
@@ -151,7 +143,6 @@ export function readAIApplyBatch(projectId: string, batchId: string): AIApplyBat
   if (stat.isSymbolicLink() || !stat.isFile() || stat.size > MAX_MANIFEST_BYTES) {
     throw new Error('Invalid AI apply batch manifest file');
   }
-  secureWindowsPrivatePath(file, 'file');
   const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
   if (!validManifest(parsed, batchId)) throw new Error('Invalid AI apply batch manifest content');
   return parsed;
