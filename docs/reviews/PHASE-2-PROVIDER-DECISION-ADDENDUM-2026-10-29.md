@@ -11,7 +11,7 @@ The real-provider acceptance requirement is satisfied by the successful live Gro
 ## Phase 2 closure evidence
 
 - Final-main CI: PASS — https://github.com/AligasSRM/Alex-Studio/actions/runs/40869543180
-- Docker integration: PASS — https://github.com/AligasSRM/Alex-Studio/actions/runs/40870643852
+- legacy isolation integration: PASS — https://github.com/AligasSRM/Alex-Studio/actions/runs/40870643852
 - Live Groq provider integration: PASS — https://github.com/AligasSRM/Alex-Studio/actions/runs/40869543153
 - Dependency remediation: merged PR #60 — https://github.com/AligasSRM/Alex-Studio/pull/60
 - This closure PR CI, including browser acceptance and verified source archive: PASS — https://github.com/AligasSRM/Alex-Studio/actions/runs/40871459755
