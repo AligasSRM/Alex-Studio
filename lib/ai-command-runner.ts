@@ -39,7 +39,7 @@ type ManifestPlan = {
 };
 
 const SCRIPT_NAMES = ['build', 'test', 'lint', 'typecheck'] as const;
-const REQUIRED_SCRIPTS = new Set<string>(['build', 'test']);
+const REQUIRED_SCRIPTS = ['build', 'test'] as const;
 const MAX_CAPTURE = 6000;
 const MAX_PROJECT_ENTRIES = 20_000;
 const MAX_PROJECT_DEPTH = 64;
