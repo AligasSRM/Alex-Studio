@@ -36,7 +36,7 @@ describe('project ZIP export', () => {
     const centralOffset = zip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
     expect(centralOffset).toBeGreaterThanOrEqual(0);
     expect(zip.readUInt16LE(centralOffset + 4) >>> 8).toBe(0); // DOS/Windows host marker.
-    expect(zip.readUInt32LE(centralOffset + 38)).toBe(0x20); // DOS archive attribute, not Unix mode bits.
+    expect(zip.readUInt32LE(centralOffset + 38)).toBe(0x20); // Windows/DOS archive attribute.
     const entries = readZipEntries(zip);
     expect(entries.get('index.html')).toBe('<h1>Hello</h1>');
     expect(entries.get('assets/site.css')).toBe('body { color: black; }');
