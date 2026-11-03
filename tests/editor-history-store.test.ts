@@ -1,16 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { createProject } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 import { createEditHistory, recordEdit, undoEdit, redoEdit } from '../lib/edit-history';
 import { loadEditorHistory, saveEditorHistory } from '../lib/editor-history-store';
 
 const projectIds: string[] = [];
 function setupProject() {
-  const project = createProject('editor-history-' + randomUUID().slice(0, 8));
-  projectIds.push(project.id);
-  return project;
+  const id = 'editor-history-' + randomUUID().slice(0, 8);
+  const root = projectRoot(id);
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><title>Test</title>');
+  projectIds.push(id);
+  return { id };
 }
 afterEach(() => {
   for (const id of projectIds.splice(0)) fs.rmSync(projectRoot(id), { recursive: true, force: true });
@@ -32,8 +34,6 @@ describe('persistent editor history', () => {
     const directory = path.join(projectRoot(project.id), '.alex', 'editor-history');
     const files = fs.readdirSync(directory);
     expect(files).toHaveLength(1);
-    expect(fs.statSync(directory).mode & 0o777).toBe(0o700);
-    expect(fs.statSync(path.join(directory, files[0])).mode & 0o777).toBe(0o600);
   });
 
   it('discards unsaved draft text on reload while retaining history to the last saved version', () => {

@@ -15,7 +15,7 @@ function historyDirectory(projectId: string) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Editor history metadata directory must be a real directory');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    fs.mkdirSync(metadata, { recursive: false, mode: 0o700 });
+    fs.mkdirSync(metadata, { recursive: false });
   }
   const directory = path.join(metadata, 'editor-history');
   try {
@@ -23,10 +23,8 @@ function historyDirectory(projectId: string) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Editor history directory must be a real directory');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    fs.mkdirSync(directory, { recursive: false, mode: 0o700 });
+    fs.mkdirSync(directory, { recursive: false });
   }
-  fs.chmodSync(metadata, 0o700);
-  fs.chmodSync(directory, 0o700);
   return directory;
 }
 
@@ -52,20 +50,17 @@ export function saveEditorHistory(projectId: string, filePath: string, history: 
   if (Buffer.byteLength(serialized, 'utf8') > MAX_HISTORY_BYTES) throw new Error('Editor history exceeds the safe storage limit');
   const destination = historyPath(projectId, filePath);
   const temporary = path.join(path.dirname(destination), '.' + randomUUID() + '.tmp');
-  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL |
-    (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
-  const descriptor = fs.openSync(temporary, flags, 0o600);
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL;
+  const descriptor = fs.openSync(temporary, flags);
   try {
     if (!fs.fstatSync(descriptor).isFile()) throw new Error('Editor history must be a regular file');
     fs.writeFileSync(descriptor, serialized, 'utf8');
-    fs.fchmodSync(descriptor, 0o600);
     fs.fsyncSync(descriptor);
   } finally {
     fs.closeSync(descriptor);
   }
   try {
     fs.renameSync(temporary, destination);
-    fs.chmodSync(destination, 0o600);
   } catch (error) {
     fs.rmSync(temporary, { force: true });
     throw error;

@@ -126,7 +126,8 @@ export function createProjectZip(projectDirectory: string): Buffer {
     central.writeUInt16LE(0, 32);
     central.writeUInt16LE(0, 34);
     central.writeUInt16LE(0, 36);
-    central.writeUInt32LE((0o100644 << 16) >>> 0, 38);
+    // Use the Windows/DOS archive attribute for exported files.
+    central.writeUInt32LE(0x20, 38);
     central.writeUInt32LE(entry.offset, 42);
     centralParts.push(central, name);
   }

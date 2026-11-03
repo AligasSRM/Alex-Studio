@@ -39,7 +39,7 @@ type ManifestPlan = {
 };
 
 const SCRIPT_NAMES = ['build', 'test', 'lint', 'typecheck'] as const;
-const REQUIRED_SCRIPTS = new Set<string>(['build', 'test']);
+const REQUIRED_SCRIPTS = ['build', 'test'] as const;
 const MAX_CAPTURE = 6000;
 const MAX_PROJECT_ENTRIES = 20_000;
 const MAX_PROJECT_DEPTH = 64;
@@ -118,7 +118,7 @@ export function inspectGeneratedProject(root: string): ManifestPlan {
     kind: 'npm',
     packageJson: manifest,
     lockfileSha256: createHash('sha256').update(lockBytes).digest('hex'),
-    scripts: SCRIPT_NAMES.map(name => ({ name, required: REQUIRED_SCRIPTS.has(name) })).filter(item => item.required || typeof scriptsObject[item.name] === 'string'),
+    scripts: SCRIPT_NAMES.map(name => ({ name, required: REQUIRED_SCRIPTS.includes(name as typeof REQUIRED_SCRIPTS[number]) })).filter(item => item.required || typeof scriptsObject[item.name] === 'string'),
     preflightError: null,
   };
 }
@@ -127,7 +127,7 @@ function evidence(name: string, required: boolean, status: CommandStatus, output
   return {
     name,
     command: 'npm run ' + name,
-    cwd: '<Windows-isolated-workspace-unavailable>',
+    cwd: '<local-android-command-runner-unavailable>',
     required,
     status,
     startedAt: null,
@@ -146,6 +146,36 @@ function evidence(name: string, required: boolean, status: CommandStatus, output
  * provider is implemented and verified, npm execution is deliberately fail-closed.
  */
 export async function runProjectCommands(root: string): Promise<CommandRun> {
+  // Classify an explicitly malformed npm manifest before lockfile availability.
+  // This is read-only and never invokes a generated command.
+  try {
+    const packagePath = path.join(root, 'package.json');
+    if (fs.existsSync(packagePath)) {
+      const parsed: unknown = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const manifest = parsed as Record<string, unknown>;
+        const rawScripts = manifest.scripts;
+        if (rawScripts && typeof rawScripts === 'object' && !Array.isArray(rawScripts)) {
+          const scripts = rawScripts as Record<string, unknown>;
+          const missing = [...REQUIRED_SCRIPTS].filter(name => typeof scripts[name] !== 'string');
+          if (missing.length) {
+            const output = 'Required scripts missing: ' + missing.join(', ');
+            return {
+              ok: false,
+              available: true,
+              status: 'FAIL',
+              summary: 'Required npm scripts are missing',
+              output,
+              commands: [...REQUIRED_SCRIPTS].map(name => evidence(name, true, 'NOT RUN', output, null)),
+            };
+          }
+        }
+      }
+    }
+  } catch {
+    // The detailed parser below reports malformed manifests as UNAVAILABLE.
+  }
+
   let plan: ManifestPlan;
   try {
     plan = inspectGeneratedProject(root);
@@ -163,6 +193,25 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
       output: 'No package.json was present. This result does not certify browser execution or end-to-end acceptance.',
       commands: [],
     };
+  }
+
+  // A missing required script is a deterministic manifest defect. Detect it
+  // from package.json before lockfile/cache availability checks; no command runs.
+  const rawScripts = plan.packageJson?.scripts;
+  if (rawScripts && typeof rawScripts === 'object' && !Array.isArray(rawScripts)) {
+    const scripts = rawScripts as Record<string, unknown>;
+    const missing = [...REQUIRED_SCRIPTS].filter(name => typeof scripts[name] !== 'string');
+    if (missing.length) {
+      const output = 'Required scripts missing: ' + missing.join(', ');
+      return {
+        ok: false,
+        available: true,
+        status: 'FAIL',
+        summary: 'Required npm scripts are missing',
+        output,
+        commands: [...REQUIRED_SCRIPTS].map(name => evidence(name, true, 'NOT RUN', output, plan.lockfileSha256)),
+      };
+    }
   }
 
   if (plan.preflightError) {
@@ -184,12 +233,12 @@ export async function runProjectCommands(root: string): Promise<CommandRun> {
     };
   }
 
-  const output = 'UNAVAILABLE: the Windows-native isolated execution provider is not implemented. No generated command was started. Direct host execution or a non-Windows fallback is prohibited by the locked platform scope.';
+  const output = 'UNAVAILABLE: the local Android project-command runner is not implemented. No generated command was started.';
   return {
     ok: false,
     available: false,
     status: 'UNAVAILABLE',
-    summary: 'Windows-native isolated execution provider is not implemented',
+    summary: 'Local Android project-command runner is not implemented',
     output,
     commands: plan.scripts.map(item => evidence(item.name, item.required, 'UNAVAILABLE', output, plan.lockfileSha256)),
   };

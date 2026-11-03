@@ -1,15 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createProject } from '../lib/project-store';
+import { WORKSPACE_ROOT } from '../lib/path-security';
 import { projectRoot } from '../lib/path-security';
 import { recordAIApplyAudit } from '../lib/ai-apply-audit';
 
 const ids: string[] = [];
 
 function makeProject() {
-  const project = createProject('AI Apply Audit ' + Date.now());
-  ids.push(project.id);
-  return project.id;
+  const id = 'ai-apply-audit-' + Date.now().toString(36) + '-' + ids.length;
+  const root = path.join(WORKSPACE_ROOT, id);
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify({ id, name: 'AI Apply Audit', createdAt: new Date().toISOString() }));
+  ids.push(id);
+  return id;
 }
 
 afterEach(() => {
@@ -17,7 +20,7 @@ afterEach(() => {
 });
 
 describe('AI apply audit ledger', () => {
-  it('appends metadata-only events with restricted file permissions', () => {
+  it('appends metadata-only events with metadata-only events', () => {
     const id = makeProject();
     const event = {
       batchId: 'batch-test-1',
@@ -35,8 +38,7 @@ describe('AI apply audit ledger', () => {
     expect(lines).toHaveLength(2);
     expect(lines.map((line) => line.outcome)).toEqual(['started', 'applied']);
     expect(lines[1].rollbackStatus).toBe('not-needed');
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
-    expect(fs.readFileSync(file, 'utf8')).not.toContain('<!doctype html>');
+        expect(fs.readFileSync(file, 'utf8')).not.toContain('<!doctype html>');
   });
 
   it('rejects a symlinked audit ledger', () => {

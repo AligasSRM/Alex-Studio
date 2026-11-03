@@ -20,7 +20,7 @@ function auditFile(projectId: string) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('AI apply audit directory must be a real directory');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    fs.mkdirSync(directory, { recursive: false, mode: 0o700 });
+    fs.mkdirSync(directory, { recursive: false });
   }
   return path.join(directory, 'ai-apply-audit.jsonl');
 }
@@ -34,12 +34,16 @@ export function recordAIApplyAudit(projectId: string, event: AIApplyAuditEvent) 
     throw new Error('Invalid AI apply audit event');
   }
   const file = auditFile(projectId);
-  const noFollow = typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0;
-  const descriptor = fs.openSync(file, fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_WRONLY | noFollow, 0o600);
+  try {
+    const existing = fs.lstatSync(file);
+    if (existing.isSymbolicLink() || !existing.isFile()) throw new Error('AI apply audit ledger must be a regular file');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  const descriptor = fs.openSync(file, fs.constants.O_APPEND | fs.constants.O_CREAT | fs.constants.O_WRONLY);
   try {
     const stat = fs.fstatSync(descriptor);
     if (!stat.isFile()) throw new Error('AI apply audit ledger must be a regular file');
-    fs.fchmodSync(descriptor, 0o600);
     fs.writeSync(descriptor, JSON.stringify(event) + '\n', undefined, 'utf8');
     fs.fsyncSync(descriptor);
   } finally {

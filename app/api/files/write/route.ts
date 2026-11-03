@@ -33,6 +33,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Write failed';
-    return NextResponse.json({ error: message }, { status: message.startsWith('UNAVAILABLE:') ? 503 : 400 });
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -43,12 +43,12 @@ afterEach(() => {
   }
 });
 
-describe('full AI lifecycle proof (real provider and real Docker; explicitly gated)', () => {
+describe('full AI lifecycle proof (real provider; explicitly gated)', () => {
   lifecycleTest('generates a draft, proves requirements, repairs a broken draft, and applies only the verified files', async () => {
     const provider = process.env.AI_PROVIDER === 'groq' ? 'groq' : 'openai';
     const apiKey = provider === 'groq' ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error(provider === 'groq' ? 'GROQ_API_KEY is required' : 'OPENAI_API_KEY is required');
-    if (!process.env.AI_RUNNER_DOCKER_IMAGE) throw new Error('AI_RUNNER_DOCKER_IMAGE must name the approved digest-pinned runner image');
+    if (!process.env.AI_WINDOWS_ISOLATION_PROVIDER) throw new Error('AI_WINDOWS_ISOLATION_PROVIDER must name the approved digest-pinned runner image');
 
     const id = await makeProject();
     const original = readProjectFile(id, 'index.html');

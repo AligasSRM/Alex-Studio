@@ -32,7 +32,7 @@ function batchesDirectory(projectId: string) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Project metadata directory must be a real directory');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    fs.mkdirSync(metadataRoot, { recursive: false, mode: 0o700 });
+    fs.mkdirSync(metadataRoot, { recursive: false });
   }
   const directory = path.join(metadataRoot, 'ai-apply-batches');
   try {
@@ -40,10 +40,8 @@ function batchesDirectory(projectId: string) {
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('AI apply batch directory must be a real directory');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    fs.mkdirSync(directory, { recursive: false, mode: 0o700 });
+    fs.mkdirSync(directory, { recursive: false });
   }
-  fs.chmodSync(metadataRoot, 0o700);
-  fs.chmodSync(directory, 0o700);
   return directory;
 }
 
@@ -74,21 +72,18 @@ export function saveAIApplyBatch(projectId: string, manifest: AIApplyBatchManife
   if (Buffer.byteLength(serialized, 'utf8') > MAX_MANIFEST_BYTES) throw new Error('AI apply batch snapshots exceed the safe storage limit');
   const destination = manifestPath(projectId, manifest.batchId);
   const temporary = path.join(path.dirname(destination), '.' + randomUUID() + '.tmp');
-  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL |
-    (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
-  const descriptor = fs.openSync(temporary, flags, 0o600);
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL;
+  const descriptor = fs.openSync(temporary, flags);
   try {
     const stat = fs.fstatSync(descriptor);
     if (!stat.isFile()) throw new Error('AI apply batch manifest must be a regular file');
     fs.writeFileSync(descriptor, serialized, 'utf8');
-    fs.fchmodSync(descriptor, 0o600);
     fs.fsyncSync(descriptor);
   } finally {
     fs.closeSync(descriptor);
   }
   try {
     fs.renameSync(temporary, destination);
-    fs.chmodSync(destination, 0o600);
   } catch (error) {
     fs.rmSync(temporary, { force: true });
     throw error;
@@ -102,9 +97,8 @@ export function saveAIApplyBatch(projectId: string, manifest: AIApplyBatchManife
 export function acquireAIApplyBatchLock(projectId: string, batchId: string): () => void {
   const manifestFile = manifestPath(projectId, batchId);
   const lockFile = manifestFile.slice(0, -'.json'.length) + '.lock';
-  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL |
-    (typeof fs.constants.O_NOFOLLOW === 'number' ? fs.constants.O_NOFOLLOW : 0);
-  const descriptor = fs.openSync(lockFile, flags, 0o600);
+  const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL;
+  const descriptor = fs.openSync(lockFile, flags);
   let released = false;
   try {
     fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, createdAt: new Date().toISOString() }) + '\n', 'utf8');

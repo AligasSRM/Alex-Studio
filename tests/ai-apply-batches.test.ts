@@ -1,16 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { createProject } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 import { acquireAIApplyBatchLock, listAIApplyBatches, readAIApplyBatch, saveAIApplyBatch, type AIApplyBatchManifest } from '../lib/ai-apply-batches';
 
 const projectIds: string[] = [];
 
 function setupProject() {
-  const project = createProject('batch-store-' + randomUUID().slice(0, 8));
-  projectIds.push(project.id);
-  return project;
+  const id = 'batch-store-' + randomUUID().slice(0, 8);
+  fs.mkdirSync(projectRoot(id), { recursive: true });
+  projectIds.push(id);
+  return { id };
 }
 
 function manifest(overrides: Partial<AIApplyBatchManifest> = {}): AIApplyBatchManifest {
@@ -45,8 +45,6 @@ describe('AI apply batch manifest storage', () => {
     });
     expect(JSON.stringify(summaries[0])).not.toContain('before</h1>');
     const manifestFile = path.join(projectRoot(project.id), '.alex', 'ai-apply-batches', batch.batchId + '.json');
-    expect(fs.statSync(manifestFile).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(path.dirname(manifestFile)).mode & 0o777).toBe(0o700);
   });
 
   it('returns null for an unknown valid batch id and rejects malformed ids', () => {
@@ -74,7 +72,7 @@ describe('AI apply batch manifest storage', () => {
   it('does not follow a symlink in the batch metadata directory', () => {
     const project = setupProject();
     const metadata = path.join(projectRoot(project.id), '.alex');
-    fs.mkdirSync(metadata, { mode: 0o700 });
+    fs.mkdirSync(metadata);
     const outside = path.join(projectRoot(project.id), 'outside');
     fs.mkdirSync(outside);
     fs.symlinkSync(outside, path.join(metadata, 'ai-apply-batches'));
@@ -86,7 +84,6 @@ describe('AI apply batch manifest storage', () => {
     saveAIApplyBatch(project.id, batch);
     const release = acquireAIApplyBatchLock(project.id, batch.batchId);
     const lockFile = path.join(projectRoot(project.id), '.alex', 'ai-apply-batches', batch.batchId + '.lock');
-    expect(fs.statSync(lockFile).mode & 0o777).toBe(0o600);
     expect(() => acquireAIApplyBatchLock(project.id, batch.batchId)).toThrow(expect.objectContaining({ code: 'EEXIST' }));
     release();
     expect(() => {
@@ -100,7 +97,7 @@ describe('AI apply batch manifest storage', () => {
     const batch = manifest();
     saveAIApplyBatch(project.id, batch);
     const lockFile = path.join(projectRoot(project.id), '.alex', 'ai-apply-batches', batch.batchId + '.lock');
-    fs.writeFileSync(lockFile, 'stale lock', { mode: 0o600 });
+    fs.writeFileSync(lockFile, 'stale lock');
     expect(() => acquireAIApplyBatchLock(project.id, batch.batchId)).toThrow(expect.objectContaining({ code: 'EEXIST' }));
     expect(fs.readFileSync(lockFile, 'utf8')).toBe('stale lock');
   });

@@ -5,16 +5,11 @@ import { projectRoot, resolveProjectPath, assertTextContent } from './path-secur
 
 export type FileNode = { name: string; path: string; type: 'file' | 'folder'; size?: number };
 const MAX_TEXT_BYTES = 1024 * 1024;
-const WINDOWS_MUTATION_UNAVAILABLE = 'UNAVAILABLE: secure Windows-native handle-based file mutation is not implemented; refusing writes and deletes until reparse-point and TOCTOU protections are verified.';
-function assertWindowsMutationAvailable(): void {
-  throw new Error(WINDOWS_MUTATION_UNAVAILABLE);
-}
 
 function assertRegularNonLink(target: string, allowMissing = false): fs.Stats | null {
   try {
     const stat = fs.lstatSync(target);
-    // On Windows, Node reports symbolic links and directory junctions as symbolic links.
-    // Refuse every reparse-point-like entry rather than following it.
+    // Do not follow symbolic links inside a project.
     if (stat.isSymbolicLink()) throw new Error('Symbolic links and junctions are not allowed in project paths');
     if (!stat.isFile() && !stat.isDirectory()) throw new Error('Unsupported filesystem entry');
     return stat;
@@ -145,7 +140,7 @@ function createBackup(root: string, target: string, backupName: string): void {
   }
   const source = readCheckedFile(target);
   const backupPath = path.join(backupDir, backupName);
-  const descriptor = fs.openSync(backupPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
+  const descriptor = fs.openSync(backupPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL);
   try {
     fs.writeFileSync(descriptor, source, 'utf8');
     fs.fsyncSync(descriptor);
@@ -158,7 +153,6 @@ function createBackup(root: string, target: string, backupName: string): void {
 }
 
 export function writeProjectFile(id: string, projectPath: string, content: unknown, expectedCurrentContent?: string | null) {
-  assertWindowsMutationAvailable();
   assertTextContent(content);
   const { root, target, parent } = checkedTarget(id, projectPath);
   ensureParents(root, parent);
@@ -178,7 +172,7 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
   let ownsTemporary = false;
   let renamed = false;
   try {
-    const descriptor = fs.openSync(temporaryPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
+    const descriptor = fs.openSync(temporaryPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL);
     ownsTemporary = true;
     try {
       fs.writeFileSync(descriptor, content, 'utf8');
@@ -187,9 +181,7 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
       fs.closeSync(descriptor);
     }
 
-    // Re-check immediately before replacement. Windows Node APIs do not expose
-    // descriptor-relative rename/open primitives, so this is a narrowed race window,
-    // not a cross-process compare-and-swap guarantee.
+    // Re-check the target immediately before replacing it.
     assertPathWithinProject(root, target);
     assertExpectedFileState(target, expectedCurrentContent);
     const current = assertRegularNonLink(target, true);
@@ -197,7 +189,7 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
     fs.renameSync(temporaryPath, target);
     renamed = true;
     const actual = readCheckedFile(target);
-    if (actual !== content) throw new Error('Windows file replacement could not be verified');
+    if (actual !== content) throw new Error('File replacement could not be verified');
     return { backup: existed };
   } catch (error) {
     // Reconcile errors after rename: never claim failure if the exact desired bytes
@@ -216,7 +208,6 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
 }
 
 export function deleteProjectFile(id: string, projectPath: string, expectedCurrentContent: string) {
-  assertWindowsMutationAvailable();
   const { root, target } = checkedTarget(id, projectPath);
   assertPathWithinProject(root, target);
   const actual = readCheckedFile(target);

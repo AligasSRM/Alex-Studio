@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { GET } from '../app/api/projects/export/route';
-import { createProject } from '../lib/project-store';
+import { WORKSPACE_ROOT } from '../lib/path-security';
 import { projectRoot } from '../lib/path-security';
 
 const ids: string[] = [];
@@ -11,7 +11,11 @@ afterEach(() => {
 
 describe('project ZIP export route', () => {
   it('returns a downloadable ZIP and excludes secret and internal files', async () => {
-    const project = createProject('Export Route Test ' + Date.now());
+    const projectId = 'export-route-' + Date.now().toString(36) + '-' + ids.length;
+    const root = path.join(WORKSPACE_ROOT, projectId);
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify({ id: projectId, name: 'Export Route Test', createdAt: new Date().toISOString() }));
+    const project = { id: projectId };
     ids.push(project.id);
     fs.writeFileSync(path.join(projectRoot(project.id), 'secrets.txt'), 'must-not-export');
     fs.writeFileSync(path.join(projectRoot(project.id), '.env'), 'API_KEY=must-not-export');
