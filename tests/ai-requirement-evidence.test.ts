@@ -37,7 +37,7 @@ describe('AI user-requirement evidence', () => {
   });
 
   it('extracts only a valid browser payload from mixed runner output', () => {
-    expect(parseBrowserSnapshot('container removed\n{"title":"X","body":"Y","errors":[],"ok":true}'))
+    expect(parseBrowserSnapshot('runner removed\n{"title":"X","body":"Y","errors":[],"ok":true}'))
       .toEqual({ title: 'X', body: 'Y', errors: [] });
     expect(parseBrowserSnapshot('no browser output')).toBeNull();
   });
