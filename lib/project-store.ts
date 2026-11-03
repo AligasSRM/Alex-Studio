@@ -81,7 +81,8 @@ export function createProject(input: string): ProjectRecord {
   const record: ProjectRecord = { id, name, createdAt: new Date().toISOString() };
   try {
     fs.writeFileSync(meta(id), JSON.stringify(record, null, 2) + '\\n', { flag: 'wx' });
-    fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html>\\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + name.replace(/[&<>"]/g, '') + '</title></head><body><main><h1>' + name.replace(/[&<>"]/g, '') + '</h1></main></body></html>\\n', { flag: 'wx' });
+    const safeName = name.replace(/[&<>"]/g, '');
+    fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html>\\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + safeName + '</title></head><body><main><h1>' + safeName + '</h1></main></body></html>\\n', { flag: 'wx' });
     fs.writeFileSync(path.join(root, 'styles.css'), 'body { font-family: system-ui, sans-serif; margin: 2rem; }\\n', { flag: 'wx' });
     fs.writeFileSync(path.join(root, 'script.js'), '', { flag: 'wx' });
     return record;
@@ -89,4 +90,26 @@ export function createProject(input: string): ProjectRecord {
     fs.rmSync(root, { recursive: true, force: true });
     throw error;
   }
+}
+
+export function updateProject(id: string, updates: { name?: string }): ProjectRecord | null {
+  const current = getProject(id);
+  if (!current) return null;
+  const name = updates.name === undefined ? current.name : updates.name.trim();
+  if (!name || name.length > 80) throw new Error('Project name must contain 1–80 characters');
+  const updated = { ...current, name };
+  const metadata = meta(id);
+  const temporary = metadata + '.tmp-' + randomUUID();
+  fs.writeFileSync(temporary, JSON.stringify(updated, null, 2) + '\\n', { flag: 'wx' });
+  fs.renameSync(temporary, metadata);
+  return updated;
+}
+
+export function deleteProject(id: string): boolean {
+  const root = projectRoot(id);
+  if (!fs.existsSync(root)) return false;
+  const stat = fs.lstatSync(root);
+  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Project path is not a real directory');
+  fs.rmSync(root, { recursive: true, force: false });
+  return !fs.existsSync(root);
 }
