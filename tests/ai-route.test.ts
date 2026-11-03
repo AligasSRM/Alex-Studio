@@ -15,9 +15,9 @@ function makeProject() {
   const id = 'ai-route-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
   const root = projectRoot(id);
   fs.mkdirSync(root, { recursive: true });
-  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify({ id, name, createdAt: new Date().toISOString() }) + '\\n');
-  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><head><title>Fixture</title></head><body><h1>Fixture</h1></body></html>\\n');
-  fs.writeFileSync(path.join(root, 'styles.css'), 'body{font-family:system-ui}\\n');
+  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify({ id, name, createdAt: new Date().toISOString() }) + '\n');
+  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><head><title>Fixture</title></head><body><h1>Fixture</h1></body></html>\n');
+  fs.writeFileSync(path.join(root, 'styles.css'), 'body{font-family:system-ui}\n');
   fs.writeFileSync(path.join(root, 'script.js'), '');
   createdIds.push(id);
   return id;
