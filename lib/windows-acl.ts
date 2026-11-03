@@ -34,7 +34,7 @@ export function secureWindowsPrivatePath(target: string, kind: WindowsPrivatePat
   execFileSync('icacls.exe', [
     target,
     '/reset',
-    '/inheritance:r',
+    '/inheritancelevel:r',
     '/grant:r',
     '*' + sid + ':' + rights,
     '*S-1-5-18:' + rights,
