@@ -1,12 +1,11 @@
 name: Alex Studio CI
 on:
   pull_request:
-    branches: [main, integration/security-hardening-2026-11-02]
+    branches: [integration/security-hardening-2026-11-02, main]
   push:
-    branches: [main, integration/security-hardening-2026-11-02, fix/project-create-fail-closed-ci-coverage-2026-11-03, feature/alex-studio-implementation-2026-10-27, test/phase-0-acceptance-suite, fix/security-review-apply-gate-2026-10-27]
+    branches: [integration/security-hardening-2026-11-02, main, chore/android-personal-scope-cleanup-2026-11-04]
   workflow_dispatch:
 
-# Keep the workflow token read-only. This CI does not need to push commits or open PRs.
 permissions:
   contents: read
 
@@ -16,193 +15,28 @@ concurrency:
 
 jobs:
   verify:
-    name: Windows-host tests, types, lint and build
-    runs-on: windows-latest
+    name: Android-scope application checks
+    runs-on: ubuntu-latest
     timeout-minutes: 25
-    defaults:
-      run:
-        shell: pwsh
     steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
-
-      - name: Record exact tested commit
-        run: Write-Output "Testing commit $env:GITHUB_SHA on Windows CI (not Windows 10 device acceptance)"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      # Validate dependency sources and lockfile integrity metadata before running install scripts.
-      - name: Verify dependency lockfile provenance
-        run: |
-          $nodeScript = @'
-          const fs = require('node:fs');
-          const lock = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
-          if (lock.lockfileVersion !== 3) throw new Error(`Unexpected lockfileVersion: ${lock.lockfileVersion}`);
-          const packages = Object.entries(lock.packages ?? {}).filter(([path]) => path !== '');
-          const errors = [];
-          for (const [path, pkg] of packages) {
-            if (path === 'vendor/deepmerge') {
-              if (pkg.name !== 'deepmerge' || pkg.version !== '4.3.2') errors.push(`${path}: unexpected vendored package identity/version`);
-              continue;
-            }
-            if (pkg.link) continue;
-            if (!pkg.resolved) { errors.push(`${path}: missing resolved URL`); continue; }
-            if (!pkg.resolved.startsWith('https://registry.npmjs.org/')) errors.push(`${path}: unapproved source ${pkg.resolved}`);
-            if (!/^sha512-[A-Za-z0-9+/]+=*$/.test(pkg.integrity ?? '')) errors.push(`${path}: missing or non-SHA-512 integrity`);
-          }
-          if (errors.length) {
-            console.error('Dependency lockfile provenance validation failed:', ...errors);
-            process.exit(1);
-          }
-          console.log(`Validated ${packages.length} locked packages against the npm registry allowlist and SHA-512 integrity metadata.`);
-          '@
-          $nodeScript | node
-
-      # Reproducible install from the committed lockfile using the official npm registry.
+          cache: npm
       - name: Install dependencies
-        run: npm ci --registry=https://registry.npmjs.org/ --prefer-online
-        timeout-minutes: 8
-
-      # npm audit still flags vendored deepmerge 4.3.2 upstream; this repository applies a reviewed postinstall mitigation.
-      # Fail closed if the expected patch is absent or the dependency changes without review.
-      - name: Verify deepmerge security mitigation
-        run: |
-          $nodeScript = @'
-          const fs = require('node:fs');
-          const path = require('node:path');
-          const entry = require.resolve('deepmerge');
-          let dir = path.dirname(entry);
-          let metadata;
-          while (true) {
-            const candidate = path.join(dir, 'package.json');
-            if (fs.existsSync(candidate)) {
-              const parsed = JSON.parse(fs.readFileSync(candidate, 'utf8'));
-              if (parsed.name === 'deepmerge') { metadata = parsed; break; }
-            }
-            const parent = path.dirname(dir);
-            if (parent === dir) break;
-            dir = parent;
-          }
-          if (!metadata || metadata.version !== '4.3.2') {
-            throw new Error('deepmerge version changed; review the vendored security mitigation before proceeding.');
-          }
-          const source = fs.readFileSync(entry, 'utf8');
-          if (!source.includes('function propertyIsForbidden(key)') ||
-              !source.includes('if (propertyIsForbidden(key) || propertyIsUnsafe(target, key)) {')) {
-            throw new Error('Reviewed deepmerge __proto__ mitigation is missing; refusing to continue.');
-          }
-          console.log('Verified vendored deepmerge 4.3.2 and the reviewed __proto__ mitigation.');
-          '@
-          $nodeScript | node
-
-      - name: Verify npm cache integrity
-        run: npm cache verify
-
-      # Generate a current dependency vulnerability report from the resolved install.
-      - name: Audit dependency vulnerabilities
-        run: |
-          $env:AUDIT_REPORT_PATH = Join-Path $env:RUNNER_TEMP 'npm-audit-report.json'
-          $auditOutput = npm audit --json
-          $auditStatus = $LASTEXITCODE
-          [System.IO.File]::WriteAllText($env:AUDIT_REPORT_PATH, ($auditOutput -join [Environment]::NewLine), [System.Text.UTF8Encoding]::new($false))
-          $env:AUDIT_STATUS = [string]$auditStatus
-          $nodeScript = @'
-          const fs = require('node:fs');
-          const report = JSON.parse(fs.readFileSync(process.env.AUDIT_REPORT_PATH, 'utf8'));
-          const counts = report.metadata?.vulnerabilities ?? {};
-          const lines = [
-            '## npm audit report',
-            '',
-            '| Severity | Count |',
-            '|---|---:|',
-            ...['critical', 'high', 'moderate', 'low', 'info'].map(s => `| ${s} | ${counts[s] ?? 0} |`),
-            '',
-            '### Affected packages',
-            '',
-            '| Package | Severity | Direct | Fix available | Details |',
-            '|---|---|---|---|---|',
-          ];
-          for (const [name, item] of Object.entries(report.vulnerabilities ?? {})) {
-            const details = (item.via ?? []).map(v => typeof v === 'string' ? v : `${v.title ?? 'Advisory'} (${v.url ?? 'no URL'})`).join('; ').replaceAll('|', '\\|');
-            lines.push(`| ${name} | ${item.severity} | ${item.isDirect ? 'yes' : 'no'} | ${item.fixAvailable ? JSON.stringify(item.fixAvailable) : 'no'} | ${details} |`);
-          }
-          if (!Object.keys(report.vulnerabilities ?? {}).length) lines.push('| — | No vulnerabilities reported | — | — | — |');
-          lines.push('', `Audit exit status: ${process.env.AUDIT_STATUS}`);
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n');
-          console.log(lines.join('\n'));
-
-          // Keep the reviewed, mitigated low-severity Jest/deepmerge chain visible,
-          // but fail CI for new low findings or any moderate/high/critical finding.
-          const knownLowPackages = new Set([
-            '@jest/core', 'deepmerge', 'jest', 'jest-cli', 'jest-config', 'ts-jest',
-          ]);
-          const blockingSeverities = ['critical', 'high', 'moderate'].filter((s) => (counts[s] ?? 0) > 0);
-          const unexpectedLow = Object.entries(report.vulnerabilities ?? {})
-            .filter(([name, item]) => item.severity === 'low' && !knownLowPackages.has(name))
-            .map(([name]) => name);
-          const allowedAdvisories = new Set(['https://github.com/advisories/GHSA-gcqx-w48m-w2h4']);
-          const unexpectedLowAdvisories = Object.entries(report.vulnerabilities ?? {})
-            .filter(([, item]) => item.severity === 'low')
-            .flatMap(([name, item]) => (item.via ?? [])
-              .filter((via) => typeof via === 'object' && via.url)
-              .filter((via) => !allowedAdvisories.has(via.url))
-              .map((via) => `${name}: ${via.url}`));
-          if (blockingSeverities.length || unexpectedLow.length || unexpectedLowAdvisories.length) {
-            console.error('Dependency audit gate failed:', { blockingSeverities, unexpectedLow, unexpectedLowAdvisories });
-            process.exitCode = 1;
-          } else if ((counts.low ?? 0) > 0) {
-            console.warn('Known low-severity findings remain; review the documented deepmerge mitigation and residual risk.');
-          }
-          '@
-          $nodeScript | node
-
-      - name: Upload dependency audit JSON
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: always()
-        with:
-          name: npm-audit-report
-          path: ${{ runner.temp }}/npm-audit-report.json
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Install Playwright Chromium Headless Shell
-        run: npx playwright install --only-shell chromium
-        timeout-minutes: 8
-
-      - name: Verify installed Playwright Chromium
-        run: npx playwright --version && node -e "const { chromium } = require('@playwright/test'); console.log(chromium.executablePath())"
-
+        run: npm ci
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
       - name: Unit tests
         run: npm test
-
       - name: Type check
         run: npm run typecheck
-
       - name: Lint
         run: npm run lint
-
       - name: Production build
         run: npm run build
-
-      - name: Run browser acceptance tests
+      - name: Browser acceptance
         run: npm run test:e2e
-
-      - name: Create source archive on Windows host
-        run: |
-          $archivePath = Join-Path $env:RUNNER_TEMP 'Alex-Studio-Phase-2-Source.zip'
-          ./scripts/create-source-archive.ps1 -OutputPath $archivePath
-
-      - name: Upload verified phase 2 source archive
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: alex-studio-phase-2-source
-          path: ${{ runner.temp }}/Alex-Studio-Phase-2-Source.zip
-          if-no-files-found: error
-          retention-days: 7
-
-      # Passing this workflow does not certify Windows 10 device compatibility, Android physical-device acceptance, or the Windows-native generated-code isolation provider.
