@@ -9,7 +9,7 @@ The generated npm command runner, browser verification, build/server preview, an
 
 ## Why the former runner was removed
 
-The former runner depended on an alternate-OS container runtime and did not establish execution on the approved Windows 10 host. Running generated npm scripts directly as the Windows user would remove the isolation boundary and is not an acceptable fallback.
+The former runner depended on an external runtime and did not establish execution on the approved Windows 10 host. Running generated npm scripts directly as the Windows user would remove the isolation boundary and is not an acceptable fallback.
 
 ## Required implementation before this blocker can close
 
