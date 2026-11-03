@@ -21,7 +21,7 @@ function currentUserSid(): string {
 /**
  * Replace inherited/default ACLs with explicit full-control entries for the
  * current Windows user and SYSTEM, then ask icacls to verify the resulting ACL.
- * This is intentionally Windows-only; POSIX mode bits are not a security control.
+ * This provider applies and verifies Windows access-control entries before private metadata is read or written.
  */
 export function secureWindowsPrivatePath(target: string, kind: WindowsPrivatePathKind): void {
   const stat = fs.lstatSync(target);
