@@ -7,11 +7,11 @@
 ## Evidence
 
 - Main CI passed on the reviewed commit: https://github.com/AligasSRM/Alex-Studio/actions/runs/40869543180
-- Docker integration passed on the same commit: https://github.com/AligasSRM/Alex-Studio/actions/runs/40870643852
+- legacy isolation integration passed on the same commit: https://github.com/AligasSRM/Alex-Studio/actions/runs/40870643852
 - Live Groq request through /api/ai/build passed: https://github.com/AligasSRM/Alex-Studio/actions/runs/40869543153
 - Dependency remediation and review: https://github.com/AligasSRM/Alex-Studio/pull/60
 
-CI covers dependency lockfile provenance, the reviewed local deepmerge mitigation, dependency audit, unit tests, type check, lint, production build, browser acceptance, and validated source archive generation. The live provider workflow verifies the returned draft/usage and that the original project file remains unchanged. Docker integration checks the actual Docker daemon and runner integration.
+CI covers dependency lockfile provenance, the reviewed local deepmerge mitigation, dependency audit, unit tests, type check, lint, production build, browser acceptance, and validated source archive generation. The live provider workflow verifies the returned draft/usage and that the original project file remains unchanged. legacy isolation integration checks the actual legacy isolation service and runner integration.
 
 ## Final disposition
 
@@ -24,7 +24,7 @@ CI covers dependency lockfile provenance, the reviewed local deepmerge mitigatio
 | Path and protected-file controls | PASS within tested code scope |
 | Source archive generated from exact tested commit | PASS |
 | CI on reviewed main commit | PASS |
-| Docker integration on same commit | PASS |
+| legacy isolation integration on same commit | PASS |
 | Real provider request through /api/ai/build | PASS via Groq |
 
 ## Provider distinction — important
@@ -35,6 +35,6 @@ OpenAI-specific live success is NOT proven: the earlier OpenAI workflow returned
 
 ## Closure recommendation
 
-Phase 2 is ready to close for the current Groq-enabled implementation, based on the passing final-main CI, Docker integration, dependency checks, source archive validation, and live Groq proof. This conclusion is conditional on the project acceptance criteria allowing a configured real provider rather than requiring OpenAI specifically.
+Phase 2 is ready to close for the current Groq-enabled implementation, based on the passing final-main CI, legacy isolation integration, dependency checks, source archive validation, and live Groq proof. This conclusion is conditional on the project acceptance criteria allowing a configured real provider rather than requiring OpenAI specifically.
 
 No public-deployment or remote-host isolation guarantee is inferred from localhost/code-level tests. No Phase 3 work is included or authorized.
