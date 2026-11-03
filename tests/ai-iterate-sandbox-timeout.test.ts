@@ -12,7 +12,7 @@ import { runSandbox } from '../app/api/ai/iterate/route';
 describe('AI iterate sandbox fail-closed behavior', () => {
   afterEach(() => jest.clearAllMocks());
 
-  it('returns UNAVAILABLE without starting Docker or generated browser code', async () => {
+  it('returns UNAVAILABLE without starting generated browser code', async () => {
     const result = await runSandbox(process.cwd());
 
     expect(result).toMatchObject({
