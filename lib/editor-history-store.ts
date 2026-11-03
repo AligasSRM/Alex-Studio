@@ -3,7 +3,6 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { projectRoot } from './path-security';
 import { createEditHistory, type EditHistory } from './edit-history';
-import { secureWindowsPrivatePath } from './windows-acl';
 
 const MAX_HISTORY_ENTRIES = 100;
 const MAX_HISTORY_BYTES = 16 * 1024 * 1024;
@@ -17,7 +16,6 @@ function historyDirectory(projectId: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     fs.mkdirSync(metadata, { recursive: false });
-    secureWindowsPrivatePath(metadata, 'directory');
   }
   const directory = path.join(metadata, 'editor-history');
   try {
@@ -26,10 +24,7 @@ function historyDirectory(projectId: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     fs.mkdirSync(directory, { recursive: false });
-    secureWindowsPrivatePath(directory, 'directory');
   }
-  secureWindowsPrivatePath(metadata, 'directory');
-  secureWindowsPrivatePath(directory, 'directory');
   return directory;
 }
 
@@ -58,7 +53,6 @@ export function saveEditorHistory(projectId: string, filePath: string, history: 
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL;
   const descriptor = fs.openSync(temporary, flags);
   try {
-    secureWindowsPrivatePath(temporary, 'file');
     if (!fs.fstatSync(descriptor).isFile()) throw new Error('Editor history must be a regular file');
     fs.writeFileSync(descriptor, serialized, 'utf8');
     fs.fsyncSync(descriptor);
@@ -67,7 +61,6 @@ export function saveEditorHistory(projectId: string, filePath: string, history: 
   }
   try {
     fs.renameSync(temporary, destination);
-    secureWindowsPrivatePath(destination, 'file');
   } catch (error) {
     fs.rmSync(temporary, { force: true });
     throw error;
@@ -88,7 +81,6 @@ export function loadEditorHistory(projectId: string, filePath: string, currentCo
     throw error;
   }
   if (stat.isSymbolicLink() || !stat.isFile() || stat.size > MAX_HISTORY_BYTES) throw new Error('Invalid editor history file');
-  secureWindowsPrivatePath(target, 'file');
   try {
     const parsed: unknown = JSON.parse(fs.readFileSync(target, 'utf8'));
     if (parsed && typeof parsed === 'object') {
