@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { projectRoot } from './path-security';
-import { secureWindowsPrivatePath } from './windows-acl';
 
 export type AIUsageEntry = {
   timestamp: string;
@@ -26,9 +25,7 @@ function usageDirectory(projectId: string) {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     fs.mkdirSync(directory, { recursive: false });
-    secureWindowsPrivatePath(directory, 'directory');
   }
-  secureWindowsPrivatePath(directory, 'directory');
   return directory;
 }
 
@@ -52,7 +49,6 @@ export function recordAIUsage(projectId: string, entry: AIUsageEntry) {
   try {
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink() || !stat.isFile()) throw new Error('Usage ledger must be a regular file');
-    secureWindowsPrivatePath(file, 'file');
     if (stat.size > MAX_USAGE_LEDGER_BYTES) throw new Error('Usage ledger exceeds the safe storage limit');
     const parsed: unknown = JSON.parse(fs.readFileSync(file, 'utf8'));
     if (!Array.isArray(parsed) || !parsed.every(isUsageEntry)) throw new Error('Usage ledger is invalid');
@@ -74,7 +70,6 @@ export function recordAIUsage(projectId: string, entry: AIUsageEntry) {
   try {
     const descriptor = fs.openSync(temporary, flags);
     try {
-      secureWindowsPrivatePath(temporary, 'file');
       if (!fs.fstatSync(descriptor).isFile()) throw new Error('Usage temporary file must be regular');
       fs.writeFileSync(descriptor, serialized, 'utf8');
       fs.fsyncSync(descriptor);
@@ -82,7 +77,6 @@ export function recordAIUsage(projectId: string, entry: AIUsageEntry) {
       fs.closeSync(descriptor);
     }
     fs.renameSync(temporary, file);
-    secureWindowsPrivatePath(file, 'file');
   } catch (error) {
     fs.rmSync(temporary, { force: true });
     throw error;
