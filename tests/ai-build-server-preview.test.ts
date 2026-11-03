@@ -33,7 +33,7 @@ describe('build/server preview preflight', () => {
     expect(result.output).toContain('package-lock.json is required');
   });
 
-  it('reports a missing offline cache as UNAVAILABLE before starting Docker', async () => {
+  it('reports a missing offline cache as UNAVAILABLE before starting generated commands', async () => {
     const previous = process.env.AI_RUNNER_NPM_CACHE;
     delete process.env.AI_RUNNER_NPM_CACHE;
     try {
@@ -46,7 +46,7 @@ describe('build/server preview preflight', () => {
     }
   });
 
-  it('rejects a symbolic-link workspace before invoking Docker', async () => {
+  it('rejects a symbolic-link workspace before starting generated commands', async () => {
     const root = project({ build: 'node build.js', start: 'node server.js' });
     const outside = path.join(os.tmpdir(), 'alex-preview-outside-' + Date.now());
     fs.writeFileSync(outside, 'not part of the project');
