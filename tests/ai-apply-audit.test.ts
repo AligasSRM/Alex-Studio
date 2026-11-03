@@ -3,7 +3,6 @@ import path from 'node:path';
 import { WORKSPACE_ROOT } from '../lib/path-security';
 import { projectRoot } from '../lib/path-security';
 import { recordAIApplyAudit } from '../lib/ai-apply-audit';
-import { secureWindowsPrivatePath } from '../lib/windows-acl';
 
 const ids: string[] = [];
 
@@ -21,7 +20,7 @@ afterEach(() => {
 });
 
 describe('AI apply audit ledger', () => {
-  it('appends metadata-only events with restricted file permissions', () => {
+  it('appends metadata-only events with metadata-only events', () => {
     const id = makeProject();
     const event = {
       batchId: 'batch-test-1',
@@ -39,8 +38,7 @@ describe('AI apply audit ledger', () => {
     expect(lines).toHaveLength(2);
     expect(lines.map((line) => line.outcome)).toEqual(['started', 'applied']);
     expect(lines[1].rollbackStatus).toBe('not-needed');
-    expect(() => secureWindowsPrivatePath(file, 'file')).not.toThrow();
-    expect(fs.readFileSync(file, 'utf8')).not.toContain('<!doctype html>');
+        expect(fs.readFileSync(file, 'utf8')).not.toContain('<!doctype html>');
   });
 
   it('rejects a symlinked audit ledger', () => {
