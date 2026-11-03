@@ -20,7 +20,6 @@ import { extractAIResponseText } from '@/lib/ai-response';
 import { isProtectedAIGeneratedPath } from '@/lib/ai-path-policy';
 import { findSecretKinds, redactSecretMaterial } from '@/lib/secret-scanner';
 import { filterSandboxFiles } from '@/lib/ai-sandbox-files';
-import { secureWindowsPrivatePath } from '@/lib/windows-acl';
 
 const MAX_FILES = 10;
 const MAX_ROUNDS = 2;
@@ -85,8 +84,8 @@ export function runSandbox(_root: string): Promise<Result> {
   return Promise.resolve({
     ok: false,
     available: false,
-    summary: 'Windows-native isolated browser runner is not implemented',
-    output: 'Browser verification is unavailable until a Windows-native isolation provider is implemented. No generated browser code was started; direct host execution is prohibited.',
+    summary: 'Local browser verification is not implemented',
+    output: 'Browser verification is not available in this build.',
     pageSnapshot: null,
   });
 }
@@ -155,15 +154,13 @@ export async function POST(request: Request) {
       if (findSecretKinds(content).length) secretPaths.add(entry.path);
     }
     for (const file of parseDraft(body.projectId, body.files, originals, true, secretPaths)) working.set(file.path, file.content);
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); secureWindowsPrivatePath(root, 'directory');
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-'));
     const writeFiles = () => {
       for (const [filePath, content] of Array.from(filterSandboxFiles(working, secretPaths).entries())) {
         const target = path.resolve(root, ...filePath.split('/')); const relative = path.relative(root, target);
         if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Sandbox path escape denied');
         fs.mkdirSync(path.dirname(target), { recursive: true });
-        secureWindowsPrivatePath(path.dirname(target), 'directory');
         fs.writeFileSync(target, content, { encoding: 'utf8', flag: 'w' });
-        secureWindowsPrivatePath(target, 'file');
       }
     };
     writeFiles();
@@ -183,7 +180,7 @@ export async function POST(request: Request) {
       try { next = await getRepair(apiKey, model, provider, body.projectId, body.prompt, context, diagnostic, working, secretPaths); }
       catch (e) { repairs.push({ round, summary: e instanceof Error ? e.message : 'AI repair failed', diagnostic }); break; }
       for (const file of next.files) working.set(file.path, file.content);
-      fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); secureWindowsPrivatePath(root, 'directory'); writeFiles();
+      fs.rmSync(root, { recursive: true, force: true }); root = fs.mkdtempSync(path.join(os.tmpdir(), 'alex-studio-ai-')); writeFiles();
       diagnostic = await verifyProject(root, body.requirements);
       commandChecks = diagnostic.commandChecks!;
       repairs.push({ round, summary: next.summary, diagnostic });
