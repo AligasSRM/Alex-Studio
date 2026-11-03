@@ -18,7 +18,7 @@ No other operating system or device platform is in scope. This decision is locke
 - Windows 10 is the only computer operating-system target.
 - All file-management behavior must use Windows-compatible APIs, path handling, permissions, locking, atomic replacement, and recovery semantics.
 - Runtime assumptions tied to other operating systems must be removed from application code, scripts, workflows, tests, setup instructions, and project documentation.
-- The application must not depend on an alternate operating-system layer or container host to provide its core file-management or execution behavior.
+- The application must not depend on an alternate operating-system layer or external runtime to provide its core file-management or execution behavior.
 - Windows 10 version/build and required security prerequisites must be detected and reported accurately. Compatibility must not be claimed until verified on the target machine.
 - If safe isolation or a required security prerequisite is unavailable or cannot be verified, execution and verification must fail closed as `UNAVAILABLE`; generated code must never fall back to unrestricted host execution.
 
