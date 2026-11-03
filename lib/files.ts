@@ -3,6 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { projectRoot, resolveProjectPath, assertTextContent } from './path-security';
 import { assertWindowsMutationAvailable } from './platform-mutation';
+import { secureWindowsPrivatePath } from './windows-acl';
 
 export type FileNode = { name: string; path: string; type: 'file' | 'folder'; size?: number };
 const MAX_TEXT_BYTES = 1024 * 1024;
@@ -139,11 +140,13 @@ function createBackup(root: string, target: string, backupName: string): void {
     const stat = assertRegularNonLink(dir, true);
     if (!stat) fs.mkdirSync(dir);
     else if (!stat.isDirectory()) throw new Error('Backup path must be a directory');
+    secureWindowsPrivatePath(dir, 'directory');
   }
   const source = readCheckedFile(target);
   const backupPath = path.join(backupDir, backupName);
-  const descriptor = fs.openSync(backupPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
+  const descriptor = fs.openSync(backupPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL);
   try {
+    secureWindowsPrivatePath(backupPath, 'file');
     fs.writeFileSync(descriptor, source, 'utf8');
     fs.fsyncSync(descriptor);
   } catch (error) {
@@ -175,9 +178,10 @@ export function writeProjectFile(id: string, projectPath: string, content: unkno
   let ownsTemporary = false;
   let renamed = false;
   try {
-    const descriptor = fs.openSync(temporaryPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL, 0o600);
+    const descriptor = fs.openSync(temporaryPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL);
     ownsTemporary = true;
     try {
+      secureWindowsPrivatePath(temporaryPath, 'file');
       fs.writeFileSync(descriptor, content, 'utf8');
       fs.fsyncSync(descriptor);
     } finally {
