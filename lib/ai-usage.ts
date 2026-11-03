@@ -73,8 +73,8 @@ export function recordAIUsage(projectId: string, entry: AIUsageEntry) {
   const flags = fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL;
   try {
     const descriptor = fs.openSync(temporary, flags);
-    secureWindowsPrivatePath(temporary, 'file');
     try {
+      secureWindowsPrivatePath(temporary, 'file');
       if (!fs.fstatSync(descriptor).isFile()) throw new Error('Usage temporary file must be regular');
       fs.writeFileSync(descriptor, serialized, 'utf8');
       fs.fsyncSync(descriptor);
