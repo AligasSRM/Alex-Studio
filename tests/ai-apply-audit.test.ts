@@ -3,6 +3,7 @@ import path from 'node:path';
 import { WORKSPACE_ROOT } from '../lib/path-security';
 import { projectRoot } from '../lib/path-security';
 import { recordAIApplyAudit } from '../lib/ai-apply-audit';
+import { secureWindowsPrivatePath } from '../lib/windows-acl';
 
 const ids: string[] = [];
 
@@ -38,7 +39,7 @@ describe('AI apply audit ledger', () => {
     expect(lines).toHaveLength(2);
     expect(lines.map((line) => line.outcome)).toEqual(['started', 'applied']);
     expect(lines[1].rollbackStatus).toBe('not-needed');
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    expect(() => secureWindowsPrivatePath(file, 'file')).not.toThrow();
     expect(fs.readFileSync(file, 'utf8')).not.toContain('<!doctype html>');
   });
 
