@@ -118,7 +118,7 @@ export function inspectGeneratedProject(root: string): ManifestPlan {
     kind: 'npm',
     packageJson: manifest,
     lockfileSha256: createHash('sha256').update(lockBytes).digest('hex'),
-    scripts: SCRIPT_NAMES.map(name => ({ name, required: REQUIRED_SCRIPTS.has(name) })).filter(item => item.required || typeof scriptsObject[item.name] === 'string'),
+    scripts: SCRIPT_NAMES.map(name => ({ name, required: REQUIRED_SCRIPTS.includes(name as typeof REQUIRED_SCRIPTS[number]) })).filter(item => item.required || typeof scriptsObject[item.name] === 'string'),
     preflightError: null,
   };
 }
