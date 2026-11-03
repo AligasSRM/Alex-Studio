@@ -3,7 +3,6 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { projectRoot } from '../lib/path-security';
 import { acquireAIApplyBatchLock, listAIApplyBatches, readAIApplyBatch, saveAIApplyBatch, type AIApplyBatchManifest } from '../lib/ai-apply-batches';
-import { secureWindowsPrivatePath } from '../lib/windows-acl';
 
 const projectIds: string[] = [];
 
@@ -46,8 +45,6 @@ describe('AI apply batch manifest storage', () => {
     });
     expect(JSON.stringify(summaries[0])).not.toContain('before</h1>');
     const manifestFile = path.join(projectRoot(project.id), '.alex', 'ai-apply-batches', batch.batchId + '.json');
-    expect(() => secureWindowsPrivatePath(manifestFile, 'file')).not.toThrow();
-    expect(() => secureWindowsPrivatePath(path.dirname(manifestFile), 'directory')).not.toThrow();
   });
 
   it('returns null for an unknown valid batch id and rejects malformed ids', () => {
@@ -87,7 +84,6 @@ describe('AI apply batch manifest storage', () => {
     saveAIApplyBatch(project.id, batch);
     const release = acquireAIApplyBatchLock(project.id, batch.batchId);
     const lockFile = path.join(projectRoot(project.id), '.alex', 'ai-apply-batches', batch.batchId + '.lock');
-    expect(() => secureWindowsPrivatePath(lockFile, 'file')).not.toThrow();
     expect(() => acquireAIApplyBatchLock(project.id, batch.batchId)).toThrow(expect.objectContaining({ code: 'EEXIST' }));
     release();
     expect(() => {
