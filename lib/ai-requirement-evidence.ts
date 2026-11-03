@@ -26,7 +26,7 @@ export function parseBrowserSnapshot(output: string): BrowserSnapshot | null {
         errors: value.errors.filter((item): item is string => typeof item === 'string').slice(0, 50),
       };
     } catch {
-      // Docker diagnostics can contain unrelated JSON; keep searching for the runner payload.
+      // Runner diagnostics can contain unrelated JSON; keep searching for the runner payload.
     }
   }
   return null;
