@@ -3,7 +3,6 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { POST as buildPost } from '../app/api/ai/build/route';
 import { POST as applyPost } from '../app/api/ai/apply/route';
-import { POST as createProjectPost } from '../app/api/projects/route';
 import { projectRoot } from '../lib/path-security';
 import { readProjectFile } from '../lib/files';
 import * as fileOps from '../lib/files';
@@ -24,11 +23,17 @@ function localPost(url: string, body: string) {
     body,
   });
 }
-async function makeProject() {
-  const response = await createProjectPost(localPost('http://localhost:3000/api/projects', JSON.stringify({ name: 'AI Build Test ' + Date.now() })));
-  const data = await response.json() as { project: { id: string } };
-  createdIds.push(data.project.id);
-  return data.project.id;
+function makeProject() {
+  const name = 'AI Build Test';
+  const id = 'ai-build-test-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  const root = projectRoot(id);
+  fs.mkdirSync(root, { recursive: true });
+  fs.writeFileSync(path.join(root, '.alex-project.json'), JSON.stringify({ id, name, createdAt: new Date().toISOString() }) + '\\n');
+  fs.writeFileSync(path.join(root, 'index.html'), '<!doctype html><html><head><title>Fixture</title></head><body><h1>Fixture</h1></body></html>\\n');
+  fs.writeFileSync(path.join(root, 'styles.css'), 'body{font-family:system-ui}\\n');
+  fs.writeFileSync(path.join(root, 'script.js'), '');
+  createdIds.push(id);
+  return id;
 }
 function hash(value: string) {
   return createHash('sha256').update(value, 'utf8').digest('hex');
