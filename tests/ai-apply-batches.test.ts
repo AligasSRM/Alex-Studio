@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { createProject } from '../lib/project-store';
 import { projectRoot } from '../lib/path-security';
 import { acquireAIApplyBatchLock, listAIApplyBatches, readAIApplyBatch, saveAIApplyBatch, type AIApplyBatchManifest } from '../lib/ai-apply-batches';
 import { secureWindowsPrivatePath } from '../lib/windows-acl';
@@ -9,9 +8,10 @@ import { secureWindowsPrivatePath } from '../lib/windows-acl';
 const projectIds: string[] = [];
 
 function setupProject() {
-  const project = createProject('batch-store-' + randomUUID().slice(0, 8));
-  projectIds.push(project.id);
-  return project;
+  const id = 'batch-store-' + randomUUID().slice(0, 8);
+  fs.mkdirSync(projectRoot(id), { recursive: true });
+  projectIds.push(id);
+  return { id };
 }
 
 function manifest(overrides: Partial<AIApplyBatchManifest> = {}): AIApplyBatchManifest {
