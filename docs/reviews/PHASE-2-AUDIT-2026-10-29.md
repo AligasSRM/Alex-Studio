@@ -8,7 +8,7 @@
 ## Evidence-based summary
 
 - Main CI passed on the audited revision: [run 40864894574](https://github.com/AligasSRM/Alex-Studio/actions/runs/40864894574).
-- Docker runner integration passed on the same revision: [run 40864894589](https://github.com/AligasSRM/Alex-Studio/actions/runs/40864894589).
+- legacy isolated-runner integration passed on the same revision: [run 40864894589](https://github.com/AligasSRM/Alex-Studio/actions/runs/40864894589).
 - The CI-uploaded `npm-audit-report.json` reports **0 critical, 0 high, 0 moderate, and 0 low vulnerabilities** (663 dependencies represented in the audit metadata). Artifact: `npm-audit-report` from run 40864894574.
 - The repository vendors a reviewed, MIT-licensed `deepmerge` implementation as local package version `4.3.2`, blocks `__proto__` keys on both source and target copy paths, and includes regression tests. CI verifies the expected package identity and guard; this is a maintained local patch, not an upstream release claim.
 - The source ZIP is generated from the exact checked-out commit and validated in CI; no stale source ZIP is tracked in `main`. The archive step passed in run 40864894574.
@@ -29,7 +29,7 @@
 | Path and file safety | Path validation rejects traversal and symlink escapes; protected paths and file-content size limits are enforced. | **Code-level controls present; CI passed on audited main** | Retain. Do not infer production or remote-host isolation from localhost-only request checks. |
 | Source archive | Previously tracked ZIP did not faithfully represent current source. | **Resolved in main** | Archive generated from tested commit, ZIP validated, sensitive/forbidden paths excluded, and CI artifact uploaded. |
 | Standard CI | Unit tests, type check, lint, production build, browser acceptance, and archive creation. | **Passed on audited main** | Re-run after the AI-apply hardening PR merges. |
-| Docker integration | Runner integration test. | **Passed on audited main** | Re-run after the AI-apply hardening PR merges. |
+| legacy isolation integration | Runner integration test. | **Passed on audited main** | Re-run after the AI-apply hardening PR merges. |
 | Real OpenAI provider | Live build-route test returns HTTP 503 after retries. | **OPEN — acceptance gate not met** | Investigate provider-side limits/availability and retry via the protected workflow. Do not weaken or skip the live test, and do not expose credentials. |
 
 ## Phase 2 acceptance gates
@@ -37,7 +37,7 @@
 Phase 2 is not complete until all of the following are true:
 
 1. CI passes on the final main commit, including AI-apply streaming body-limit tests, unit tests, type check, lint, production build, browser acceptance, and source archive validation.
-2. The Docker runner integration passes on the same final commit.
+2. The legacy isolated-runner integration passes on the same final commit.
 3. The dependency audit remains at zero findings; any local vendored security patch is clearly documented and regression-tested.
 4. The source archive is produced from the exact tested commit and contains no secrets, `.git/`, `node_modules/`, `.next/`, `.alex/`, or workspace data.
 5. A real OpenAI integration call succeeds through `/api/ai/build`, validates the returned draft and usage, and proves the original project file remains unchanged.
@@ -46,6 +46,6 @@ Phase 2 is not complete until all of the following are true:
 ## Evidence links
 
 - Main CI after dependency remediation: https://github.com/AligasSRM/Alex-Studio/actions/runs/40864894574
-- Docker integration after dependency remediation: https://github.com/AligasSRM/Alex-Studio/actions/runs/40864894589
+- legacy isolation integration after dependency remediation: https://github.com/AligasSRM/Alex-Studio/actions/runs/40864894589
 - Latest retried live OpenAI proof (still failing HTTP 503): https://github.com/AligasSRM/Alex-Studio/actions/runs/40863771244
 - Dependency remediation PR: https://github.com/AligasSRM/Alex-Studio/pull/60
