@@ -39,13 +39,14 @@ afterEach(() => {
 });
 
 describe('local project API', () => {
-  it('fails closed on project creation until Windows-native mutation protection exists', async () => {
-    const before = fs.existsSync(path.join(process.cwd(), 'workspace')) ? fs.readdirSync(path.join(process.cwd(), 'workspace')) : [];
+  it('creates a project and its starter files', async () => {
     const response = await createProjectRoute(localRequest('http://localhost:3000/api/projects', { name: 'API Test Project' }));
-    expect(response.status).toBe(503);
-    expect((await response.json()).error).toMatch(/^UNAVAILABLE:/);
-    const after = fs.existsSync(path.join(process.cwd(), 'workspace')) ? fs.readdirSync(path.join(process.cwd(), 'workspace')) : [];
-    expect(after).toEqual(before);
+    expect(response.status).toBe(201);
+    const data = await response.json() as { project: { id: string; name: string } };
+    createdIds.push(data.project.id);
+    expect(data.project.name).toBe('API Test Project');
+    expect(getProject(data.project.id)).not.toBeNull();
+    expect(fs.existsSync(path.join(projectRoot(data.project.id), 'index.html'))).toBe(true);
   });
 
   it('rejects symlinked project metadata when reading project details', async () => {
@@ -60,34 +61,31 @@ describe('local project API', () => {
     expect(listProjects().some((item) => item.id === project.id)).toBe(false);
   });
 
-  it('refuses file writes without explicit approval and returns unavailable after approval', async () => {
+  it('requires approval, writes files, and creates a backup', async () => {
     const project = createFixtureProject('Approval Test Project');
     const payload = { projectId: project.id, path: 'index.html', content: '<h1>Approved content</h1>' };
     const denied = await writeFileRoute(localRequest('http://localhost:3000/api/files', payload));
     expect(denied.status).toBe(409);
     const approved = await writeFileRoute(localRequest('http://localhost:3000/api/files', { ...payload, approved: true }));
-    expect(approved.status).toBe(503);
-    expect((await approved.json()).error).toMatch(/^UNAVAILABLE:/);
+    expect(approved.status).toBe(200);
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).not.toBe(payload.content);
-    expect(fs.existsSync(path.join(projectRoot(project.id), '.alex', 'backups'))).toBe(false);
+    expect(fs.existsSync(path.join(projectRoot(project.id), '.alex', 'backups'))).toBe(true);
 
     const traversal = await writeFileRoute(localRequest('http://localhost:3000/api/files', {
       ...payload, path: '../outside.txt', approved: true,
     }));
-    expect(traversal.status).toBe(503);
+    expect(traversal.status).toBe(400);
     expect(fs.existsSync(path.join(projectRoot(project.id), '..', 'outside.txt'))).toBe(false);
     expect(approved.headers.get('content-type')).toContain('application/json');
   });
 
-  it('returns the same 503 gate for the dedicated write and apply endpoints', async () => {
+  it('writes through the dedicated write and apply endpoints', async () => {
     const project = createFixtureProject('Dedicated Mutation Endpoint Test');
     const payload = { projectId: project.id, path: 'index.html', content: '<h1>must remain unchanged</h1>', approved: true };
     const write = await writeSpecificFileRoute(localRequest('http://localhost:3000/api/files/write', payload));
     const apply = await applyFileRoute(localRequest('http://localhost:3000/api/files/apply', payload));
-    expect(write.status).toBe(503);
-    expect(apply.status).toBe(503);
-    expect((await write.json()).error).toMatch(/^UNAVAILABLE:/);
-    expect((await apply.json()).error).toMatch(/^UNAVAILABLE:/);
+    expect(write.status).toBe(200);
+    expect(apply.status).toBe(200);
     expect(fs.readFileSync(path.join(projectRoot(project.id), 'index.html'), 'utf8')).not.toBe(payload.content);
   });
 
