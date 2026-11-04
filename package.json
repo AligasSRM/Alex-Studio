@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start --hostname 127.0.0.1",
-    "lint": "eslint",
+    "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test test_fileOps.mjs test_checksum.mjs test_projectOps.mjs test_aiUsage.mjs test_zip.mjs"
   },
