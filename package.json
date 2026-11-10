@@ -28,7 +28,7 @@
     "@types/react-dom": "19.3.0",
     "deepmerge": "file:vendor/deepmerge",
     "eslint": "10.13.0",
-    "eslint-config-next": "16.4.3",
+    "eslint-config-next": "16.4.5",
     "jest": "30.5.2",
     "ts-jest": "29.4.15",
     "typescript": "6.0.3"
